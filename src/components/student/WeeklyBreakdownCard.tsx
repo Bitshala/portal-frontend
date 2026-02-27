@@ -31,6 +31,7 @@ interface ExerciseScores {
 export interface WeekData {
   week: number;
   weekId: string;
+  weekType?: string;
   totalScore: number;
   maxTotalScore: number;
   groupDiscussionScores: GroupDiscussionScores;
@@ -86,8 +87,8 @@ export const WeeklyBreakdownList = ({ weeks, cohortType }: WeeklyBreakdownListPr
               }}
             >
               {/* Week number */}
-              <Typography sx={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', minWidth: { xs: 48, sm: 60 } }}>
-                W{week.week.toString().padStart(2, '0')}
+              <Typography sx={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', minWidth: { xs: 48, sm: week.weekType === 'ORIENTATION' || week.weekType === 'GRADUATION' ? 100 : 60 } }}>
+                {week.weekType === 'ORIENTATION' ? 'Orientation' : week.weekType === 'GRADUATION' ? 'Graduation' : `W${week.week.toString().padStart(2, '0')}`}
               </Typography>
 
               {/* Attendance */}
@@ -100,9 +101,18 @@ export const WeeklyBreakdownList = ({ weeks, cohortType }: WeeklyBreakdownListPr
 
               {/* Group number */}
               {gd.groupNumber !== null && (
-                <Typography variant="caption" sx={{ color: '#a1a1aa', display: { xs: 'none', sm: 'block' } }}>
-                  G{gd.groupNumber}
-                </Typography>
+                <Chip
+                  label={`Group ${gd.groupNumber}`}
+                  size="small"
+                  sx={{
+                    bgcolor: 'rgba(59,130,246,0.15)',
+                    color: '#60a5fa',
+                    fontWeight: 600,
+                    fontSize: '0.7rem',
+                    height: 22,
+                    display: { xs: 'none', sm: 'flex' },
+                  }}
+                />
               )}
 
               {/* Spacer */}

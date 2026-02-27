@@ -50,8 +50,10 @@ interface ExerciseScores {
 
 interface WeeklyScore {
   weekId: string;
+  attended: boolean;
   groupDiscussionScores: GroupDiscussionScores;
   exerciseScores: ExerciseScores;
+  attendanceScores?: { totalScore: number; maxTotalScore: number };
   totalScore: number;
   maxTotalScore: number;
 }
@@ -128,6 +130,12 @@ const StudentDetailPage = () => {
     return map;
   }, [sortedCohortWeeks]);
 
+  const weekIdToTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    sortedCohortWeeks.forEach(week => map.set(week.id, week.type));
+    return map;
+  }, [sortedCohortWeeks]);
+
   const sortedWeeklyScores = useMemo(() => {
     if (!selectedCohort?.weeklyScores) return [];
     return [...selectedCohort.weeklyScores].sort((a, b) => {
@@ -138,7 +146,7 @@ const StudentDetailPage = () => {
   }, [selectedCohort?.weeklyScores, weekIdToNumberMap]);
 
   const totalWeeks = sortedWeeklyScores.length || 0;
-  const attendedWeeks = sortedWeeklyScores.filter(w => w.groupDiscussionScores.attendance).length || 0;
+  const attendedWeeks = sortedWeeklyScores.filter(w => w.attended ?? w.groupDiscussionScores?.attendance).length || 0;
   const hasExercises = cohortHasExercises(selectedCohort?.cohortType || '');
 
   const stats = {
@@ -155,41 +163,41 @@ const StudentDetailPage = () => {
     .map((weekScore) => ({
       week: weekIdToNumberMap.get(weekScore.weekId) ?? 0,
       weekId: weekScore.weekId,
+      weekType: weekIdToTypeMap.get(weekScore.weekId) ?? 'GROUP_DISCUSSION',
       totalScore: weekScore.totalScore,
       maxTotalScore: weekScore.maxTotalScore,
       groupDiscussionScores: weekScore.groupDiscussionScores,
       exerciseScores: weekScore.exerciseScores,
-      attendance: weekScore.groupDiscussionScores.attendance,
-    }))
-    .filter((week) => week.week !== 0);
+      attendance: weekScore.attended ?? weekScore.groupDiscussionScores?.attendance ?? false,
+    }));
 
   const chartWeeklyData = sortedWeeklyScores.map((weekScore) => {
     const weekNumber = weekIdToNumberMap.get(weekScore.weekId) ?? 0;
     return {
       week: weekNumber,
-      attendance: weekScore.groupDiscussionScores.attendance,
+      attendance: weekScore.attended ?? weekScore.groupDiscussionScores?.attendance ?? false,
       gdScore: {
-        fa: weekScore.groupDiscussionScores.communicationScore,
-        fb: weekScore.groupDiscussionScores.depthOfAnswerScore,
-        fc: weekScore.groupDiscussionScores.technicalBitcoinFluencyScore,
-        fd: weekScore.groupDiscussionScores.engagementScore,
+        fa: weekScore.groupDiscussionScores?.communicationScore ?? 0,
+        fb: weekScore.groupDiscussionScores?.depthOfAnswerScore ?? 0,
+        fc: weekScore.groupDiscussionScores?.technicalBitcoinFluencyScore ?? 0,
+        fd: weekScore.groupDiscussionScores?.engagementScore ?? 0,
       },
       bonusScore: {
-        attempt: weekScore.groupDiscussionScores.bonusAnswerScore,
-        good: weekScore.groupDiscussionScores.bonusAnswerScore,
-        followUp: weekScore.groupDiscussionScores.bonusFollowupScore,
+        attempt: weekScore.groupDiscussionScores?.bonusAnswerScore ?? 0,
+        good: weekScore.groupDiscussionScores?.bonusAnswerScore ?? 0,
+        followUp: weekScore.groupDiscussionScores?.bonusFollowupScore ?? 0,
       },
       exerciseScore: {
         Submitted: weekScore.exerciseScores?.isSubmitted ?? false,
         privateTest: weekScore.exerciseScores?.isPassing ?? false,
       },
-      total: weekScore.totalScore / weekScore.maxTotalScore,
+      total: weekScore.maxTotalScore > 0 ? weekScore.totalScore / weekScore.maxTotalScore : 0,
       totalScore: weekScore.totalScore,
       maxTotalScore: weekScore.maxTotalScore,
-      group: weekScore.groupDiscussionScores.groupNumber?.toString() || null,
+      group: weekScore.groupDiscussionScores?.groupNumber?.toString() || null,
       ta: 'TBD',
     };
-  }).filter((weekData) => weekData.week !== 0);
+  });
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#000', color: '#fafafa' }}>

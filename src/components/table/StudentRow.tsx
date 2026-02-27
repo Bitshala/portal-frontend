@@ -18,6 +18,7 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL;
 interface StudentRowProps {
   person: TableRowData;
   week: number;
+  showAttendance?: boolean;
   showGdScores?: boolean;
   showBonusScores?: boolean;
   showExerciseScores?: boolean;
@@ -53,6 +54,7 @@ const tooltipSx = {
 export const StudentRow: React.FC<StudentRowProps> = ({
   person,
   week,
+  showAttendance = false,
   showGdScores = true,
   showBonusScores = true,
   showExerciseScores = true,
@@ -207,7 +209,7 @@ export const StudentRow: React.FC<StudentRowProps> = ({
       </TableCell>
 
       {/* Attendance */}
-      {showGdScores && (
+      {showAttendance && (
         <TableCell sx={{ ...cellSx, display: { xs: 'none', lg: 'table-cell' } }}>
           <Chip
             label={person.attendance ? 'Present' : 'Absent'}

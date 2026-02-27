@@ -54,6 +54,10 @@ export const StudentTableGrid: React.FC<StudentTableGridProps> = ({
   onContextMenu,
 }) => {
   const isGroupDiscussion = weekType === 'GROUP_DISCUSSION';
+  const isOrientationOrGraduation = weekType === 'ORIENTATION' || weekType === 'GRADUATION';
+
+  // Show Attendance for GROUP_DISCUSSION, ORIENTATION, and GRADUATION weeks
+  const showAttendance = isGroupDiscussion || isOrientationOrGraduation;
 
   // Show GD/Bonus only for GROUP_DISCUSSION weeks
   const hasGdScores = useMemo(() => isGroupDiscussion && data.some(d => d.gdScore !== null), [data, isGroupDiscussion]);
@@ -150,7 +154,7 @@ export const StudentTableGrid: React.FC<StudentTableGridProps> = ({
                 TA
               </TableCell>
 
-              {hasGdScores && (
+              {showAttendance && (
                 <TableCell
                   sx={{
                     ...headerSx,
@@ -226,6 +230,7 @@ export const StudentTableGrid: React.FC<StudentTableGridProps> = ({
                 key={person.id}
                 person={person}
                 week={week}
+                showAttendance={showAttendance}
                 showGdScores={hasGdScores}
                 showBonusScores={hasBonusScores}
                 showExerciseScores={hasExerciseScores}
