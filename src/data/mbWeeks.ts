@@ -4,7 +4,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 1,
     title: "Introduction & How Bitcoin Works",
-    content: "Chapter 1: Introduction - Chapter 2: How Bitcoin Works",
+    content: `
+## Reading Material
+
+1. [Chapter 1: Introduction](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch01_intro.adoc)
+2. [Chapter 2: How Bitcoin Works](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch02_overview.adoc)
+    `,
     gdQuestions: [
       "What were the major problems of Digital Currencies before Bitcoin? How did Bitcoin solve them?",
       "Do you think it would be better if bitcoin transactions were reversible? What are the potential benefits and drawbacks?",
@@ -24,7 +29,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 2,
     title: "Bitcoin Core & Keys and Addresses",
-    content: "Chapter 3: Bitcoin Core - Chapter 4: Keys and Addresses",
+    content: `
+## Reading Material
+
+1. [Chapter 3: Bitcoin Core: The Reference Implementation](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch03_bitcoin-core.adoc)
+2. [Chapter 4: Keys and Addresses](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch04_keys.adoc)
+    `,
     gdQuestions: [
       "Why is Bitcoin Core called a \"Reference Implementation\"? What other implementations of Bitcoin are out there? Is it preferable to have many implementations of Bitcoin?",
       "What are BIPs (Bitcoin Improvement Proposals)? What are their role in the Bitcoin development process?",
@@ -46,7 +56,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 3,
     title: "Wallet Recovery & Transactions",
-    content: "Chapter 5: Wallet Recovery - Chapter 6: Transactions",
+    content: `
+## Reading Material
+
+1. [Chapter 5: Wallet Recovery](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch05_wallets.adoc)
+2. [Chapter 6: Transactions](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch06_transactions.adoc)
+    `,
     gdQuestions: [
       "What is a Bitcoin wallet? What are the different types of wallets available?",
       "What is the difference between deterministic and non-deterministic wallets?",
@@ -66,7 +81,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 4,
     title: "Authorization and Authentication & Digital Signature",
-    content: "Chapter 7: Authorization and Authentication - Chapter 8: Digital Signature",
+    content: `
+## Reading Material
+
+1. [Chapter 7: Authorization and Authentication](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch07_authorization-authentication.adoc)
+2. [Chapter 8: Digital Signatures](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch08_signatures.adoc)
+    `,
     gdQuestions: [
       "Is the Turing incompleteness of Bitcoin's scripting language (SCRIPT) a feature or a deficiency?",
       "Explain different types of timelocks available in a Bitcoin transaction and list the components of the transactions that can be used to set these timelocks.",
@@ -86,7 +106,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 5,
     title: "Transaction Fees & The Bitcoin Network",
-    content: "Chapter 9: Transaction Fees - Chapter 10: The Bitcoin Network",
+    content: `
+## Reading Material
+
+1. [Chapter 9: Transaction Fees](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch09_fees.adoc)
+2. [Chapter 10: The Bitcoin Network](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch10_network.adoc)
+    `,
     gdQuestions: [
       "Why do we need to pay transaction fees when we have block reward as an incentive? Is there a minimum fee that every transaction needs to pay? Is it a consensus rule or policy rule?",
       "What is RBF. When is it useful? List all the conditions required to do a valid RBF.",
@@ -106,7 +131,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 6,
     title: "The Blockchain & Mining and Consensus",
-    content: "Chapter 11: The Blockchain - Chapter 12: Mining and Consensus",
+    content: `
+## Reading Material
+
+1. [Chapter 11: The Blockchain](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch11_blockchain.adoc)
+2. [Chapter 12: Mining and Consensus](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch12_mining.adoc)
+    `,
     gdQuestions: [
       "Describe the structure of a block and what data does a block header contain?",
       "What is a Merkle Tree? How is it used in the blockchain? What data does the Merkle Root verifies?",
@@ -126,7 +156,12 @@ export const mbWeeks: WeekContent[] = [
   {
     week: 7,
     title: "Bitcoin Security & Second-Layer Applications",
-    content: "Chapter 13: Bitcoin Security - Chapter 14: Second-Layer Applications",
+    content: `
+## Reading Material
+
+1. [Chapter 13: Bitcoin Security](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch13_security.adoc)
+2. [Chapter 14: Second-Layer Applications](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch14_applications.adoc)
+    `,
     gdQuestions: [
       "Why does the author say securing bitcoins is like securing cash or a chunk of precious metal?",
       "What could be the consequences of applying centralised security models to a decentralised network like Bitcoin?",

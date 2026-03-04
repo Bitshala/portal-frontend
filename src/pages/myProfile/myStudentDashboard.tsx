@@ -360,7 +360,7 @@ const MyStudentDashboard = () => {
                   >
                     View
                   </Button>
-                  {row.status === 'Completed' && certificate && row.type !== 'MASTERING_LIGHTNING_NETWORK' && (
+                  {row.status === 'Completed' && certificate && (
                     <Button
                       size="small"
                       startIcon={

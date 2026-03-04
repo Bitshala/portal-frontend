@@ -7,13 +7,10 @@ import {
   Button as MuiButton,
   CircularProgress,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
   IconButton,
-  FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Snackbar,
@@ -56,7 +53,6 @@ const cohortTypeToContent = {
   BITCOIN_PROTOCOL_DEVELOPMENT: { weeks: bpdWeeks },
 } as const;
 
-const DEFAULT_GROUPS = ['Group 0', 'Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5'];
 
 const TableView: React.FC = () => {
   const navigate = useNavigate();
