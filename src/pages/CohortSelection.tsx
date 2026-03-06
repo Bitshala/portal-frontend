@@ -26,7 +26,6 @@ import {
   Plus,
   X,
   Pencil,
-  Award,
 } from 'lucide-react';
 import { useCohorts, useCreateCohort, useUpdateCohort } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
@@ -400,67 +399,71 @@ export const CohortSelection = () => {
             emptyMessage={`No ${activeTab.toLowerCase()} cohorts found.`}
             actions={isAdmin ? (cohort) => (
               <>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<Pencil size={13} />}
-                  onClick={() => openEditModal(cohort)}
-                  sx={{
-                    color: '#d4d4d8',
-                    borderColor: '#52525b',
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    py: 0.5,
-                    '&:hover': { borderColor: '#71717a', bgcolor: 'rgba(255,255,255,0.04)' },
-                  }}
-                >
-                  Edit
-                </Button>
+                {cohort.status !== 'Completed' && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Pencil size={13} />}
+                    onClick={() => openEditModal(cohort)}
+                    sx={{
+                      color: '#d4d4d8',
+                      borderColor: '#52525b',
+                      textTransform: 'none',
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      py: 0.5,
+                      '&:hover': { borderColor: '#71717a', bgcolor: 'rgba(255,255,255,0.04)' },
+                    }}
+                  >
+                    Edit
+                  </Button>
+                )}
                 {cohort.status === 'Completed' && (
                   <>
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       size="small"
                       startIcon={
                         isGeneratingCerts && generatingCohortId === cohort.id
-                          ? <CircularProgress size={13} sx={{ color: '#f59e0b' }} />
-                          : <Award size={13} />
+                          ? <CircularProgress size={13} sx={{ color: '#fff' }} />
+                          : undefined
                       }
                       disabled={isGeneratingCerts && generatingCohortId === cohort.id}
                       onClick={() => handleGenerateCertificates(cohort.id, cohort.name)}
                       sx={{
-                        color: '#fbbf24',
-                        borderColor: 'rgba(245,158,11,0.3)',
+                        bgcolor: '#f59e0b',
+                        color: '#000',
                         textTransform: 'none',
                         fontSize: '0.75rem',
                         fontWeight: 500,
                         py: 0.5,
-                        '&:hover': { borderColor: 'rgba(245,158,11,0.5)', bgcolor: 'rgba(245,158,11,0.08)' },
-                        '&.Mui-disabled': { color: '#92400e', borderColor: 'rgba(245,158,11,0.15)' },
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: '#d97706', boxShadow: 'none' },
+                        '&.Mui-disabled': { bgcolor: '#78350f', color: '#92400e' },
                       }}
                     >
                       Generate Certs
                     </Button>
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       size="small"
                       startIcon={
                         downloadingCohortId === cohort.id
-                          ? <CircularProgress size={13} sx={{ color: '#2dd4bf' }} />
-                          : <Download size={13} />
+                          ? <CircularProgress size={13} sx={{ color: '#fff' }} />
+                          : undefined
                       }
                       disabled={downloadingCohortId === cohort.id}
                       onClick={() => handleDownloadCertificates(cohort.id, cohort.name)}
                       sx={{
-                        color: '#2dd4bf',
-                        borderColor: 'rgba(20,184,166,0.3)',
+                        bgcolor: '#14b8a6',
+                        color: '#000',
                         textTransform: 'none',
                         fontSize: '0.75rem',
                         fontWeight: 500,
                         py: 0.5,
-                        '&:hover': { borderColor: 'rgba(20,184,166,0.5)', bgcolor: 'rgba(20,184,166,0.08)' },
-                        '&.Mui-disabled': { color: '#115e59', borderColor: 'rgba(20,184,166,0.15)' },
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
+                        '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
                       }}
                     >
                       Download Certs
