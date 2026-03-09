@@ -386,9 +386,21 @@ const TableView: React.FC = () => {
     );
   }, [cohortData?.id, removeUserMutation]);
 
-  const handleDownloadCSV = useCallback(() => {
+  const handleDownloadCSV = useCallback(async () => {
     const rows = sortedFilteredData;
     if (rows.length === 0) return;
+
+    // Fetch real emails for all users via getUserById
+    const emailMap = new Map<string, string>();
+    const userIds = rows.map((r) => String(r.userId ?? r.id)).filter(Boolean);
+    const results = await Promise.allSettled(
+      userIds.map((id) => apiService.getUserById(id)),
+    );
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled' && result.value?.email) {
+        emailMap.set(userIds[i], result.value.email);
+      }
+    });
 
     const hasExercises = cohortHasExercises(cohortData?.type || '');
 
@@ -400,13 +412,17 @@ const TableView: React.FC = () => {
       'Total',
     ];
 
-    const csvRows = rows.map((r, i) => [
-      i + 1, r.email, r.name, r.discordGlobalName, r.group, r.ta, r.attendance ? 'Present' : 'Absent',
-      r.gdScore?.fa ?? '-', r.gdScore?.fb ?? '-', r.gdScore?.fc ?? '-', r.gdScore?.fd ?? '-',
-      r.bonusScore?.attempt ?? '-', r.bonusScore?.good ?? '-', r.bonusScore?.followUp ?? '-',
-      ...(hasExercises ? [r.exerciseScore?.Submitted ? 'Yes' : 'No', r.exerciseScore?.privateTest ? 'Yes' : 'No'] : []),
-      r.total,
-    ]);
+    const csvRows = rows.map((r, i) => {
+      const odId = String(r.userId ?? r.id);
+      const email = emailMap.get(odId) ?? '';
+      return [
+        i + 1, email, r.name, r.discordGlobalName, r.group, r.ta, r.attendance ? 'Present' : 'Absent',
+        r.gdScore?.fa ?? '-', r.gdScore?.fb ?? '-', r.gdScore?.fc ?? '-', r.gdScore?.fd ?? '-',
+        r.bonusScore?.attempt ?? '-', r.bonusScore?.good ?? '-', r.bonusScore?.followUp ?? '-',
+        ...(hasExercises ? [r.exerciseScore?.Submitted ? 'Yes' : 'No', r.exerciseScore?.privateTest ? 'Yes' : 'No'] : []),
+        r.total,
+      ];
+    });
 
     const weekLabel = weekIndex !== undefined ? `week${weekIndex}` : 'all';
     downloadCSV(headers, csvRows, `students-${weekLabel}.csv`);
