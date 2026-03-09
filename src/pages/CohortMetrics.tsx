@@ -15,6 +15,7 @@ import {
   ComposedChart,
   Line,
   Legend,
+  LabelList,
 } from 'recharts';
 import { BarChart3, Users, TrendingUp, Target } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
@@ -404,7 +405,8 @@ const CohortMetrics = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={displayData}
-                  margin={{ top: 8, right: 16, left: -8, bottom: 60 }}
+                  margin={{ top: 24, right: 16, left: 0, bottom: 16 }}
+                  barCategoryGap="25%"
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -412,31 +414,40 @@ const CohortMetrics = () => {
                     vertical={false}
                   />
                   <XAxis
-                    dataKey="shortLabel"
-                    tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                    dataKey="label"
+                    tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
+                    interval={0}
+                    height={48}
+                    angle={displayData.length > 4 ? -25 : 0}
+                    textAnchor={displayData.length > 4 ? 'end' : 'middle'}
                   />
                   <YAxis
-                    domain={[0, 100]}
+                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
                     tickFormatter={(v) => `${v}%`}
+                    width={48}
                   />
                   <RechartsTooltip
                     cursor={{ fill: 'rgba(249,115,22,0.08)' }}
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: '#fb923c', fontWeight: 600 }}
+                    itemStyle={{ color: '#fafafa' }}
                     formatter={(value: number) => [`${value}%`, 'Retention Rate']}
                   />
-                  <Bar dataKey="retentionRate" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                  <Bar dataKey="retentionRate" radius={[6, 6, 0, 0]} maxBarSize={64}>
                     {displayData.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
+                    <LabelList
+                      dataKey="retentionRate"
+                      position="top"
+                      formatter={(v: number) => `${v}%`}
+                      style={{ fill: '#fafafa', fontSize: 13, fontWeight: 600 }}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -466,7 +477,7 @@ const CohortMetrics = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={displayData}
-                  margin={{ top: 8, right: 16, left: -8, bottom: 60 }}
+                  margin={{ top: 24, right: 16, left: 0, bottom: 16 }}
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -474,25 +485,28 @@ const CohortMetrics = () => {
                     vertical={false}
                   />
                   <XAxis
-                    dataKey="shortLabel"
-                    tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                    dataKey="label"
+                    tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
+                    interval={0}
+                    height={48}
+                    angle={displayData.length > 4 ? -25 : 0}
+                    textAnchor={displayData.length > 4 ? 'end' : 'middle'}
                   />
                   <YAxis
-                    domain={[0, 100]}
+                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
                     tickFormatter={(v) => `${v}%`}
+                    width={48}
                   />
                   <RechartsTooltip
                     cursor={{ fill: 'rgba(249,115,22,0.08)' }}
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: '#fb923c', fontWeight: 600 }}
+                    itemStyle={{ color: '#fafafa' }}
                     formatter={(value: number, name: string) => [
                       `${value}%`,
                       name === 'retentionRate' ? 'Retention Rate' : 'Completion Rate',
@@ -507,10 +521,17 @@ const CohortMetrics = () => {
                   <Bar
                     dataKey="retentionRate"
                     fill="#fb923c"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={56}
                     opacity={0.85}
-                  />
+                  >
+                    <LabelList
+                      dataKey="retentionRate"
+                      position="top"
+                      formatter={(v: number) => `${v}%`}
+                      style={{ fill: '#fb923c', fontSize: 11, fontWeight: 600 }}
+                    />
+                  </Bar>
                   <Line
                     type="monotone"
                     dataKey="completionRate"
@@ -545,57 +566,70 @@ const CohortMetrics = () => {
                 Cohort Performance Distribution
               </Typography>
             </Box>
-            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 2 }}>
-              Each point represents a cohort. Position shows retention vs completion,
-              size indicates participant count.
+            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 1 }}>
+              Each bubble is a cohort — X-axis is average exercise completion, Y-axis
+              is student retention ({'>='}50% attendance). Bubble size = participant count.
             </Typography>
-            <Box sx={{ width: '100%', height: { xs: 300, md: 400 } }}>
+            {/* Inline legend for scatter */}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+              {displayData.map((m, i) => (
+                <Box key={m.cohortId} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                  <Typography sx={{ color: '#d4d4d8', fontSize: '0.75rem' }}>{m.label}</Typography>
+                </Box>
+              ))}
+            </Box>
+            <Box sx={{ width: '100%', height: { xs: 320, md: 420 } }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
+                <ScatterChart margin={{ top: 24, right: 24, left: 8, bottom: 32 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                   <XAxis
                     type="number"
                     dataKey="completionRate"
                     name="Completion Rate"
-                    unit="%"
-                    domain={[0, 100]}
+                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
+                    tickFormatter={(v) => `${v}%`}
                     label={{
                       value: 'Completion Rate (%)',
                       position: 'insideBottom',
-                      offset: -4,
-                      fill: '#71717a',
+                      offset: -16,
+                      fill: '#a1a1aa',
                       fontSize: 12,
+                      fontWeight: 500,
                     }}
                   />
                   <YAxis
                     type="number"
                     dataKey="retentionRate"
                     name="Retention Rate"
-                    unit="%"
-                    domain={[0, 100]}
+                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    width={48}
                     label={{
                       value: 'Retention Rate (%)',
                       angle: -90,
                       position: 'insideLeft',
-                      offset: 8,
-                      fill: '#71717a',
+                      offset: 4,
+                      fill: '#a1a1aa',
                       fontSize: 12,
+                      fontWeight: 500,
                     }}
                   />
                   <ZAxis
                     type="number"
                     dataKey="totalParticipants"
-                    range={[80, 400]}
+                    range={[200, 600]}
                     name="Participants"
                   />
                   <RechartsTooltip
                     contentStyle={tooltipStyle}
+                    itemStyle={{ color: '#fafafa' }}
                     cursor={{ strokeDasharray: '3 3', stroke: '#71717a' }}
                     formatter={(value: number, name: string) => [
                       name === 'Participants' ? value : `${value}%`,
@@ -614,9 +648,15 @@ const CohortMetrics = () => {
                       <Cell
                         key={i}
                         fill={CHART_COLORS[i % CHART_COLORS.length]}
-                        opacity={0.85}
+                        opacity={0.9}
                       />
                     ))}
+                    <LabelList
+                      dataKey="shortLabel"
+                      position="top"
+                      style={{ fill: '#d4d4d8', fontSize: 11, fontWeight: 500 }}
+                      offset={10}
+                    />
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>

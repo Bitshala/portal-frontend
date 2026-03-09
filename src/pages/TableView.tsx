@@ -393,15 +393,15 @@ const TableView: React.FC = () => {
     const hasExercises = cohortHasExercises(cohortData?.type || '');
 
     const headers = [
-      'Name', 'Discord Name', 'Group', 'TA', 'Attendance',
+      '#', 'Email', 'Name', 'Discord Name', 'Group', 'TA', 'Attendance',
       'Communication', 'Depth of Answer', 'Technical Bitcoin Fluency', 'Engagement',
       'Bonus Attempt', 'Bonus Good', 'Bonus Follow Up',
       ...(hasExercises ? ['Exercise Submitted', 'Exercise Passing'] : []),
       'Total',
     ];
 
-    const csvRows = rows.map((r) => [
-      r.name, r.email, r.group, r.ta, r.attendance ? 'Present' : 'Absent',
+    const csvRows = rows.map((r, i) => [
+      i + 1, r.email, r.name, r.discordGlobalName, r.group, r.ta, r.attendance ? 'Present' : 'Absent',
       r.gdScore?.fa ?? '-', r.gdScore?.fb ?? '-', r.gdScore?.fc ?? '-', r.gdScore?.fd ?? '-',
       r.bonusScore?.attempt ?? '-', r.bonusScore?.good ?? '-', r.bonusScore?.followUp ?? '-',
       ...(hasExercises ? [r.exerciseScore?.Submitted ? 'Yes' : 'No', r.exerciseScore?.privateTest ? 'Yes' : 'No'] : []),

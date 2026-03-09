@@ -442,13 +442,17 @@ export const CohortSelection = () => {
                           : undefined
                       }
                       disabled={isGeneratingCerts && generatingCohortId === cohort.id}
-                      onClick={() => handleGenerateCertificates(cohort.id, cohort.name)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateCertificates(cohort.id, cohort.name);
+                      }}
                       sx={{
                         bgcolor: '#f59e0b',
                         color: '#000',
                         textTransform: 'none',
                         fontSize: '0.75rem',
                         fontWeight: 500,
+                        whiteSpace: 'nowrap',
                         py: 0.5,
                         boxShadow: 'none',
                         '&:hover': { bgcolor: '#d97706', boxShadow: 'none' },
@@ -463,16 +467,20 @@ export const CohortSelection = () => {
                       startIcon={
                         downloadingCohortId === cohort.id
                           ? <CircularProgress size={13} sx={{ color: '#fff' }} />
-                          : undefined
+                          : <Download size={13} />
                       }
                       disabled={downloadingCohortId === cohort.id}
-                      onClick={() => handleDownloadCertificates(cohort.id, cohort.name)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadCertificates(cohort.id, cohort.name);
+                      }}
                       sx={{
                         bgcolor: '#14b8a6',
                         color: '#000',
                         textTransform: 'none',
                         fontSize: '0.75rem',
                         fontWeight: 500,
+                        whiteSpace: 'nowrap',
                         py: 0.5,
                         boxShadow: 'none',
                         '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
