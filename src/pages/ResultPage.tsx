@@ -15,7 +15,7 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material';
-import { ArrowLeft, Medal, Crown, Flame, Download } from 'lucide-react';
+import { ArrowLeft, Medal, Crown, Flame } from 'lucide-react';
 
 import { useCohort } from '../hooks/cohortHooks';
 import { useCohortLeaderboard } from '../hooks/scoreHooks';
@@ -339,30 +339,30 @@ export const ResultPage: React.FC = () => {
                             {eligible ? (
                               <Button
                                 size="small"
-                                variant="contained"
-                                startIcon={
-                                  downloadingUserId === student.userId
-                                    ? <CircularProgress size={13} sx={{ color: '#fff' }} />
-                                    : <Download size={13} />
-                                }
+                                variant="outlined"
                                 disabled={downloadingUserId === student.userId}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDownloadCertificate(student);
                                 }}
                                 sx={{
-                                  bgcolor: '#14b8a6',
-                                  color: '#fff',
+                                  color: '#4ade80',
+                                  borderColor: '#4ade80',
+                                  borderRadius: 2,
                                   textTransform: 'none',
                                   fontSize: '0.75rem',
-                                  fontWeight: 500,
+                                  fontWeight: 600,
                                   py: 0.5,
-                                  boxShadow: 'none',
-                                  '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
-                                  '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
+                                  px: 1.5,
+                                  '&:hover': { borderColor: '#22c55e', bgcolor: 'rgba(74,222,128,0.08)' },
+                                  '&.Mui-disabled': { borderColor: '#166534', color: '#166534' },
                                 }}
                               >
-                                Download
+                                {downloadingUserId === student.userId ? (
+                                  <CircularProgress size={14} sx={{ color: '#4ade80' }} />
+                                ) : (
+                                  'Download'
+                                )}
                               </Button>
                             ) : (
                               <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>—</Typography>
