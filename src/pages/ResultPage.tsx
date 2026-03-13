@@ -20,6 +20,7 @@ import { ArrowLeft, Medal, Crown, Flame, Download } from 'lucide-react';
 import { useCohort } from '../hooks/cohortHooks';
 import { useCohortLeaderboard } from '../hooks/scoreHooks';
 import { useUser } from '../hooks/userHooks';
+import { useCohortCertificates } from '../hooks/certificateHooks';
 import apiService from '../services/apiService';
 
 import { UserRole } from '../types/enums';
@@ -101,6 +102,16 @@ export const ResultPage: React.FC = () => {
   );
 
   const showDownloadColumn = canViewAttendance && isCohortCompleted;
+
+  const { data: certificatesData } = useCohortCertificates(
+    cohortIdParam || '',
+    { enabled: showDownloadColumn && !!cohortIdParam },
+  );
+
+  const certificateUserIds = useMemo(() => {
+    if (!certificatesData) return new Set<string>();
+    return new Set(certificatesData.map((cert) => cert.userId));
+  }, [certificatesData]);
 
   const results = useMemo<StudentResult[]>(() => transformLeaderboardData(leaderboardData), [leaderboardData]);
 
@@ -316,41 +327,49 @@ export const ResultPage: React.FC = () => {
                         </TableCell>
                       )}
 
-                      {showDownloadColumn && (
-                        <TableCell sx={{ ...cellSx, display: { xs: 'none', sm: 'table-cell' } }}>
-                          {student.totalScore > 0 ? (
-                            <Button
-                              size="small"
-                              variant="contained"
-                              startIcon={
-                                downloadingUserId === student.userId
-                                  ? <CircularProgress size={13} sx={{ color: '#fff' }} />
-                                  : <Download size={13} />
-                              }
-                              disabled={downloadingUserId === student.userId}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownloadCertificate(student);
-                              }}
-                              sx={{
-                                bgcolor: '#14b8a6',
-                                color: '#fff',
-                                textTransform: 'none',
-                                fontSize: '0.75rem',
-                                fontWeight: 500,
-                                py: 0.5,
-                                boxShadow: 'none',
-                                '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
-                                '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
-                              }}
-                            >
-                              Download
-                            </Button>
-                          ) : (
-                            <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>—</Typography>
-                          )}
-                        </TableCell>
-                      )}
+                      {showDownloadColumn && (() => {
+                        const attended = student.totalAttendance;
+                        const total = student.maxAttendance;
+                        const passesAttendance = total > 0 && attended / total >= 0.7;
+                        const hasCertificate = certificateUserIds.has(student.userId);
+                        const eligible = passesAttendance && hasCertificate;
+
+                        return (
+                          <TableCell sx={{ ...cellSx, display: { xs: 'none', sm: 'table-cell' } }}>
+                            {eligible ? (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={
+                                  downloadingUserId === student.userId
+                                    ? <CircularProgress size={13} sx={{ color: '#fff' }} />
+                                    : <Download size={13} />
+                                }
+                                disabled={downloadingUserId === student.userId}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadCertificate(student);
+                                }}
+                                sx={{
+                                  bgcolor: '#14b8a6',
+                                  color: '#fff',
+                                  textTransform: 'none',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                  py: 0.5,
+                                  boxShadow: 'none',
+                                  '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
+                                  '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
+                                }}
+                              >
+                                Download
+                              </Button>
+                            ) : (
+                              <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>—</Typography>
+                            )}
+                          </TableCell>
+                        );
+                      })()}
                     </TableRow>
                   );
                 })}
