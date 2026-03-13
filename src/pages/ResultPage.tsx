@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -12,12 +12,15 @@ import {
   CircularProgress,
   Button,
   Chip,
+  Snackbar,
+  Alert,
 } from '@mui/material';
-import { ArrowLeft, Medal, Crown, Flame } from 'lucide-react';
+import { ArrowLeft, Medal, Crown, Flame, Download } from 'lucide-react';
 
 import { useCohort } from '../hooks/cohortHooks';
 import { useCohortLeaderboard } from '../hooks/scoreHooks';
 import { useUser } from '../hooks/userHooks';
+import apiService from '../services/apiService';
 
 import { UserRole } from '../types/enums';
 import {
@@ -28,6 +31,7 @@ import {
   getErrorMessage,
 } from '../utils/resultHelper';
 import { cohortHasExercises } from '../utils/calculations';
+import { computeStatus } from '../utils/cohortUtils';
 
 const getScoreColor = (score: number): string => {
   if (score > 0) return '#4ade80';
@@ -91,12 +95,54 @@ export const ResultPage: React.FC = () => {
 
   const hasExercises = useMemo(() => cohortHasExercises(cohortData?.type || ''), [cohortData?.type]);
 
+  const isCohortCompleted = useMemo(
+    () => cohortData ? computeStatus(cohortData.startDate, cohortData.endDate) === 'Completed' : false,
+    [cohortData],
+  );
+
+  const showDownloadColumn = canViewAttendance && isCohortCompleted;
+
   const results = useMemo<StudentResult[]>(() => transformLeaderboardData(leaderboardData), [leaderboardData]);
 
   const sortedResults = useMemo(() => sortResults(results), [results]);
 
   const cohortName = useMemo(() => formatCohortName(cohortData), [cohortData]);
 
+  const [downloadingUserId, setDownloadingUserId] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  const handleDownloadCertificate = useCallback(async (student: StudentResult) => {
+    if (!cohortIdParam) return;
+    setDownloadingUserId(student.userId);
+    try {
+      const certificates = await apiService.getCohortCertificates(cohortIdParam);
+      const studentCerts = certificates.filter((cert) => cert.userId === student.userId);
+      if (studentCerts.length === 0) {
+        setSnackbar({ open: true, message: `No certificate found for ${student.discordUsername}. Generate certificates first.`, severity: 'error' });
+        return;
+      }
+      for (const cert of studentCerts) {
+        const blob = await apiService.downloadCertificate(cert.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${cert.name}-${cert.certificateType}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+      setSnackbar({ open: true, message: `Downloaded certificate for ${student.discordUsername}!`, severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: `Failed to download certificate for ${student.discordUsername}.`, severity: 'error' });
+    } finally {
+      setDownloadingUserId(null);
+    }
+  }, [cohortIdParam]);
 
   const handleStudentClick = useCallback(
     (student: StudentResult) => {
@@ -189,6 +235,9 @@ export const ResultPage: React.FC = () => {
                   {hasExercises && (
                     <TableCell sx={{ ...headerSx, display: { xs: 'none', sm: 'table-cell' } }}>Exercises</TableCell>
                   )}
+                  {showDownloadColumn && (
+                    <TableCell sx={{ ...headerSx, display: { xs: 'none', sm: 'table-cell' } }}>Certificate</TableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -266,6 +315,42 @@ export const ResultPage: React.FC = () => {
                           />
                         </TableCell>
                       )}
+
+                      {showDownloadColumn && (
+                        <TableCell sx={{ ...cellSx, display: { xs: 'none', sm: 'table-cell' } }}>
+                          {student.totalScore > 0 ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={
+                                downloadingUserId === student.userId
+                                  ? <CircularProgress size={13} sx={{ color: '#fff' }} />
+                                  : <Download size={13} />
+                              }
+                              disabled={downloadingUserId === student.userId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadCertificate(student);
+                              }}
+                              sx={{
+                                bgcolor: '#14b8a6',
+                                color: '#fff',
+                                textTransform: 'none',
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                py: 0.5,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
+                                '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
+                              }}
+                            >
+                              Download
+                            </Button>
+                          ) : (
+                            <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>—</Typography>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -286,6 +371,23 @@ export const ResultPage: React.FC = () => {
           </Typography>
         )}
       </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

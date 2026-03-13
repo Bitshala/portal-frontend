@@ -85,8 +85,63 @@ export const bpdWeeks: WeekContent[] = [
       "What are Compact Block Relays? Why are they useful? How do they differ from Compact Block Filters (BIP157/158)? What is the current number of nodes serving BIP157 Compact Block Filters in the Bitcoin P2P network? What are the 5 most dominant service flags on the current Bitcoin P2P network? How did you find this data?",
       "What are Eclipse Attacks? What would an attacker gain by eclipsing a node? How would an attacker perform this on a target node? What mechanisms do Bitcoin nodes have to resist targeted eclipse attacks? Describe the BGP Hijack attack. Can Bitcoin be attacked via this currently? What are the current R&Ds for mitigating BGP on Bitcoin?"
     ],
+    bonusQuestions: [
+      "Explain how a compact block is reconstructed from short transaction identifiers. What are the two main reasons reconstruction fails in practice (even for well-connected nodes), and what fallback messages resolve it?",
+      "On a scale of sovereignty, how would you order the following types of mining in Bitcoin? P2Pool mining, Pool Mining, Solo Mining?",
+      "Whether mining in a pool or solo, it is you who decides which transactions get mined in a block. True or False?",
+      "What are shares in pooled mining?",
+      "The ASIC, in a miner, constructs the block. True or False?",
+      "The ASIC miners are also open source. True or False?",
+      "Which block has the largest target in the Bitcoin network?"
+    ],
     assignmentLinks: {
       1: "https://classroom.github.com/a/ogEHBuaR",
     }
+  },
+  {
+    week: 4,
+    title: "P2P",
+    content: "## Reading Material\n- [P2P](https://chaincode.gitbook.io/seminars/bitcoin-protocol-development/p2p)",
+    gdQuestions: [
+      "Describe in brief the different attacks possible in the Bitcoin P2P network. What are some of the latest developments happening on the P2P network? Can you identify other networks pre-Bitcoin that had similar architectures? Can you identify common design primitives of all P2P networks?",
+      "What are the benefits of running your own Bitcoin full node? What are the practical ways (hardware and software) to run a full node from a home setup? What are the current typical operating metrics for an operating full node? Specifically, what is the disk usage, I/O throughput, network bandwidth usage (upload/download), and memory usage? What sources did you use to find this data?",
+      "Are there private networks operating on Bitcoin that exist separately from the main P2P gossip network? If so, what is the purpose or use case for these private networks? Does the presence of such networks suggest a risk of centralization in the Bitcoin ecosystem? Can a standard, individual node runner connect to these private networks? What potential methods could be employed to address or mitigate the effects of these private networks?",
+      "What are Inbound and Outbound connections, and what are the key differences between them? What are the default maximum numbers for Inbound and Outbound connections on a node? Is it possible for a node operator to change these default limits, and if so, what is the procedure? Under what circumstances might a node operator need or want to adjust these default connection settings?",
+      "What is a Bitcoin node's Address Book? What specific data is stored within it? Where exactly is the address book file located within the node's data directory? Is the file human-readable? Detail the different tables used in the address book and explain their respective purposes. Are there any potential security vulnerabilities or attacks possible by corrupting a node's address book? What mitigation strategies are currently employed to prevent or address such attacks?",
+      "What are Anchor Connections? When were they first introduced? Why are they used? How are these connections chosen? Can you, as a node operator, add your own anchor connections? If so, what is the procedure? In what specific situations might you need to add your own anchor connections?"
+    ],
+    bonusQuestions: [
+      "What are filler connections, and what is their purpose? How does a node determine the number of filler connections to maintain? How does a node select the addresses for its filler connections? Can a node operator customize these behaviors? What is a safe number of filler connections to maintain? Are too many filler connections beneficial?",
+      "How might an attacker attempt an Eclipse Attack on a node? What current safeguards are implemented against these attacks? What ongoing developments are focused on resisting eclipse attacks on nodes? What would an attacker gain by successfully eclipsing a node? Can a node detect if it is currently being eclipsed? What can a node operator do to identify attempts to eclipse?",
+      "What are Standardness Rules, and how are they enforced in the network? How is it possible to mine a non-standard transaction? What have been the major sources of non-standard transactions recently? What is the average percentage of non-standard transactions in recent blocks, and how did you find this data?",
+      "What is the crux of the recent OP_RETURN controversy? ELI5. What is the purpose of policy rules? Should policy rules be part of the consensus rules? List all the current policy rules enforced by a Bitcoin Core node. As a node operator, can you modify these rules? Which rules might you personally consider changing on your own node?",
+      "What is the minimum size of a Standard Transaction in Bitcoin? Describe the size in bytes of each component that makes up a minimal standard transaction. Is it possible to construct transactions smaller than the minimum standard size? What types of transactions are the largest (by byte size)? What is the largest transaction that has ever been mined into the Bitcoin Blockchain? How did you find this data?"
+    ],
+    assignmentLinks: {}
+  },
+  {
+    week: 5,
+    title: "Scripts and Wallets",
+    content: "## Reading Material\n- [Scripts and Wallets](https://chaincode.gitbook.io/seminars/bitcoin-protocol-development/scripts-wallets)",
+    gdQuestions: [
+      "Explain the major factors hindering Blockchain scaling. What is a Turing-complete language? Is it a good idea to add Turing-completeness to Bitcoin Scripts? What's the difference between \"computation\" and \"validation\"? What should a global blockchain focus more on architecturally?",
+      "What is an Output Descriptor? Why are they useful? Describe the major components of a Descriptor. What libraries are available to work with Descriptors? Can you give a real-world example of a Descriptor wallet? What is the benefit of a Descriptor wallet over traditional wallets?",
+      "What is a Miniscript? How is it different from Descriptors? Why is it useful? What libraries are available to work with Miniscripts? Can you identify any real-world wallet that uses Miniscripts? How can end-users find Miniscripts useful?",
+      "What is an XPub? Why are they useful? What is the difference between hardened and unhardened derivations? When is one used over the other? What is a Zpub? Is it different from an XPub? Where have you used XPubs in real life?",
+      "What is a Mnemonic? How are mnemonics related to XPubs/Xprivs? What is a Master Finger Print? What is it used for? What is the source of the words used for mnemonic generation? How many words are there? Why exactly that many words are needed? What would happen if you deviate from the standard word list and invent your own words?",
+      "What is Coin Selection? How many algorithms do we have for Coin Selection in practice? Why is it a hard problem? What libraries can you use to work with coin selection algorithms? How can good Coin Selection improve the privacy of a wallet?",
+      "What is UTXO management? Why should UTXOs be managed? Which real-life wallets allow you to manage the UTXO set? As a regular wallet user, do you want your UTXOs to be distributed in many small chunks or consolidated in one large chunk? What is a Dust Attack? What should you do if you get targeted by Dust Attacks?",
+      "How can we make Bitcoin transactions more private? What is a Confidential Transaction? Can it be applied to Bitcoin? Will it be a Softfork or Hardfork? What is the rationale for not adding Confidential Transactions to Bitcoin?"
+    ],
+    bonusQuestions: [
+      "Coin selection can expose a wallet by observing how the wallet selects its inputs. Are there any efforts to standardize coin selection into a library so there's a standard?",
+      "Describe how Coin Selection patterns can be used to fingerprint wallets. What are possible ways to defend against such attacks? What are other possible ways to fingerprint wallets? How can a wallet developer avoid fingerprinting?",
+      "When does a transaction get evicted from the mempool? What recourses do users have to bump up the priority for their transactions? Describe RBF (Replace-By-Fee) and CPFP (Child-Pays-For-Parent) in brief. When should one be used over the other? What real-life wallets allow you to perform RBF or CPFP?",
+      "What is a Schnorr signature? How is it different from ECDSA signatures? Why didn't Bitcoin have Schnorr signatures before? Which upgrade added Schnorr signatures to Bitcoin? What are the special benefits of Schnorr signatures?",
+      "What is a Nonce in Schnorr signatures? Why does the Nonce have to be random? What happens if it is not random? What is Musig? Why is it useful? Can you specify real-world uses of Musig?",
+      "Describe Taproot in brief. What benefits does Taproot provide? Why does Taproot increase transaction privacy? Was Taproot a softfork or a hard fork? How was backward compatibility maintained in the Taproot upgrade?",
+      "Why does Tapscript not support OP_CHECKMULTISIG? What does it use instead of OP_CHECKMULTISIG? What is the purpose of Tagged Hashes?"
+    ],
+    assignmentLinks: {}
   }
 ];

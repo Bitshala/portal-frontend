@@ -30,7 +30,6 @@ import {
 import { useCohorts, useCreateCohort, useUpdateCohort } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
 import { useGenerateCohortCertificates } from '../hooks/certificateHooks';
-import apiService from '../services/apiService';
 import { UserRole, CohortType } from '../types/enums';
 import type { GetCohortResponseDto } from '../types/api';
 import type { ApiCohort, CohortStatus } from '../types/cohort';
@@ -72,7 +71,6 @@ export const CohortSelection = () => {
 
   const [activeTab, setActiveTab] = useState<string>('Active');
   const [generatingCohortId, setGeneratingCohortId] = useState<string | null>(null);
-  const [downloadingCohortId, setDownloadingCohortId] = useState<string | null>(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -208,37 +206,6 @@ export const CohortSelection = () => {
     );
   };
 
-  const handleDownloadCertificates = async (cohortId: string, cohortName: string) => {
-    setDownloadingCohortId(cohortId);
-    try {
-      const certificates = await apiService.getCohortCertificates(cohortId);
-      if (certificates.length === 0) {
-        setSnackbar({ open: true, message: 'No certificates found. Generate certificates first.', severity: 'error' });
-        return;
-      }
-      for (const cert of certificates) {
-        const blob = await apiService.downloadCertificate(cert.id);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${cert.name}-${cert.certificateType}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      }
-      setSnackbar({ open: true, message: `Downloaded ${certificates.length} certificates for ${cohortName}!`, severity: 'success' });
-    } catch (error) {
-      let errorMessage = 'Failed to download certificates.';
-      if (typeof error === 'object' && error !== null && 'response' in error) {
-        const re = error as { response?: { data?: { message?: string } } };
-        if (re.response?.data?.message) errorMessage = re.response.data.message;
-      }
-      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
-    } finally {
-      setDownloadingCohortId(null);
-    }
-  };
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -460,34 +427,6 @@ export const CohortSelection = () => {
                       }}
                     >
                       Generate Certs
-                    </Button>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      startIcon={
-                        downloadingCohortId === cohort.id
-                          ? <CircularProgress size={13} sx={{ color: '#fff' }} />
-                          : <Download size={13} />
-                      }
-                      disabled={downloadingCohortId === cohort.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownloadCertificates(cohort.id, cohort.name);
-                      }}
-                      sx={{
-                        bgcolor: '#14b8a6',
-                        color: '#000',
-                        textTransform: 'none',
-                        fontSize: '0.75rem',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                        py: 0.5,
-                        boxShadow: 'none',
-                        '&:hover': { bgcolor: '#0d9488', boxShadow: 'none' },
-                        '&.Mui-disabled': { bgcolor: '#115e59', color: '#0d3d38' },
-                      }}
-                    >
-                      Download Certs
                     </Button>
                   </>
                 )}
