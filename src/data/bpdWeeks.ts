@@ -111,11 +111,11 @@ export const bpdWeeks: WeekContent[] = [
       "What are Anchor Connections? When were they first introduced? Why are they used? How are these connections chosen? Can you, as a node operator, add your own anchor connections? If so, what is the procedure? In what specific situations might you need to add your own anchor connections?"
     ],
     bonusQuestions: [
-      "What are filler connections, and what is their purpose? How does a node determine the number of filler connections to maintain? How does a node select the addresses for its filler connections? Can a node operator customize these behaviors? What is a safe number of filler connections to maintain? Are too many filler connections beneficial?",
-      "How might an attacker attempt an Eclipse Attack on a node? What current safeguards are implemented against these attacks? What ongoing developments are focused on resisting eclipse attacks on nodes? What would an attacker gain by successfully eclipsing a node? Can a node detect if it is currently being eclipsed? What can a node operator do to identify attempts to eclipse?",
-      "What are Standardness Rules, and how are they enforced in the network? How is it possible to mine a non-standard transaction? What have been the major sources of non-standard transactions recently? What is the average percentage of non-standard transactions in recent blocks, and how did you find this data?",
-      "What is the crux of the recent OP_RETURN controversy? ELI5. What is the purpose of policy rules? Should policy rules be part of the consensus rules? List all the current policy rules enforced by a Bitcoin Core node. As a node operator, can you modify these rules? Which rules might you personally consider changing on your own node?",
-      "What is the minimum size of a Standard Transaction in Bitcoin? Describe the size in bytes of each component that makes up a minimal standard transaction. Is it possible to construct transactions smaller than the minimum standard size? What types of transactions are the largest (by byte size)? What is the largest transaction that has ever been mined into the Bitcoin Blockchain? How did you find this data?"
+      "What is BIP324? What are the privacy/security threats that BIP324 mitigates? Which threats does it not mitigate? What can we do about those?",
+      "Bitcoin Core treats addresses differently depending on where they came from (DNS seeds, addr gossip, outbound peers, etc.). Explain why source tagging matters for security, and what attack becomes easier if you don't track it.",
+      "How can you bypass the \"standardness rules\" in the P2P network? Are these rules necessary? What attacks could be possible if these rules aren't enforced?",
+      "Which of the listed options is a \"policy option\" that a node operator cannot configure?\ndatacarrier\nminrelaytxfee\nmaxwitnesssize\nDustrelayfee",
+      "Can a malicious peer send an arbitrarily long P2P message to DOS-attack a node? If not, what limit prevents these attacks?"
     ],
     assignmentLinks: {}
   },

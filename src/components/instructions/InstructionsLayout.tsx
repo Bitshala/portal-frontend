@@ -413,7 +413,7 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                                 <Typography sx={{ color: '#60a5fa', fontWeight: 600, mr: 1.5, mt: 0.1, minWidth: 24, fontSize: '1.1rem' }}>
                                   {index + 1}.
                                 </Typography>
-                                <Typography sx={{ color: '#e4e4e7', lineHeight: 1.7, fontSize: '1.1rem' }}>
+                                <Typography sx={{ color: '#e4e4e7', lineHeight: 1.7, fontSize: '1.1rem', whiteSpace: 'pre-line' }}>
                                   {question}
                                 </Typography>
                               </Box>
@@ -536,6 +536,7 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                   lineHeight: 1.7,
                   maxWidth: 800,
                   mx: 'auto',
+                  whiteSpace: 'pre-line',
                 }}>
                   {allSlides[gdSlideIndex]?.text}
                 </Typography>
