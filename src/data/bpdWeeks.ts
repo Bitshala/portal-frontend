@@ -114,7 +114,7 @@ export const bpdWeeks: WeekContent[] = [
       "What is BIP324? What are the privacy/security threats that BIP324 mitigates? Which threats does it not mitigate? What can we do about those?",
       "Bitcoin Core treats addresses differently depending on where they came from (DNS seeds, addr gossip, outbound peers, etc.). Explain why source tagging matters for security, and what attack becomes easier if you don't track it.",
       "How can you bypass the \"standardness rules\" in the P2P network? Are these rules necessary? What attacks could be possible if these rules aren't enforced?",
-      "Which of the listed options is a \"policy option\" that a node operator cannot configure?\ndatacarrier\nminrelaytxfee\nmaxwitnesssize\nDustrelayfee",
+      "Which of the listed options is a \"policy option\" that a node operator cannot configure?\na) datacarrier\nb) minrelaytxfee\nc) maxwitnesssize\nd) Dustrelayfee",
       "Can a malicious peer send an arbitrarily long P2P message to DOS-attack a node? If not, what limit prevents these attacks?"
     ],
     assignmentLinks: {}
