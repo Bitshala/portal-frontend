@@ -13,7 +13,7 @@ const COMPONENT_LABELS: Record<CohortComponent, string> = {
   [CohortComponent.STUDY_MATERIAL]: 'Study Material',
   [CohortComponent.GROUP_DISCUSSIONS]: 'Group Discussions',
   [CohortComponent.LOUNGE_DISCUSSIONS]: 'Lounge Discussions',
-  [CohortComponent.DEPUTY]: 'Deputy',
+  [CohortComponent.DEPUTY]: 'TA',
   [CohortComponent.TEACHING_ASSISTANTS]: 'Teaching Assistants',
   [CohortComponent.BITSHALA_CLUBS]: 'Bitshala Clubs',
   [CohortComponent.BITDEV_MEETUPS]: 'Bitdev Meetups',
