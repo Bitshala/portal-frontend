@@ -13,6 +13,8 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import { BookOpen, User, Eye, Download, UserPlus, Clock, MessageSquare, CalendarPlus } from 'lucide-react';
 import { useMyCohorts, useCohorts, useJoinCohort, useJoinCohortWaitlist } from '../../hooks/cohortHooks';
@@ -352,72 +354,58 @@ const MyStudentDashboard = () => {
               const certificate = myCertificates?.find((c) => c.cohortId === row.id);
               return (
                 <>
-                  <Button
-                    size="small"
-                    startIcon={<Eye size={14} />}
-                    onClick={() => {
-                      if (userData?.id) {
-                        const params = new URLSearchParams({
-                          studentId: userData.id,
-                          cohortType: row.type,
-                          cohortId: row.id,
-                          ...(userData.name && { studentName: userData.name }),
-                          ...(userData.email && { studentEmail: userData.email }),
-                        });
-                        navigate(`/detailPage?${params.toString()}`);
-                      }
-                    }}
-                    sx={{
-                      color: '#fb923c',
-                      bgcolor: 'rgba(249,115,22,0.1)',
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.75rem',
-                      px: 1.5,
-                      minWidth: 'auto',
-                      '&:hover': { bgcolor: 'rgba(249,115,22,0.2)' },
-                    }}
-                  >
-                    View
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<MessageSquare size={14} />}
-                    onClick={() => navigate(`/cohortfeedback?cohortId=${row.id}`)}
-                    sx={{
-                      color: '#a78bfa',
-                      bgcolor: 'rgba(167,139,250,0.1)',
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.75rem',
-                      px: 1.5,
-                      minWidth: 'auto',
-                      '&:hover': { bgcolor: 'rgba(167,139,250,0.2)' },
-                    }}
-                  >
-                    Feedback
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<CalendarPlus size={14} />}
-                    onClick={() => {
-                      // webcal:// triggers native calendar subscribe on macOS/iOS/Outlook
-                      // Falls back gracefully to .ics download on other platforms
-                      window.location.href = apiService.getCalendarSubscribeUrl(row.id);
-                    }}
-                    sx={{
-                      color: '#34d399',
-                      bgcolor: 'rgba(52,211,153,0.1)',
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      fontSize: '0.75rem',
-                      px: 1.5,
-                      minWidth: 'auto',
-                      '&:hover': { bgcolor: 'rgba(52,211,153,0.2)' },
-                    }}
-                  >
-                    Calendar
-                  </Button>
+                  <Tooltip title="View cohort details" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        if (userData?.id) {
+                          const params = new URLSearchParams({
+                            studentId: userData.id,
+                            cohortType: row.type,
+                            cohortId: row.id,
+                            ...(userData.name && { studentName: userData.name }),
+                            ...(userData.email && { studentEmail: userData.email }),
+                          });
+                          navigate(`/detailPage?${params.toString()}`);
+                        }
+                      }}
+                      sx={{
+                        color: '#fb923c',
+                        bgcolor: 'rgba(249,115,22,0.1)',
+                        '&:hover': { bgcolor: 'rgba(249,115,22,0.2)' },
+                      }}
+                    >
+                      <Eye size={16} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Submit feedback for this cohort" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => navigate(`/cohortfeedback?cohortId=${row.id}`)}
+                      sx={{
+                        color: '#a78bfa',
+                        bgcolor: 'rgba(167,139,250,0.1)',
+                        '&:hover': { bgcolor: 'rgba(167,139,250,0.2)' },
+                      }}
+                    >
+                      <MessageSquare size={16} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Subscribe to cohort calendar" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        window.location.href = apiService.getCalendarSubscribeUrl(row.id);
+                      }}
+                      sx={{
+                        color: '#34d399',
+                        bgcolor: 'rgba(52,211,153,0.1)',
+                        '&:hover': { bgcolor: 'rgba(52,211,153,0.2)' },
+                      }}
+                    >
+                      <CalendarPlus size={16} />
+                    </IconButton>
+                  </Tooltip>
                   {row.status === 'Completed' && certificate && (
                     <Button
                       size="small"
