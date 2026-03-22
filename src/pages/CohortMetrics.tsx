@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Box, Typography, CircularProgress, Chip } from '@mui/material';
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,10 +10,10 @@ import {
   Scatter,
   ZAxis,
   Cell,
-  ComposedChart,
-  Line,
   Legend,
   LabelList,
+  LineChart,
+  Line,
 } from 'recharts';
 import { BarChart3, Users, TrendingUp, Target } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
@@ -49,6 +47,7 @@ interface CohortMetric {
   shortLabel: string;
   type: CohortType;
   season: number;
+  startDate: string;
   totalParticipants: number;
   retainedStudents: number;
   retentionRate: number;
@@ -98,6 +97,26 @@ const StatCard = ({
   </Box>
 );
 
+/* ── Formula info box ── */
+const FormulaBox = ({ formulas }: { formulas: { name: string; formula: string }[] }) => (
+  <Box
+    sx={{
+      bgcolor: '#111113',
+      border: '1px solid #27272a',
+      borderRadius: 1.5,
+      px: 2,
+      py: 1.5,
+      mb: 2,
+    }}
+  >
+    {formulas.map((f, i) => (
+      <Typography key={i} sx={{ color: '#71717a', fontSize: '0.72rem', fontFamily: 'monospace', lineHeight: 1.8 }}>
+        <span style={{ color: '#a1a1aa', fontWeight: 600 }}>{f.name}</span>{' = '}{f.formula}
+      </Typography>
+    ))}
+  </Box>
+);
+
 const CohortMetrics = () => {
   const [selectedCohorts, setSelectedCohorts] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<'Completed' | 'Active' | 'All'>(
@@ -141,12 +160,10 @@ const CohortMetrics = () => {
           return {
             cohortId: cohort.id,
             label: `${cohortTypeToName(cohort.type)} S${cohort.season}`,
-            shortLabel: `${cohort.type
-              .split('_')
-              .map((w) => w[0])
-              .join('')} S${cohort.season}`,
+            shortLabel: `${cohort.type.split('_').map((w) => w[0]).join('')} S${cohort.season}`,
             type: cohort.type,
             season: cohort.season,
+            startDate: cohort.startDate,
             totalParticipants: 0,
             retainedStudents: 0,
             retentionRate: 0,
@@ -163,31 +180,23 @@ const CohortMetrics = () => {
 
         const avgAttendanceRate =
           (entries.reduce(
-            (sum, e) =>
-              sum + (e.maxAttendance > 0 ? e.totalAttendance / e.maxAttendance : 0),
+            (sum, e) => sum + (e.maxAttendance > 0 ? e.totalAttendance / e.maxAttendance : 0),
             0,
-          ) /
-            totalParticipants) *
-          100;
+          ) / totalParticipants) * 100;
 
         const completionRate =
           (entries.reduce(
-            (sum, e) =>
-              sum + (e.maxTotalScore > 0 ? e.totalScore / e.maxTotalScore : 0),
+            (sum, e) => sum + (e.maxTotalScore > 0 ? e.totalScore / e.maxTotalScore : 0),
             0,
-          ) /
-            totalParticipants) *
-          100;
+          ) / totalParticipants) * 100;
 
         return {
           cohortId: cohort.id,
           label: `${cohortTypeToName(cohort.type)} S${cohort.season}`,
-          shortLabel: `${cohort.type
-            .split('_')
-            .map((w) => w[0])
-            .join('')} S${cohort.season}`,
+          shortLabel: `${cohort.type.split('_').map((w) => w[0]).join('')} S${cohort.season}`,
           type: cohort.type,
           season: cohort.season,
+          startDate: cohort.startDate,
           totalParticipants,
           retainedStudents,
           retentionRate: Math.round(retentionRate * 10) / 10,
@@ -198,10 +207,18 @@ const CohortMetrics = () => {
       .filter((m): m is CohortMetric => m !== null);
   }, [filteredCohorts, leaderboardQueries]);
 
-  const displayData = useMemo(() => {
-    if (selectedCohorts.size === 0) return metricsData;
-    return metricsData.filter((m) => selectedCohorts.has(m.cohortId));
+  // Sort by startDate ascending (earliest first) for charts
+  const chronologicalData = useMemo(() => {
+    const data = selectedCohorts.size === 0
+      ? [...metricsData]
+      : metricsData.filter((m) => selectedCohorts.has(m.cohortId));
+    return data.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   }, [metricsData, selectedCohorts]);
+
+  // Sort by startDate descending (recent first) for detail table
+  const reverseChronologicalData = useMemo(() => {
+    return [...chronologicalData].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+  }, [chronologicalData]);
 
   const toggleCohort = (cohortId: string) => {
     setSelectedCohorts((prev) => {
@@ -213,31 +230,22 @@ const CohortMetrics = () => {
   };
 
   const avgRetention =
-    displayData.length > 0
+    chronologicalData.length > 0
       ? Math.round(
-          (displayData.reduce((s, d) => s + d.retentionRate, 0) / displayData.length) *
-            10,
+          (chronologicalData.reduce((s, d) => s + d.retentionRate, 0) / chronologicalData.length) * 10,
         ) / 10
       : 0;
   const avgCompletion =
-    displayData.length > 0
+    chronologicalData.length > 0
       ? Math.round(
-          (displayData.reduce((s, d) => s + d.completionRate, 0) / displayData.length) *
-            10,
+          (chronologicalData.reduce((s, d) => s + d.completionRate, 0) / chronologicalData.length) * 10,
         ) / 10
       : 0;
-  const totalParticipants = displayData.reduce((s, d) => s + d.totalParticipants, 0);
+  const totalParticipants = chronologicalData.reduce((s, d) => s + d.totalParticipants, 0);
 
   if (cohortsLoading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '60vh',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress sx={{ color: '#fb923c' }} />
       </Box>
     );
@@ -249,14 +257,7 @@ const CohortMetrics = () => {
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
           <BarChart3 size={28} color="#fb923c" />
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: '#fafafa',
-              fontSize: { xs: '1.5rem', md: '2rem' },
-            }}
-          >
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#fafafa', fontSize: { xs: '1.5rem', md: '2rem' } }}>
             Cohort Metrics
           </Typography>
         </Box>
@@ -271,38 +272,24 @@ const CohortMetrics = () => {
           <Chip
             key={status}
             label={status}
-            onClick={() => {
-              setStatusFilter(status);
-              setSelectedCohorts(new Set());
-            }}
+            onClick={() => { setStatusFilter(status); setSelectedCohorts(new Set()); }}
             sx={{
-              bgcolor:
-                statusFilter === status ? 'rgba(249,115,22,0.15)' : '#27272a',
+              bgcolor: statusFilter === status ? 'rgba(249,115,22,0.15)' : '#27272a',
               color: statusFilter === status ? '#fb923c' : '#a1a1aa',
-              border:
-                statusFilter === status
-                  ? '1px solid #f97316'
-                  : '1px solid #3f3f46',
+              border: statusFilter === status ? '1px solid #f97316' : '1px solid #3f3f46',
               fontWeight: 600,
               fontSize: '0.8rem',
               cursor: 'pointer',
-              '&:hover': {
-                bgcolor:
-                  statusFilter === status
-                    ? 'rgba(249,115,22,0.2)'
-                    : '#3f3f46',
-              },
+              '&:hover': { bgcolor: statusFilter === status ? 'rgba(249,115,22,0.2)' : '#3f3f46' },
             }}
           />
         ))}
       </Box>
 
-      {/* Cohort Selector Buttons */}
+      {/* Cohort Selector */}
       {metricsData.length > 0 && (
         <Box sx={{ mb: 3 }}>
-          <Typography
-            sx={{ color: '#a1a1aa', fontSize: '0.8rem', fontWeight: 500, mb: 1 }}
-          >
+          <Typography sx={{ color: '#a1a1aa', fontSize: '0.8rem', fontWeight: 500, mb: 1 }}>
             Filter by cohort (click to toggle, none selected = show all)
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
@@ -313,19 +300,13 @@ const CohortMetrics = () => {
                 onClick={() => toggleCohort(m.cohortId)}
                 size="small"
                 sx={{
-                  bgcolor: selectedCohorts.has(m.cohortId)
-                    ? `${CHART_COLORS[i % CHART_COLORS.length]}22`
-                    : '#1c1c1f',
-                  color: selectedCohorts.has(m.cohortId)
-                    ? CHART_COLORS[i % CHART_COLORS.length]
-                    : '#a1a1aa',
+                  bgcolor: selectedCohorts.has(m.cohortId) ? `${CHART_COLORS[i % CHART_COLORS.length]}22` : '#1c1c1f',
+                  color: selectedCohorts.has(m.cohortId) ? CHART_COLORS[i % CHART_COLORS.length] : '#a1a1aa',
                   border: `1px solid ${selectedCohorts.has(m.cohortId) ? CHART_COLORS[i % CHART_COLORS.length] : '#3f3f46'}`,
                   fontWeight: 500,
                   fontSize: '0.75rem',
                   cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: `${CHART_COLORS[i % CHART_COLORS.length]}15`,
-                  },
+                  '&:hover': { bgcolor: `${CHART_COLORS[i % CHART_COLORS.length]}15` },
                 }}
               />
             ))}
@@ -336,43 +317,19 @@ const CohortMetrics = () => {
       {anyLoading && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <CircularProgress size={16} sx={{ color: '#fb923c' }} />
-          <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>
-            Loading cohort data...
-          </Typography>
+          <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>Loading cohort data...</Typography>
         </Box>
       )}
 
       {/* Summary Cards */}
       <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
-        <StatCard
-          icon={BarChart3}
-          label="Cohorts Analyzed"
-          value={displayData.length}
-          color="#fb923c"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Avg Retention Rate"
-          value={`${avgRetention}%`}
-          subtitle="Students attending >=50% weeks"
-          color="#4ade80"
-        />
-        <StatCard
-          icon={Target}
-          label="Avg Completion Rate"
-          value={`${avgCompletion}%`}
-          subtitle="Average score percentage"
-          color="#38bdf8"
-        />
-        <StatCard
-          icon={Users}
-          label="Total Participants"
-          value={totalParticipants}
-          color="#a78bfa"
-        />
+        <StatCard icon={BarChart3} label="Cohorts Analyzed" value={chronologicalData.length} color="#fb923c" />
+        <StatCard icon={TrendingUp} label="Avg Retention Rate" value={`${avgRetention}%`} subtitle="Students attending ≥50% weeks" color="#4ade80" />
+        <StatCard icon={Target} label="Avg Completion Rate" value={`${avgCompletion}%`} subtitle="Average score percentage" color="#38bdf8" />
+        <StatCard icon={Users} label="Total Participants" value={totalParticipants} color="#a78bfa" />
       </Box>
 
-      {displayData.length === 0 && allLoaded && (
+      {chronologicalData.length === 0 && allLoaded && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography sx={{ color: '#71717a', fontSize: '1rem' }}>
             No cohort data available for the selected filter.
@@ -380,39 +337,27 @@ const CohortMetrics = () => {
         </Box>
       )}
 
-      {displayData.length > 0 && (
+      {chronologicalData.length > 0 && (
         <>
-          {/* Chart 1: Retention Rate per Cohort */}
-          <Box
-            sx={{
-              bgcolor: '#1c1c1f',
-              border: '1px solid #27272a',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-            }}
-          >
+          {/* ═══════ Chart 1: Retention Rate vs Time/Cohort (Line) ═══════ */}
+          <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <TrendingUp size={20} color="#4ade80" />
               <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
-                Retention Rate by Cohort
+                Retention Rate vs Time / Cohort
               </Typography>
             </Box>
-            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 2 }}>
-              {'Percentage of participants who attended >=50% of total weeks'}
+            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 1.5 }}>
+              Percentage of participants retained over time — ordered by cohort start date (earliest → latest)
             </Typography>
+            <FormulaBox formulas={[
+              { name: 'Retention Rate', formula: '(Students with attendance ≥ 50% of total weeks) / Total Participants × 100' },
+              { name: 'Retained Student', formula: 'totalAttendance / maxAttendance ≥ 0.5' },
+            ]} />
             <Box sx={{ width: '100%', height: { xs: 300, md: 400 } }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={displayData}
-                  margin={{ top: 24, right: 16, left: 0, bottom: 16 }}
-                  barCategoryGap="25%"
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#3f3f46"
-                    vertical={false}
-                  />
+                <LineChart data={chronologicalData} margin={{ top: 24, right: 24, left: 0, bottom: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
                   <XAxis
                     dataKey="label"
                     tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
@@ -420,11 +365,11 @@ const CohortMetrics = () => {
                     tickLine={false}
                     interval={0}
                     height={48}
-                    angle={displayData.length > 4 ? -25 : 0}
-                    textAnchor={displayData.length > 4 ? 'end' : 'middle'}
+                    angle={chronologicalData.length > 4 ? -25 : 0}
+                    textAnchor={chronologicalData.length > 4 ? 'end' : 'middle'}
                   />
                   <YAxis
-                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
+                    domain={[0, 100]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
@@ -432,58 +377,51 @@ const CohortMetrics = () => {
                     width={48}
                   />
                   <RechartsTooltip
-                    cursor={{ fill: 'rgba(249,115,22,0.08)' }}
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: '#fb923c', fontWeight: 600 }}
                     itemStyle={{ color: '#fafafa' }}
                     formatter={(value: number) => [`${value}%`, 'Retention Rate']}
                   />
-                  <Bar dataKey="retentionRate" radius={[6, 6, 0, 0]} maxBarSize={64}>
-                    {displayData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
+                  <Line
+                    type="monotone"
+                    dataKey="retentionRate"
+                    stroke="#4ade80"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#4ade80', r: 5, strokeWidth: 0 }}
+                    activeDot={{ r: 7, stroke: '#4ade80', strokeWidth: 2, fill: '#18181b' }}
+                  >
                     <LabelList
                       dataKey="retentionRate"
                       position="top"
                       formatter={(v: number) => `${v}%`}
-                      style={{ fill: '#fafafa', fontSize: 13, fontWeight: 600 }}
+                      style={{ fill: '#4ade80', fontSize: 12, fontWeight: 600 }}
+                      offset={10}
                     />
-                  </Bar>
-                </BarChart>
+                  </Line>
+                </LineChart>
               </ResponsiveContainer>
             </Box>
           </Box>
 
-          {/* Chart 2: Retention vs Completion - Composed Chart */}
-          <Box
-            sx={{
-              bgcolor: '#1c1c1f',
-              border: '1px solid #27272a',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-            }}
-          >
+          {/* ═══════ Chart 2: Completion Rate vs Time/Cohort (Line) ═══════ */}
+          <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Target size={20} color="#38bdf8" />
               <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
-                Retention Rate vs Completion Percentage
+                Completion Rate vs Time / Cohort
               </Typography>
             </Box>
-            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 2 }}>
-              Comparing retention rates against cohort completion across all cohorts
+            <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 1.5 }}>
+              Average exercise/score completion rate over time — ordered by cohort start date (earliest → latest)
             </Typography>
+            <FormulaBox formulas={[
+              { name: 'Completion Rate', formula: 'Σ(totalScore / maxTotalScore for each student) / Total Participants × 100' },
+              { name: 'Per Student', formula: 'totalScore / maxTotalScore (capped at 1.0 if max is 0)' },
+            ]} />
             <Box sx={{ width: '100%', height: { xs: 300, md: 400 } }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  data={displayData}
-                  margin={{ top: 24, right: 16, left: 0, bottom: 16 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#3f3f46"
-                    vertical={false}
-                  />
+                <LineChart data={chronologicalData} margin={{ top: 24, right: 24, left: 0, bottom: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
                   <XAxis
                     dataKey="label"
                     tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
@@ -491,11 +429,11 @@ const CohortMetrics = () => {
                     tickLine={false}
                     interval={0}
                     height={48}
-                    angle={displayData.length > 4 ? -25 : 0}
-                    textAnchor={displayData.length > 4 ? 'end' : 'middle'}
+                    angle={chronologicalData.length > 4 ? -25 : 0}
+                    textAnchor={chronologicalData.length > 4 ? 'end' : 'middle'}
                   />
                   <YAxis
-                    domain={[0, (max: number) => Math.min(100, Math.ceil((max + 10) / 10) * 10)]}
+                    domain={[0, 100]}
                     tick={{ fill: '#a1a1aa', fontSize: 12 }}
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
@@ -503,76 +441,47 @@ const CohortMetrics = () => {
                     width={48}
                   />
                   <RechartsTooltip
-                    cursor={{ fill: 'rgba(249,115,22,0.08)' }}
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: '#fb923c', fontWeight: 600 }}
                     itemStyle={{ color: '#fafafa' }}
-                    formatter={(value: number, name: string) => [
-                      `${value}%`,
-                      name === 'retentionRate' ? 'Retention Rate' : 'Completion Rate',
-                    ]}
+                    formatter={(value: number) => [`${value}%`, 'Completion Rate']}
                   />
-                  <Legend
-                    wrapperStyle={{ color: '#a1a1aa', fontSize: 12, paddingTop: 8 }}
-                    formatter={(value: string) =>
-                      value === 'retentionRate' ? 'Retention Rate' : 'Completion Rate'
-                    }
-                  />
-                  <Bar
-                    dataKey="retentionRate"
-                    fill="#fb923c"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={56}
-                    opacity={0.85}
-                  >
-                    <LabelList
-                      dataKey="retentionRate"
-                      position="top"
-                      formatter={(v: number) => `${v}%`}
-                      style={{ fill: '#fb923c', fontSize: 11, fontWeight: 600 }}
-                    />
-                  </Bar>
                   <Line
                     type="monotone"
                     dataKey="completionRate"
                     stroke="#38bdf8"
                     strokeWidth={2.5}
                     dot={{ fill: '#38bdf8', r: 5, strokeWidth: 0 }}
-                    activeDot={{
-                      r: 7,
-                      stroke: '#38bdf8',
-                      strokeWidth: 2,
-                      fill: '#18181b',
-                    }}
-                  />
-                </ComposedChart>
+                    activeDot={{ r: 7, stroke: '#38bdf8', strokeWidth: 2, fill: '#18181b' }}
+                  >
+                    <LabelList
+                      dataKey="completionRate"
+                      position="top"
+                      formatter={(v: number) => `${v}%`}
+                      style={{ fill: '#38bdf8', fontSize: 12, fontWeight: 600 }}
+                      offset={10}
+                    />
+                  </Line>
+                </LineChart>
               </ResponsiveContainer>
             </Box>
           </Box>
 
-          {/* Chart 3: 2D Scatter Plot */}
-          <Box
-            sx={{
-              bgcolor: '#1c1c1f',
-              border: '1px solid #27272a',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-            }}
-          >
+          {/* ═══════ Chart 3: Retention vs Completion Scatter (unchanged) ═══════ */}
+          <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <BarChart3 size={20} color="#a78bfa" />
               <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
-                Cohort Performance Distribution
+                Retention vs Completion
               </Typography>
             </Box>
             <Typography sx={{ color: '#71717a', fontSize: '0.8rem', mb: 1 }}>
               Each bubble is a cohort — X-axis is average exercise completion, Y-axis
-              is student retention ({'>='}50% attendance). Bubble size = participant count.
+              is student retention ({'≥'}50% attendance). Bubble size = participant count.
             </Typography>
-            {/* Inline legend for scatter */}
+            {/* Inline legend */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
-              {displayData.map((m, i) => (
+              {chronologicalData.map((m, i) => (
                 <Box key={m.cohortId} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: CHART_COLORS[i % CHART_COLORS.length] }} />
                   <Typography sx={{ color: '#d4d4d8', fontSize: '0.75rem' }}>{m.label}</Typography>
@@ -592,14 +501,7 @@ const CohortMetrics = () => {
                     axisLine={{ stroke: '#3f3f46' }}
                     tickLine={false}
                     tickFormatter={(v) => `${v}%`}
-                    label={{
-                      value: 'Completion Rate (%)',
-                      position: 'insideBottom',
-                      offset: -16,
-                      fill: '#a1a1aa',
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
+                    label={{ value: 'Completion Rate (%)', position: 'insideBottom', offset: -16, fill: '#a1a1aa', fontSize: 12, fontWeight: 500 }}
                   />
                   <YAxis
                     type="number"
@@ -611,22 +513,9 @@ const CohortMetrics = () => {
                     tickLine={false}
                     tickFormatter={(v) => `${v}%`}
                     width={48}
-                    label={{
-                      value: 'Retention Rate (%)',
-                      angle: -90,
-                      position: 'insideLeft',
-                      offset: 4,
-                      fill: '#a1a1aa',
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
+                    label={{ value: 'Retention Rate (%)', angle: -90, position: 'insideLeft', offset: 4, fill: '#a1a1aa', fontSize: 12, fontWeight: 500 }}
                   />
-                  <ZAxis
-                    type="number"
-                    dataKey="totalParticipants"
-                    range={[200, 600]}
-                    name="Participants"
-                  />
+                  <ZAxis type="number" dataKey="totalParticipants" range={[200, 600]} name="Participants" />
                   <RechartsTooltip
                     contentStyle={tooltipStyle}
                     itemStyle={{ color: '#fafafa' }}
@@ -635,61 +524,37 @@ const CohortMetrics = () => {
                       name === 'Participants' ? value : `${value}%`,
                       name,
                     ]}
-                    labelFormatter={(
-                      _: unknown,
-                      payload: Array<{ payload?: CohortMetric }>,
-                    ) => {
+                    labelFormatter={(_: unknown, payload: Array<{ payload?: CohortMetric }>) => {
                       if (payload?.[0]?.payload) return payload[0].payload.label;
                       return '';
                     }}
                   />
-                  <Scatter data={displayData} name="Cohorts">
-                    {displayData.map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={CHART_COLORS[i % CHART_COLORS.length]}
-                        opacity={0.9}
-                      />
+                  <Scatter data={chronologicalData} name="Cohorts">
+                    {chronologicalData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} opacity={0.9} />
                     ))}
-                    <LabelList
-                      dataKey="shortLabel"
-                      position="top"
-                      style={{ fill: '#d4d4d8', fontSize: 11, fontWeight: 500 }}
-                      offset={10}
-                    />
+                    <LabelList dataKey="shortLabel" position="top" style={{ fill: '#d4d4d8', fontSize: 11, fontWeight: 500 }} offset={10} />
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
             </Box>
           </Box>
 
-          {/* Detail Table */}
-          <Box
-            sx={{
-              bgcolor: '#1c1c1f',
-              border: '1px solid #27272a',
-              borderRadius: 2,
-              p: 3,
-            }}
-          >
-            <Typography
-              sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem', mb: 2 }}
-            >
-              Cohort Details
-            </Typography>
+          {/* ═══════ Detail Table (reverse chronological — recent first) ═══════ */}
+          <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
+                Cohort Details
+              </Typography>
+              <Typography sx={{ color: '#52525b', fontSize: '0.72rem' }}>
+                Sorted by start date — most recent first
+              </Typography>
+            </Box>
             <Box sx={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {[
-                      'Cohort',
-                      'Season',
-                      'Participants',
-                      'Retained',
-                      'Retention %',
-                      'Avg Attendance %',
-                      'Completion %',
-                    ].map((h) => (
+                    {['Cohort', 'Season', 'Start Date', 'Participants', 'Retained', 'Retention %', 'Avg Attendance %', 'Completion %'].map((h) => (
                       <th
                         key={h}
                         style={{
@@ -708,76 +573,30 @@ const CohortMetrics = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayData.map((m, i) => (
-                    <tr
-                      key={m.cohortId}
-                      style={{ borderBottom: '1px solid #1c1c1f' }}
-                    >
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: CHART_COLORS[i % CHART_COLORS.length],
-                          fontSize: '0.85rem',
-                          fontWeight: 500,
-                        }}
-                      >
+                  {reverseChronologicalData.map((m, i) => (
+                    <tr key={m.cohortId} style={{ borderBottom: '1px solid #1c1c1f' }}>
+                      <td style={{ padding: '10px 12px', color: CHART_COLORS[i % CHART_COLORS.length], fontSize: '0.85rem', fontWeight: 500 }}>
                         {cohortTypeToName(m.type)}
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#d4d4d8',
-                          fontSize: '0.85rem',
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#d4d4d8', fontSize: '0.85rem' }}>
                         S{m.season}
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#d4d4d8',
-                          fontSize: '0.85rem',
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#71717a', fontSize: '0.85rem' }}>
+                        {new Date(m.startDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#d4d4d8', fontSize: '0.85rem' }}>
                         {m.totalParticipants}
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#d4d4d8',
-                          fontSize: '0.85rem',
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#d4d4d8', fontSize: '0.85rem' }}>
                         {m.retainedStudents}
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#4ade80',
-                          fontSize: '0.85rem',
-                          fontWeight: 600,
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#4ade80', fontSize: '0.85rem', fontWeight: 600 }}>
                         {m.retentionRate}%
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#facc15',
-                          fontSize: '0.85rem',
-                          fontWeight: 600,
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#facc15', fontSize: '0.85rem', fontWeight: 600 }}>
                         {m.avgAttendanceRate}%
                       </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          color: '#38bdf8',
-                          fontSize: '0.85rem',
-                          fontWeight: 600,
-                        }}
-                      >
+                      <td style={{ padding: '10px 12px', color: '#38bdf8', fontSize: '0.85rem', fontWeight: 600 }}>
                         {m.completionRate}%
                       </td>
                     </tr>
