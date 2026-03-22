@@ -419,6 +419,26 @@ class ApiService {
     });
     return data;
   };
+
+  // =========================
+  // Calendar
+  // =========================
+
+  /**
+   * Returns the webcal:// subscribe URL for a cohort calendar.
+   * This is a public endpoint — no auth needed.
+   */
+  public getCalendarSubscribeUrl = (cohortId: string): string => {
+    const httpUrl = `${API_BASE_URL}/cohort-calendar/${cohortId}/subscribe`;
+    return httpUrl.replace(/^https?:\/\//, 'webcal://');
+  };
+
+  /**
+   * Returns the raw HTTP URL for downloading the .ics file.
+   */
+  public getCalendarDownloadUrl = (cohortId: string): string => {
+    return `${API_BASE_URL}/cohort-calendar/${cohortId}/subscribe`;
+  };
 }
 
 const serviceInstance = new ApiService();

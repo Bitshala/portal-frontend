@@ -21,7 +21,7 @@ const COMPONENT_LABELS: Record<CohortComponent, string> = {
   [CohortComponent.STUDY_MATERIAL]: 'Study Material',
   [CohortComponent.GROUP_DISCUSSIONS]: 'Group Discussions',
   [CohortComponent.LOUNGE_DISCUSSIONS]: 'Lounge Discussions',
-  [CohortComponent.DEPUTY]: 'TA',
+  [CohortComponent.DEPUTY]: 'TA / Teaching Assistants',
   [CohortComponent.TEACHING_ASSISTANTS]: 'Teaching Assistants',
   [CohortComponent.BITSHALA_CLUBS]: 'Bitshala Clubs',
   [CohortComponent.BITDEV_MEETUPS]: 'Bitdev Meetups',
@@ -38,59 +38,93 @@ const RATING_LABELS: Record<ComponentRating, string> = {
 
 const OPPORTUNITY_LABELS: Record<OpportunityInterest, string> = {
   [OpportunityInterest.DEVELOPER]: 'Developer',
-  [OpportunityInterest.DESIGNER_CREATIVE]: 'Designer / Creative',
-  [OpportunityInterest.EDUCATION_WRITING]: 'Education / Writing',
+  [OpportunityInterest.DESIGNER_CREATIVE]: 'Designer',
+  [OpportunityInterest.EDUCATION_WRITING]: 'Educator',
   [OpportunityInterest.PROGRAM_OPS]: 'Program Ops',
   [OpportunityInterest.LEGAL_ACCOUNTS]: 'Legal / Accounts',
   [OpportunityInterest.BUILDING_STARTUP]: 'Building a Startup',
   [OpportunityInterest.HOSTING_CLUB]: 'Hosting a Club',
-  [OpportunityInterest.JUST_STACKING]: 'Just Stacking',
+  [OpportunityInterest.JUST_STACKING]: 'Researcher',
 };
 
 const FELLOWSHIP_LABELS: Record<FellowshipInterest, string> = {
-  [FellowshipInterest.SILENT_PAYMENT_LIBRARY]: 'Silent Payment Library',
+  [FellowshipInterest.SILENT_PAYMENT_LIBRARY]: 'Silent Payments Implementation',
   [FellowshipInterest.SILENT_PAYMENT_INDEXER]: 'Silent Payment Indexer',
-  [FellowshipInterest.COINSELECTION]: 'Coin Selection',
-  [FellowshipInterest.BITCOIN_CORE_REVIEW]: 'Bitcoin Core Review',
-  [FellowshipInterest.COINSWAP]: 'Coinswap',
+  [FellowshipInterest.COINSELECTION]: 'Miniscript Security Audits',
+  [FellowshipInterest.BITCOIN_CORE_REVIEW]: 'Bitcoin Core Review Group',
+  [FellowshipInterest.COINSWAP]: 'Lightning Node Management Tools',
   [FellowshipInterest.ANY_OTHER_PROJECT]: 'Any Other Project',
 };
 
-const ALL_COMPONENTS = Object.values(CohortComponent);
+// Show only the components visible in the design
+const VISIBLE_COMPONENTS: CohortComponent[] = [
+  CohortComponent.SESSION_INSTRUCTIONS,
+  CohortComponent.STUDY_MATERIAL,
+  CohortComponent.GROUP_DISCUSSIONS,
+  CohortComponent.DEPUTY,
+  CohortComponent.BITSHALA_CLUBS,
+  CohortComponent.BITSPACE,
+];
+
 const ALL_RATINGS = Object.values(ComponentRating);
 const ALL_OPPORTUNITIES = Object.values(OpportunityInterest);
 const ALL_FELLOWSHIPS = Object.values(FellowshipInterest);
 
-/* ── Bitcoin radio icon component ── */
-const BitcoinRadio = ({ checked, onClick }: { checked: boolean; onClick: () => void }) => (
+// Career pathways shown in the design
+const CAREER_PATHWAYS: OpportunityInterest[] = [
+  OpportunityInterest.DEVELOPER,
+  OpportunityInterest.DESIGNER_CREATIVE,
+  OpportunityInterest.JUST_STACKING,
+  OpportunityInterest.EDUCATION_WRITING,
+];
+
+// Fellowship items shown in the design
+const FELLOWSHIP_ITEMS: FellowshipInterest[] = [
+  FellowshipInterest.SILENT_PAYMENT_LIBRARY,
+  FellowshipInterest.BITCOIN_CORE_REVIEW,
+  FellowshipInterest.COINSWAP,
+  FellowshipInterest.COINSELECTION,
+];
+
+/* ── Section number label ── */
+const SectionLabel = ({ number, label }: { number: string; label: string }) => (
+  <p
+    className="text-xs font-semibold tracking-[0.15em] uppercase mb-2"
+    style={{ color: '#e97520' }}
+  >
+    {number} / {label}
+  </p>
+);
+
+/* ── Radio dot ── */
+const RadioDot = ({ checked, onClick }: { checked: boolean; onClick: () => void }) => (
   <button
     type="button"
     onClick={onClick}
-    className="w-10 h-10 flex items-center justify-center cursor-pointer bg-transparent border-0 transition-all duration-200"
+    className="w-5 h-5 rounded-full cursor-pointer bg-transparent p-0 flex items-center justify-center transition-all duration-200"
     style={{
-      color: checked ? '#f97316' : '#3f3f46',
-      filter: checked ? 'drop-shadow(0 0 6px rgba(249,115,22,0.4))' : 'none',
+      border: `2px solid ${checked ? '#e97520' : '#444'}`,
+      backgroundColor: checked ? '#e97520' : 'transparent',
     }}
   >
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="w-10 h-10 transition-transform duration-200"
-      style={{ transform: checked ? 'scale(1.2)' : 'scale(1)' }}
-    >
-      <path d="M14.24 10.56C13.93 8.7 12.07 8.5 10.66 8.36l-.34-2.36-1.43.2.33 2.34-1.14.16-.34-2.34-1.43.2.34 2.35-2.88.4.22 1.55 1.04-.15a.65.65 0 0 1 .74.5l.87 6.13a.42.42 0 0 1-.34.49l-1.04.15.06 1.6 2.88-.4.34 2.35 1.43-.2-.34-2.35 1.14-.16.34 2.35 1.43-.2-.34-2.36c2.06-.37 3.48-1.18 3.2-3.17-.22-1.6-1.12-2.15-2.34-2.24.78-.5 1.16-1.3 1-2.49zm-1.72 4.84c.22 1.56-2.1 1.9-2.88 2.01l-.46-3.24c.78-.11 3.1-.45 3.34 1.23zm-.82-4.44c.2 1.42-1.74 1.7-2.4 1.8l-.42-2.94c.66-.1 2.6-.38 2.82 1.14z" />
-    </svg>
+    {checked && (
+      <span
+        className="block w-2 h-2 rounded-full"
+        style={{ backgroundColor: '#fff' }}
+      />
+    )}
   </button>
 );
 
-/* ── Checkbox component ── */
-const Checkbox = ({ checked }: { checked: boolean; onClick: () => void }) => (
-  <span
-    className="w-4 h-4 rounded shrink-0 flex items-center justify-center"
+/* ── Checkbox ── */
+const Checkbox = ({ checked, onClick }: { checked: boolean; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="w-4 h-4 rounded-sm cursor-pointer bg-transparent p-0 flex items-center justify-center shrink-0 transition-all duration-200"
     style={{
-      border: '1.5px solid',
-      borderColor: checked ? '#f97316' : '#3f3f46',
-      backgroundColor: checked ? '#f97316' : 'transparent',
+      border: `1.5px solid ${checked ? '#e97520' : '#555'}`,
+      backgroundColor: checked ? '#e97520' : 'transparent',
     }}
   >
     {checked && (
@@ -98,33 +132,7 @@ const Checkbox = ({ checked }: { checked: boolean; onClick: () => void }) => (
         <path d="M5 13l4 4L19 7" />
       </svg>
     )}
-  </span>
-);
-
-/* ── Card wrapper matching profile design ── */
-const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-  <div
-    className={`rounded-2xl overflow-hidden ${className}`}
-    style={{
-      backgroundColor: '#0a0a0a',
-      border: '1px solid #1a1a1a',
-    }}
-  >
-    {children}
-  </div>
-);
-
-const SectionTitle = ({ title, subtitle }: { title: string; subtitle?: string }) => (
-  <div>
-    <h3 className="text-base font-bold" style={{ color: '#fafafa' }}>{title}</h3>
-    {subtitle && <p className="text-sm mt-1" style={{ color: '#71717a' }}>{subtitle}</p>}
-  </div>
-);
-
-const Label = ({ children }: { children: React.ReactNode }) => (
-  <label className="block text-sm font-semibold mb-2" style={{ color: '#d4d4d8' }}>
-    {children}
-  </label>
+  </button>
 );
 
 const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId = '' }: Props) => {
@@ -182,112 +190,124 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    backgroundColor: '#111113',
-    border: '1px solid #1e1e1e',
-    borderRadius: '10px',
-    color: '#fafafa',
-    transition: 'border-color 200ms, box-shadow 200ms',
+  const textareaStyle: React.CSSProperties = {
+    backgroundColor: '#1a1a1a',
+    border: '1px solid #2a2a2a',
+    borderRadius: '8px',
+    color: '#ccc',
     width: '100%',
     boxSizing: 'border-box',
     display: 'block',
+    resize: 'none',
+    fontFamily: 'Sora, sans-serif',
   };
 
-  const inputFocusClass = 'px-4 py-3 outline-none text-sm resize-none placeholder-zinc-600';
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {/* ── Cohort Selector ── */}
-      <Card className="p-5 sm:p-7">
-        <SectionTitle
-          title="Share Your Feedback"
-          subtitle="Help us improve by sharing your thoughts about your cohort experience"
-        />
+    <form onSubmit={handleSubmit}>
 
-        <div className="mt-5">
-          <Label>Select Cohort <span style={{ color: '#ef4444' }}>*</span></Label>
-          {isLoading ? (
-            <div
-              className="px-4 py-3 rounded-xl text-sm animate-pulse"
-              style={{ backgroundColor: '#18181b', color: '#71717a' }}
+      {/* ═══════════ 01 / SELECTION ═══════════ */}
+      <div className="mb-20">
+        <SectionLabel number="01" label="Selection" />
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="text-2xl font-bold mb-1" style={{ color: '#fff' }}>
+              Target Cohort
+            </h2>
+            <p className="text-sm" style={{ color: '#666' }}>
+              Select the specific learning track you completed.
+            </p>
+          </div>
+
+          <div>
+            <p
+              className="text-[10px] font-semibold tracking-[0.15em] uppercase mb-1.5"
+              style={{ color: '#888' }}
             >
-              Loading your cohorts...
-            </div>
-          ) : cohorts.length > 0 ? (
-            <div className="relative">
-              <select
-                value={selectedCohortId}
-                onChange={e => setSelectedCohortId(e.target.value)}
-                className="w-full px-4 py-3 pr-10 outline-none text-sm cursor-pointer"
-                style={{
-                  backgroundColor: '#111113',
-                  border: '1px solid #1e1e1e',
-                  borderRadius: '10px',
-                  color: '#fafafa',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  colorScheme: 'dark',
-                }}
-                required
+              Cohort Season
+            </p>
+            {isLoading ? (
+              <div
+                className="px-4 py-2.5 rounded-lg text-sm animate-pulse"
+                style={{ backgroundColor: '#1a1a1a', color: '#555', minWidth: 220 }}
               >
-                <option value="" style={{ backgroundColor: '#18181b' }}>Choose a cohort...</option>
-                {cohorts.map(cohort => (
-                  <option key={cohort.id} value={cohort.id} style={{ backgroundColor: '#18181b' }}>
-                    {cohort.type.replace(/_/g, ' ')} — Season {cohort.season}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-                style={{ color: '#71717a' }}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          ) : (
-            <div className="text-sm" style={{ color: '#71717a' }}>
-              You are not enrolled in any cohorts.{' '}
-              <button
-                type="button"
-                onClick={() => navigate('/myDashboard')}
-                className="bg-transparent border-0 cursor-pointer hover:underline"
-                style={{ color: '#f97316' }}
-              >
-                Join a cohort
-              </button>
-            </div>
-          )}
+                Loading cohorts...
+              </div>
+            ) : cohorts.length > 0 ? (
+              <div className="relative">
+                <select
+                  value={selectedCohortId}
+                  onChange={e => setSelectedCohortId(e.target.value)}
+                  className="px-4 py-2.5 pr-8 outline-none text-sm cursor-pointer"
+                  style={{
+                    backgroundColor: '#222',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: '#ccc',
+                    minWidth: 240,
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    colorScheme: 'dark',
+                    fontFamily: 'Sora, sans-serif',
+                  }}
+                  required
+                >
+                  <option value="" style={{ backgroundColor: '#222' }}>Choose a cohort...</option>
+                  {cohorts.map(cohort => (
+                    <option key={cohort.id} value={cohort.id} style={{ backgroundColor: '#222' }}>
+                      {cohort.type.replace(/_/g, ' ')} — Season {cohort.season}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none"
+                  style={{ color: '#888' }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="text-sm" style={{ color: '#666' }}>
+                No cohorts found.{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/myDashboard')}
+                  className="bg-transparent border-0 cursor-pointer hover:underline"
+                  style={{ color: '#e97520' }}
+                >
+                  Join a cohort
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </Card>
+      </div>
 
-      {/* ── Component Ratings ── */}
-      <Card className="p-5 sm:p-7">
-        <SectionTitle
-          title="Component Ratings"
-          subtitle="How helpful were the following components?"
-        />
+      {/* ═══════════ 02 / EVALUATION ═══════════ */}
+      <div className="mb-20">
+        <SectionLabel number="02" label="Evaluation" />
+        <h2 className="text-2xl font-bold mb-8" style={{ color: '#fff' }}>
+          Component Metrics
+        </h2>
 
         {/* Desktop table */}
-        <div className="hidden md:block mt-5 overflow-x-auto">
-          <table className="w-full" style={{ borderSpacing: '0 4px', borderCollapse: 'separate' }}>
+        <div className="hidden md:block">
+          <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
             <thead>
               <tr>
                 <th
-                  className="text-left pb-3 pl-4 font-semibold text-xs uppercase tracking-wider"
-                  style={{ color: '#52525b', width: '40%' }}
+                  className="text-left pb-4 pl-4 font-semibold text-[10px] uppercase tracking-[0.15em]"
+                  style={{ color: '#666', width: '35%' }}
                 >
-                  Component
+                  Session Type
                 </th>
                 {ALL_RATINGS.map(rating => (
                   <th
                     key={rating}
-                    className="pb-3 text-center font-semibold text-xs uppercase tracking-wider"
-                    style={{ color: '#52525b' }}
+                    className="pb-4 text-center font-semibold text-[10px] uppercase tracking-[0.15em]"
+                    style={{ color: '#666' }}
                   >
                     {RATING_LABELS[rating]}
                   </th>
@@ -295,18 +315,17 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
               </tr>
             </thead>
             <tbody>
-              {ALL_COMPONENTS.map((component, i) => (
-                <tr
-                  key={component}
-                  style={{
-                    backgroundColor: i % 2 === 0 ? '#111113' : 'transparent',
-                  }}
-                >
+              {VISIBLE_COMPONENTS.map(component => (
+                <tr key={component}>
                   <td
-                    className="py-3.5 pl-4 text-sm font-medium"
+                    className="py-4 pl-4 text-sm font-medium"
                     style={{
-                      color: '#d4d4d8',
-                      borderRadius: '10px 0 0 10px',
+                      color: '#bbb',
+                      backgroundColor: '#1a1a1a',
+                      borderRadius: '8px 0 0 8px',
+                      borderTop: '1px solid #222',
+                      borderBottom: '1px solid #222',
+                      borderLeft: '1px solid #222',
                     }}
                   >
                     {COMPONENT_LABELS[component]}
@@ -314,13 +333,17 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
                   {ALL_RATINGS.map((rating, ri) => (
                     <td
                       key={rating}
-                      className="py-3.5 text-center"
+                      className="py-4 text-center"
                       style={{
-                        borderRadius: ri === ALL_RATINGS.length - 1 ? '0 10px 10px 0' : undefined,
+                        backgroundColor: '#1a1a1a',
+                        borderTop: '1px solid #222',
+                        borderBottom: '1px solid #222',
+                        borderRadius: ri === ALL_RATINGS.length - 1 ? '0 8px 8px 0' : undefined,
+                        borderRight: ri === ALL_RATINGS.length - 1 ? '1px solid #222' : undefined,
                       }}
                     >
                       <div className="flex items-center justify-center">
-                        <BitcoinRadio
+                        <RadioDot
                           checked={componentRatings[component] === rating}
                           onClick={() => handleRatingChange(component, rating)}
                         />
@@ -334,10 +357,10 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
         </div>
 
         {/* Mobile stack */}
-        <div className="md:hidden flex flex-col gap-4 mt-5">
-          {ALL_COMPONENTS.map(component => (
+        <div className="md:hidden flex flex-col gap-5">
+          {VISIBLE_COMPONENTS.map(component => (
             <div key={component}>
-              <p className="text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+              <p className="text-sm font-medium mb-2" style={{ color: '#bbb' }}>
                 {COMPONENT_LABELS[component]}
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -348,21 +371,14 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
                       key={rating}
                       type="button"
                       onClick={() => handleRatingChange(component, rating)}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-all duration-200 border-0"
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200"
                       style={{
-                        backgroundColor: selected ? 'rgba(249,115,22,0.12)' : '#18181b',
-                        border: `1px solid ${selected ? 'rgba(249,115,22,0.4)' : '#27272a'}`,
-                        color: selected ? '#fb923c' : '#71717a',
+                        backgroundColor: selected ? 'rgba(233,117,32,0.12)' : '#1a1a1a',
+                        border: `1px solid ${selected ? 'rgba(233,117,32,0.4)' : '#2a2a2a'}`,
+                        color: selected ? '#e97520' : '#666',
                       }}
                     >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-5 h-5 shrink-0"
-                        style={{ color: selected ? '#f97316' : '#3f3f46' }}
-                      >
-                        <path d="M14.24 10.56C13.93 8.7 12.07 8.5 10.66 8.36l-.34-2.36-1.43.2.33 2.34-1.14.16-.34-2.34-1.43.2.34 2.35-2.88.4.22 1.55 1.04-.15a.65.65 0 0 1 .74.5l.87 6.13a.42.42 0 0 1-.34.49l-1.04.15.06 1.6 2.88-.4.34 2.35 1.43-.2-.34-2.35 1.14-.16.34 2.35 1.43-.2-.34-2.36c2.06-.37 3.48-1.18 3.2-3.17-.22-1.6-1.12-2.15-2.34-2.24.78-.5 1.16-1.3 1-2.49zm-1.72 4.84c.22 1.56-2.1 1.9-2.88 2.01l-.46-3.24c.78-.11 3.1-.45 3.34 1.23zm-.82-4.44c.2 1.42-1.74 1.7-2.4 1.8l-.42-2.94c.66-.1 2.6-.38 2.82 1.14z" />
-                      </svg>
+                      <RadioDot checked={selected} onClick={() => handleRatingChange(component, rating)} />
                       {RATING_LABELS[rating]}
                     </button>
                   );
@@ -371,135 +387,184 @@ const CohortFeedbackForm = ({ cohorts, isLoading, onSubmit, preselectedCohortId 
             </div>
           ))}
         </div>
-      </Card>
+      </div>
 
-      {/* ── Open-ended questions ── */}
-      <Card className="p-5 sm:p-7">
-        <SectionTitle title="Your Experience" />
+      {/* ═══════════ 03 / NARRATIVE ═══════════ */}
+      <div className="mb-20">
+        <SectionLabel number="03" label="Narrative" />
+        <h2 className="text-2xl font-bold mb-8" style={{ color: '#fff' }}>
+          Personal Experience
+        </h2>
 
-        <div className="flex flex-col gap-5 mt-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-7">
           <div>
-            <Label>Did the cohort meet your expectations? What were they?</Label>
+            <label
+              className="block text-[10px] font-semibold tracking-[0.12em] uppercase mb-2"
+              style={{ color: '#888' }}
+            >
+              Did the cohort meet your expectations?
+            </label>
             <textarea
               value={expectations}
               onChange={e => setExpectations(e.target.value)}
-              rows={3}
-              className={inputFocusClass}
-              style={inputStyle}
-              placeholder="Share your expectations and whether they were met..."
+              rows={5}
+              className="px-4 py-3 outline-none text-sm placeholder-zinc-600"
+              style={textareaStyle}
+              placeholder="Share your honest assessment..."
             />
           </div>
-
           <div>
-            <Label>What could we improve?</Label>
-            <textarea
-              value={improvements}
-              onChange={e => setImprovements(e.target.value)}
-              rows={3}
-              className={inputFocusClass}
-              style={inputStyle}
-              placeholder="Suggest areas for improvement..."
-            />
-          </div>
-
-          <div>
-            <Label>What is your ideal Bitcoin project?</Label>
+            <label
+              className="block text-[10px] font-semibold tracking-[0.12em] uppercase mb-2"
+              style={{ color: '#888' }}
+            >
+              What is your ideal Bitcoin project?
+            </label>
             <textarea
               value={idealProject}
               onChange={e => setIdealProject(e.target.value)}
-              rows={3}
-              className={inputFocusClass}
-              style={inputStyle}
-              placeholder="Describe the Bitcoin project you'd love to work on..."
+              rows={5}
+              className="px-4 py-3 outline-none text-sm placeholder-zinc-600"
+              style={textareaStyle}
+              placeholder="Describe your dream stack or tool..."
             />
           </div>
-
           <div>
-            <Label>Testimonial</Label>
+            <label
+              className="block text-[10px] font-semibold tracking-[0.12em] uppercase mb-2"
+              style={{ color: '#888' }}
+            >
+              What could we improve?
+            </label>
+            <textarea
+              value={improvements}
+              onChange={e => setImprovements(e.target.value)}
+              rows={5}
+              className="px-4 py-3 outline-none text-sm placeholder-zinc-600"
+              style={textareaStyle}
+              placeholder="Curriculum, delivery, timing..."
+            />
+          </div>
+          <div>
+            <label
+              className="block text-[10px] font-semibold tracking-[0.12em] uppercase mb-2"
+              style={{ color: '#888' }}
+            >
+              Testimonial
+            </label>
             <textarea
               value={testimonial}
               onChange={e => setTestimonial(e.target.value)}
-              rows={3}
-              className={inputFocusClass}
-              style={inputStyle}
-              placeholder="Share a testimonial about your experience (may be featured publicly)..."
+              rows={5}
+              className="px-4 py-3 outline-none text-sm placeholder-zinc-600"
+              style={textareaStyle}
+              placeholder="A short blurb for our community..."
             />
           </div>
         </div>
-      </Card>
+      </div>
 
-      {/* ── Opportunity Interests ── */}
-      <Card className="p-5 sm:p-7">
-        <SectionTitle
-          title="Opportunity Interests"
-          subtitle="What opportunities are you interested in pursuing?"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-5">
-          {ALL_OPPORTUNITIES.map(item => {
-            const selected = opportunityInterests.includes(item);
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => toggleOpportunity(item)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-left border-0"
-                style={{
-                  backgroundColor: selected ? 'rgba(249,115,22,0.1)' : '#111113',
-                  border: `1px solid ${selected ? 'rgba(249,115,22,0.3)' : '#1e1e1e'}`,
-                  color: selected ? '#fb923c' : '#a1a1aa',
-                }}
-              >
-                <Checkbox checked={selected} onClick={() => toggleOpportunity(item)} />
-                <span className="text-sm font-medium">{OPPORTUNITY_LABELS[item]}</span>
-              </button>
-            );
-          })}
+      {/* ═══════════ 04 / FUTURE ═══════════ */}
+      <div className="mb-20">
+        <SectionLabel number="04" label="Future" />
+        <h2 className="text-2xl font-bold mb-8 text-center" style={{ color: '#fff' }}>
+          Fellowship &amp; Career
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+          {/* Career Pathways */}
+          <div>
+            <h3
+              className="text-sm font-semibold mb-3 pb-2"
+              style={{ color: '#ccc', borderBottom: '1px solid #2a2a2a' }}
+            >
+              Career Pathways
+            </h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              {CAREER_PATHWAYS.map(item => {
+                const selected = opportunityInterests.includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleOpportunity(item)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 text-left"
+                    style={{
+                      backgroundColor: selected ? 'rgba(233,117,32,0.08)' : '#1a1a1a',
+                      border: `1px solid ${selected ? 'rgba(233,117,32,0.3)' : '#2a2a2a'}`,
+                      color: selected ? '#e97520' : '#999',
+                    }}
+                  >
+                    <Checkbox checked={selected} onClick={() => toggleOpportunity(item)} />
+                    <span className="text-sm font-medium">{OPPORTUNITY_LABELS[item]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Fellowship Interest */}
+          <div>
+            <h3
+              className="text-sm font-semibold mb-3 pb-2"
+              style={{ color: '#ccc', borderBottom: '1px solid #2a2a2a' }}
+            >
+              Fellowship Interest
+            </h3>
+            <div className="flex flex-col gap-2">
+              {FELLOWSHIP_ITEMS.map(item => {
+                const selected = fellowshipInterests.includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleFellowship(item)}
+                    className="flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 text-left"
+                    style={{
+                      backgroundColor: selected ? 'rgba(233,117,32,0.08)' : '#1a1a1a',
+                      border: `1px solid ${selected ? 'rgba(233,117,32,0.3)' : '#2a2a2a'}`,
+                      color: selected ? '#e97520' : '#999',
+                    }}
+                  >
+                    <span className="text-sm font-medium">{FELLOWSHIP_LABELS[item]}</span>
+                    <Checkbox checked={selected} onClick={() => toggleFellowship(item)} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </Card>
+      </div>
 
-      {/* ── Fellowship Interests ── */}
-      <Card className="p-5 sm:p-7">
-        <SectionTitle
-          title="Fellowship Interests"
-          subtitle="Which fellowship projects interest you?"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-5">
-          {ALL_FELLOWSHIPS.map(item => {
-            const selected = fellowshipInterests.includes(item);
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => toggleFellowship(item)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-left border-0"
-                style={{
-                  backgroundColor: selected ? 'rgba(249,115,22,0.1)' : '#111113',
-                  border: `1px solid ${selected ? 'rgba(249,115,22,0.3)' : '#1e1e1e'}`,
-                  color: selected ? '#fb923c' : '#a1a1aa',
-                }}
-              >
-                <Checkbox checked={selected} onClick={() => toggleFellowship(item)} />
-                <span className="text-sm font-medium">{FELLOWSHIP_LABELS[item]}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* ── Submit ── */}
-      <div className="flex justify-end pt-1">
+      {/* ═══════════ SUBMIT ═══════════ */}
+      <div className="flex flex-col items-center gap-5 pt-6 pb-12">
+        <p className="text-center text-xs" style={{ color: '#555', maxWidth: 400 }}>
+          By submitting, you confirm that your feedback is constructive and intended
+          for the betterment of the Bitshala community.
+        </p>
         <button
           type="submit"
           disabled={isSubmitting || !selectedCohortId}
-          className="border-0 font-semibold px-8 py-3 rounded-xl cursor-pointer transition-all duration-200 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="border-0 font-semibold px-10 py-3 rounded-full cursor-pointer transition-all duration-200 text-sm tracking-[0.1em] uppercase outline-none disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            backgroundColor: '#ea580c',
-            color: '#fff',
+            backgroundColor: 'transparent',
+            color: '#e97520',
+            border: '1.5px solid #e97520',
+          }}
+          onMouseEnter={e => {
+            if (!isSubmitting) {
+              e.currentTarget.style.backgroundColor = '#e97520';
+              e.currentTarget.style.color = '#fff';
+            }
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#e97520';
           }}
         >
           {isSubmitting ? (
             <span className="flex items-center gap-2">
-              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path
                   className="opacity-75"

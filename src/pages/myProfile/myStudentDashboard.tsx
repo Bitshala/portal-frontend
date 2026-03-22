@@ -14,8 +14,9 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { BookOpen, User, Eye, Download, UserPlus, Clock, MessageSquare } from 'lucide-react';
+import { BookOpen, User, Eye, Download, UserPlus, Clock, MessageSquare, CalendarPlus } from 'lucide-react';
 import { useMyCohorts, useCohorts, useJoinCohort, useJoinCohortWaitlist } from '../../hooks/cohortHooks';
+import apiService from '../../services/apiService';
 import { useUser } from '../../hooks/userHooks';
 import { useMyCertificates, useDownloadCertificate } from '../../hooks/certificateHooks';
 import { CohortType } from '../../types/enums';
@@ -395,6 +396,27 @@ const MyStudentDashboard = () => {
                     }}
                   >
                     Feedback
+                  </Button>
+                  <Button
+                    size="small"
+                    startIcon={<CalendarPlus size={14} />}
+                    onClick={() => {
+                      // webcal:// triggers native calendar subscribe on macOS/iOS/Outlook
+                      // Falls back gracefully to .ics download on other platforms
+                      window.location.href = apiService.getCalendarSubscribeUrl(row.id);
+                    }}
+                    sx={{
+                      color: '#34d399',
+                      bgcolor: 'rgba(52,211,153,0.1)',
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.75rem',
+                      px: 1.5,
+                      minWidth: 'auto',
+                      '&:hover': { bgcolor: 'rgba(52,211,153,0.2)' },
+                    }}
+                  >
+                    Calendar
                   </Button>
                   {row.status === 'Completed' && certificate && (
                     <Button

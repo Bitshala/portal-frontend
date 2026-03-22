@@ -54,33 +54,33 @@ const CohortFeedback = () => {
     return (
         <div
             className="min-h-screen"
-            style={{ backgroundColor: '#000', fontFamily: 'Sora, sans-serif' }}
+            style={{ backgroundColor: '#111', fontFamily: 'Sora, sans-serif' }}
         >
-            <div className="px-4 sm:px-6 md:px-8 py-6 sm:py-8" style={{ maxWidth: 900, margin: '0 auto' }}>
-                {/* Header */}
-                <div className="flex items-center justify-between mb-2">
+            <div className="px-4 sm:px-6 md:px-8 py-6 sm:py-8" style={{ maxWidth: 820, margin: '0 auto' }}>
+                {/* Top bar */}
+                <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => navigate('/myDashboard')}
                             className="bg-transparent border-0 cursor-pointer p-1 transition-colors duration-200"
-                            style={{ color: '#71717a' }}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#fafafa')}
-                            onMouseLeave={e => (e.currentTarget.style.color = '#71717a')}
+                            style={{ color: '#888' }}
+                            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                            onMouseLeave={e => (e.currentTarget.style.color = '#888')}
                         >
-                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
                         </button>
-                        <h1
-                            className="text-2xl sm:text-3xl font-bold"
-                            style={{ color: '#fafafa' }}
+                        <span
+                            className="text-xs font-semibold tracking-[0.2em] uppercase"
+                            style={{ color: '#ccc' }}
                         >
                             Cohort Feedback
-                        </h1>
+                        </span>
                     </div>
                     <div
-                        className="h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 overflow-hidden"
-                        style={{ backgroundColor: '#18181b', border: '1px solid #27272a' }}
+                        className="h-9 w-9 rounded-full flex items-center justify-center cursor-pointer overflow-hidden"
+                        style={{ border: '1px solid #333' }}
                         onClick={() => navigate('/me')}
                     >
                         <img
@@ -90,8 +90,16 @@ const CohortFeedback = () => {
                         />
                     </div>
                 </div>
-                <p className="mb-6" style={{ color: '#71717a', fontSize: '0.9rem' }}>
-                    Help us improve by sharing your thoughts about your cohort experience.
+
+                {/* Hero */}
+                <h1
+                    className="text-4xl sm:text-5xl font-bold mb-3"
+                    style={{ color: '#fff', lineHeight: 1.1 }}
+                >
+                    Protocol Insights.
+                </h1>
+                <p className="mb-16" style={{ color: '#777', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: 480 }}>
+                    Help us refine the Bitshala learning experience. Your feedback directly shapes the next iteration of Bitcoin protocol education.
                 </p>
 
                 {/* Form */}
