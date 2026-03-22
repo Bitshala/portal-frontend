@@ -1,4 +1,4 @@
-import { CohortType, UserRole } from './enums.ts';
+import { CohortType, UserRole, ComponentRating, CohortComponent, OpportunityInterest, FellowshipInterest } from './enums.ts';
 
 export interface PaginatedQueryDto {
   pageSize: number;
@@ -219,6 +219,46 @@ export interface LeaderboardEntryDto {
 }
 
 export type GetCohortLeaderboardResponseDto = LeaderboardEntryDto[] | { leaderboard: LeaderboardEntryDto[] };
+
+// =========================
+// Feedback
+// =========================
+
+export type ComponentRatingsDto = Partial<Record<CohortComponent, ComponentRating>>;
+
+export interface CreateFeedbackRequestDto {
+  componentRatings?: ComponentRatingsDto;
+  expectations?: string;
+  improvements?: string;
+  opportunityInterests?: OpportunityInterest[];
+  fellowshipInterests?: FellowshipInterest[];
+  idealProject?: string;
+  testimonial?: string;
+}
+
+export type UpdateFeedbackRequestDto = CreateFeedbackRequestDto;
+
+export interface GetFeedbackResponseDto {
+  id: string;
+  userName: string | null;
+  userEmail: string | null;
+  componentRatings: ComponentRatingsDto | null;
+  expectations: string | null;
+  improvements: string | null;
+  opportunityInterests: string[];
+  fellowshipInterests: string[];
+  idealProject: string | null;
+  testimonial: string | null;
+  cohortId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFeedbackResponseDto {
+  id: string;
+  message: string;
+}
 
 // =========================
 // Certificates

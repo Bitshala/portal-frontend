@@ -14,7 +14,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { BookOpen, User, Eye, Download, UserPlus, Clock } from 'lucide-react';
+import { BookOpen, User, Eye, Download, UserPlus, Clock, MessageSquare } from 'lucide-react';
 import { useMyCohorts, useCohorts, useJoinCohort, useJoinCohortWaitlist } from '../../hooks/cohortHooks';
 import { useUser } from '../../hooks/userHooks';
 import { useMyCertificates, useDownloadCertificate } from '../../hooks/certificateHooks';
@@ -378,6 +378,23 @@ const MyStudentDashboard = () => {
                     }}
                   >
                     View
+                  </Button>
+                  <Button
+                    size="small"
+                    startIcon={<MessageSquare size={14} />}
+                    onClick={() => navigate(`/cohortfeedback?cohortId=${row.id}`)}
+                    sx={{
+                      color: '#a78bfa',
+                      bgcolor: 'rgba(167,139,250,0.1)',
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.75rem',
+                      px: 1.5,
+                      minWidth: 'auto',
+                      '&:hover': { bgcolor: 'rgba(167,139,250,0.2)' },
+                    }}
+                  >
+                    Feedback
                   </Button>
                   {row.status === 'Completed' && certificate && (
                     <Button

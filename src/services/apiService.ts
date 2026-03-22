@@ -1,8 +1,6 @@
 import axios, { AxiosHeaders, type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { getAuthTokenFromStorage } from './authService.ts';
-import type // Users
-{
-  // Users
+import type {
   // Users
   GetUserResponse,
   UpdateUserRequest,
@@ -24,7 +22,12 @@ import type // Users
   // Teaching Assistants
   GetTeachingAssistantResponseDto,
   // Certificates
-  GetCertificateResponseDto
+  GetCertificateResponseDto,
+  // Feedback
+  CreateFeedbackRequestDto,
+  CreateFeedbackResponseDto,
+  GetFeedbackResponseDto,
+  UpdateFeedbackRequestDto,
 } from '../types/api.ts';
 
 const COMMON_REQUEST_HEADERS = {
@@ -289,13 +292,62 @@ class ApiService {
   // Feedback
   // =========================
 
-  public submitFeedback = async (cohortId: string, body: { feedbackText: string }): Promise<void> => {
-    await this.request<void>({
+  public submitFeedback = async (cohortId: string, body: CreateFeedbackRequestDto): Promise<CreateFeedbackResponseDto> => {
+    const { data } = await this.request<CreateFeedbackResponseDto>({
       headers: this.getRequestHeaders(),
       method: 'POST',
       url: `/feedback/${cohortId}`,
       data: body,
     });
+    return data;
+  };
+
+  public getMyFeedback = async (query: PaginatedQueryDto): Promise<PaginatedDataDto<GetFeedbackResponseDto>> => {
+    const { data } = await this.request<PaginatedDataDto<GetFeedbackResponseDto>>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/feedback/me',
+      params: query,
+    });
+    return data;
+  };
+
+  public updateFeedback = async (id: string, body: UpdateFeedbackRequestDto): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/feedback/${id}`,
+      data: body,
+    });
+  };
+
+  public listAllFeedback = async (query: PaginatedQueryDto): Promise<PaginatedDataDto<GetFeedbackResponseDto>> => {
+    const { data } = await this.request<PaginatedDataDto<GetFeedbackResponseDto>>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/feedback',
+      params: query,
+    });
+    return data;
+  };
+
+  public listFeedbackByCohort = async (cohortId: string, query: PaginatedQueryDto): Promise<PaginatedDataDto<GetFeedbackResponseDto>> => {
+    const { data } = await this.request<PaginatedDataDto<GetFeedbackResponseDto>>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/feedback/cohort/${cohortId}`,
+      params: query,
+    });
+    return data;
+  };
+
+  public getFeedbackById = async (id: string): Promise<GetFeedbackResponseDto> => {
+    const { data } = await this.request<GetFeedbackResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/feedback/${id}`,
+    });
+    return data;
   };
 
   // =========================
