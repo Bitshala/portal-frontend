@@ -26,12 +26,12 @@ import {
   Plus,
   X,
   Pencil,
-  FileArchive,
+  FolderArchive,
 } from 'lucide-react';
 import { Tooltip } from '@mui/material';
 import { useCohorts, useCreateCohort, useUpdateCohort } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
-import { useGenerateCohortCertificates } from '../hooks/certificateHooks';
+import { useGenerateCohortCertificates, useCohortCertificates } from '../hooks/certificateHooks';
 import apiService from '../services/apiService';
 import { UserRole, CohortType } from '../types/enums';
 import type { GetCohortResponseDto } from '../types/api';
@@ -43,6 +43,62 @@ import { cohortTypeToName } from '../helpers/cohortHelpers';
 import { computeStatus, COHORT_TYPES } from '../utils/cohortUtils';
 import { getTodayDate, calculateRegistrationDeadline, formatDateForInput } from '../utils/dateUtils';
 import { downloadCSV } from '../utils/csvUtils';
+
+const BulkDownloadCertButton = ({ cohortId, onError }: { cohortId: string; onError: (msg: string) => void }) => {
+  const { data: certs, isLoading } = useCohortCertificates(cohortId);
+  const [downloading, setDownloading] = useState(false);
+
+  if (isLoading || !certs || certs.length === 0) return null;
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const { blob, filename } = await apiService.downloadBulkCertificates(cohortId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      let msg = 'Failed to download certificates.';
+      if (typeof err === 'object' && err !== null && 'response' in err) {
+        const re = err as { response?: { data?: { message?: string } } };
+        if (re.response?.data?.message) msg = re.response.data.message;
+      }
+      onError(msg);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Tooltip title="Bulk download certificates" placement="top">
+      <span>
+        <IconButton
+          size="small"
+          disabled={downloading}
+          onClick={handleClick}
+          sx={{
+            border: '1px solid rgba(251,191,36,0.4)',
+            borderRadius: 1,
+            p: 0.75,
+            color: '#fbbf24',
+            '&:hover': { borderColor: '#fbbf24', bgcolor: 'rgba(251,191,36,0.08)' },
+            '&.Mui-disabled': { opacity: 0.4 },
+          }}
+        >
+          {downloading
+            ? <CircularProgress size={14} sx={{ color: '#fbbf24' }} />
+            : <FolderArchive size={14} />
+          }
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+};
 
 const inputSx = {
   '& .MuiOutlinedInput-root': {
@@ -74,7 +130,6 @@ export const CohortSelection = () => {
 
   const [activeTab, setActiveTab] = useState<string>('Active');
   const [generatingCohortId, setGeneratingCohortId] = useState<string | null>(null);
-  const [bulkDownloadingCohortId, setBulkDownloadingCohortId] = useState<string | null>(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -210,29 +265,6 @@ export const CohortSelection = () => {
     );
   };
 
-
-  const handleBulkDownloadCertificates = async (cohortId: string) => {
-    if (bulkDownloadingCohortId) return;
-    setBulkDownloadingCohortId(cohortId);
-    try {
-      const { blob, filename } = await apiService.downloadBulkCertificates(cohortId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      let errorMessage = 'Failed to download certificates.';
-      if (typeof err === 'object' && err !== null && 'response' in err) {
-        const re = err as { response?: { data?: { message?: string } } };
-        if (re.response?.data?.message) errorMessage = re.response.data.message;
-      }
-      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
-    } finally {
-      setBulkDownloadingCohortId(null);
-    }
-  };
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -453,28 +485,10 @@ export const CohortSelection = () => {
                     Generate Certs
                   </Button>
                 )}
-                <Tooltip title="Bulk download certificates" placement="top">
-                  <span>
-                    <IconButton
-                      size="small"
-                      disabled={bulkDownloadingCohortId === cohort.id}
-                      onClick={(e) => { e.stopPropagation(); handleBulkDownloadCertificates(cohort.id); }}
-                      sx={{
-                        color: '#d4d4d8',
-                        border: '1px solid #52525b',
-                        borderRadius: 1,
-                        p: 0.75,
-                        '&:hover': { borderColor: '#71717a', bgcolor: 'rgba(255,255,255,0.04)' },
-                        '&.Mui-disabled': { opacity: 0.4 },
-                      }}
-                    >
-                      {bulkDownloadingCohortId === cohort.id
-                        ? <CircularProgress size={14} sx={{ color: '#d4d4d8' }} />
-                        : <FileArchive size={14} />
-                      }
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                <BulkDownloadCertButton
+                  cohortId={cohort.id}
+                  onError={(msg) => setSnackbar({ open: true, message: msg, severity: 'error' })}
+                />
               </Box>
             ) : undefined}
           />
