@@ -18,7 +18,7 @@ const getBarColor = (score: number): string => {
 export const WeeklyProgressChart = ({ weeklyData }: WeeklyProgressChartProps) => {
   const chartData = weeklyData.map((week) => ({
     name: `W${week.week}`,
-    score: (week as { totalScore?: number }).totalScore || 0,
+    score: Math.round(week.totalScore * 100 / week.maxTotalScore), // Convert to percentage
     max: 100,
   }));
 
