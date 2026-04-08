@@ -276,3 +276,11 @@ export interface GetCertificateResponseDto {
   rank: 1 | 2 | 3 | null;
   createdAt: string;
 }
+
+export interface CertificatePreviewResponseDto {
+  userId: string;
+  name: string;
+  certificateType: CertificateType;
+  rank: 1 | 2 | 3 | null;
+  withExercises: boolean;
+}

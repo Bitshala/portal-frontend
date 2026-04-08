@@ -23,6 +23,7 @@ import type {
   GetTeachingAssistantResponseDto,
   // Certificates
   GetCertificateResponseDto,
+  CertificatePreviewResponseDto,
   // Feedback
   CreateFeedbackRequestDto,
   CreateFeedbackResponseDto,
@@ -381,6 +382,15 @@ class ApiService {
       method: 'POST',
       url: `/certificates/cohort/${cohortId}/generate`,
     });
+  };
+
+  public previewCohortCertificates = async (cohortId: string): Promise<CertificatePreviewResponseDto[]> => {
+    const { data } = await this.request<CertificatePreviewResponseDto[]>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/certificates/cohort/${cohortId}/preview`,
+    });
+    return data;
   };
 
   public getMyCertificateForCohort = async (cohortId: string): Promise<GetCertificateResponseDto> => {

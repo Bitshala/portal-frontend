@@ -27,11 +27,16 @@ import {
   X,
   Pencil,
   FolderArchive,
+  Eye,
+  Trophy,
+  CheckCircle2,
+  Minus,
 } from 'lucide-react';
 import { Tooltip } from '@mui/material';
 import { useCohorts, useCreateCohort, useUpdateCohort } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
-import { useGenerateCohortCertificates, useCohortCertificates } from '../hooks/certificateHooks';
+import { useGenerateCohortCertificates, useCohortCertificates, usePreviewCohortCertificates } from '../hooks/certificateHooks';
+import type { CertificatePreviewResponseDto } from '../types/api';
 import apiService from '../services/apiService';
 import { UserRole, CohortType } from '../types/enums';
 import type { GetCohortResponseDto } from '../types/api';
@@ -100,6 +105,262 @@ const BulkDownloadCertButton = ({ cohortId, onError }: { cohortId: string; onErr
   );
 };
 
+const rankColors: Record<1 | 2 | 3, { color: string; bg: string; label: string }> = {
+  1: { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', label: '1st' },
+  2: { color: '#d4d4d8', bg: 'rgba(212,212,216,0.12)', label: '2nd' },
+  3: { color: '#cd7f32', bg: 'rgba(205,127,50,0.15)', label: '3rd' },
+};
+
+const CertificatePreviewModal = ({
+  cohortId,
+  cohortName,
+  onClose,
+  onGenerate,
+  isGenerating,
+}: {
+  cohortId: string;
+  cohortName: string;
+  onClose: () => void;
+  onGenerate: () => void;
+  isGenerating: boolean;
+}) => {
+  const { data: previews, isLoading } = usePreviewCohortCertificates(cohortId);
+
+  const performers = previews?.filter((p) => p.certificateType === 'PERFORMER') ?? [];
+  const participants = previews?.filter((p) => p.certificateType === 'PARTICIPANT') ?? [];
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      slotProps={{
+        backdrop: { sx: { backdropFilter: 'blur(8px)', bgcolor: 'rgba(0,0,0,0.8)' } },
+      }}
+      PaperProps={{
+        sx: {
+          bgcolor: '#0e0e10',
+          backgroundImage: 'none',
+          borderRadius: 3,
+          border: '1px solid rgba(245,158,11,0.2)',
+          maxHeight: '85vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
+    >
+      {/* Header */}
+      <DialogTitle sx={{ pb: 0, pt: 3, px: 3, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#f59e0b', boxShadow: '0 0 6px #f59e0b' }} />
+              <Typography sx={{ color: '#f59e0b', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Certificate Preview
+              </Typography>
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#fafafa', fontSize: '1.1rem', lineHeight: 1.3 }}>
+              {cohortName}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#52525b', mt: 0.25, display: 'block' }}>
+              Dry-run only — no certificates will be generated or sent
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={onClose}
+            size="small"
+            sx={{ color: '#52525b', '&:hover': { color: '#fafafa', bgcolor: 'rgba(255,255,255,0.06)' }, mt: -0.5 }}
+          >
+            <X size={18} />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+
+      <DialogContent sx={{ px: 3, pb: 0, pt: 2.5, overflowY: 'auto', flexGrow: 1 }}>
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+            <CircularProgress size={32} sx={{ color: '#f59e0b' }} />
+          </Box>
+        ) : !previews || previews.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Typography sx={{ color: '#52525b', fontSize: '0.9rem' }}>
+              No certificates would be generated. Check attendance thresholds.
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Stat cards */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mb: 3 }}>
+              {[
+                { label: 'Total Recipients', value: previews.length, color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.2)' },
+                { label: 'Performers', value: performers.length, color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)' },
+                { label: 'Participants', value: participants.length, color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.2)' },
+              ].map((stat) => (
+                <Box
+                  key={stat.label}
+                  sx={{
+                    bgcolor: stat.bg,
+                    border: `1px solid ${stat.border}`,
+                    borderRadius: 2,
+                    p: 1.5,
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography sx={{ fontSize: '1.6rem', fontWeight: 700, color: stat.color, lineHeight: 1.1 }}>
+                    {stat.value}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#71717a', mt: 0.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {stat.label}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Table header */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 140px 72px 72px',
+                gap: 1,
+                px: 1.5,
+                py: 1,
+                bgcolor: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px 8px 0 0',
+                border: '1px solid #1f1f22',
+                borderBottom: 'none',
+              }}
+            >
+              {['Name', 'Type', 'Rank', 'Exercises'].map((col) => (
+                <Typography key={col} sx={{ fontSize: '0.67rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  {col}
+                </Typography>
+              ))}
+            </Box>
+
+            {/* Table rows */}
+            <Box sx={{ border: '1px solid #1f1f22', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+              {previews.map((p: CertificatePreviewResponseDto, i: number) => {
+                const isPerformer = p.certificateType === 'PERFORMER';
+                return (
+                  <Box
+                    key={p.userId}
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 140px 72px 72px',
+                      gap: 1,
+                      px: 1.5,
+                      py: 1.25,
+                      alignItems: 'center',
+                      bgcolor: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
+                      borderTop: i === 0 ? 'none' : '1px solid #18181b',
+                      transition: 'background 0.15s',
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' },
+                    }}
+                  >
+                    {/* Name */}
+                    <Typography sx={{ fontSize: '0.85rem', color: '#e4e4e7', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name}
+                    </Typography>
+
+                    {/* Type badge */}
+                    <Box>
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          px: 1,
+                          py: 0.3,
+                          borderRadius: 1,
+                          bgcolor: isPerformer ? 'rgba(245,158,11,0.12)' : 'rgba(161,161,170,0.1)',
+                          border: `1px solid ${isPerformer ? 'rgba(245,158,11,0.3)' : 'rgba(161,161,170,0.25)'}`,
+                        }}
+                      >
+                        {isPerformer && <Trophy size={10} color="#f59e0b" />}
+                        <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: isPerformer ? '#f59e0b' : '#a1a1aa', lineHeight: 1 }}>
+                          {isPerformer ? 'Performer' : 'Participant'}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Rank */}
+                    <Box>
+                      {p.rank ? (
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 32,
+                            height: 22,
+                            borderRadius: 0.75,
+                            bgcolor: rankColors[p.rank].bg,
+                            border: `1px solid ${rankColors[p.rank].color}40`,
+                          }}
+                        >
+                          <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: rankColors[p.rank].color }}>
+                            {rankColors[p.rank].label}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Typography sx={{ fontSize: '0.8rem', color: '#3f3f46' }}>—</Typography>
+                      )}
+                    </Box>
+
+                    {/* Exercises */}
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {p.withExercises ? (
+                        <CheckCircle2 size={15} color="#4ade80" />
+                      ) : (
+                        <Minus size={15} color="#3f3f46" />
+                      )}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          </>
+        )}
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 3, pt: 2, gap: 1, flexShrink: 0 }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          sx={{
+            color: '#d4d4d8',
+            borderColor: '#3f3f46',
+            textTransform: 'none',
+            fontWeight: 500,
+            '&:hover': { borderColor: '#71717a', bgcolor: 'rgba(255,255,255,0.04)' },
+          }}
+        >
+          Close
+        </Button>
+        <Button
+          onClick={() => { onGenerate(); onClose(); }}
+          variant="contained"
+          disabled={isGenerating || isLoading || !previews || previews.length === 0}
+          startIcon={isGenerating ? <CircularProgress size={13} sx={{ color: '#000' }} /> : undefined}
+          sx={{
+            bgcolor: '#f59e0b',
+            color: '#000',
+            textTransform: 'none',
+            fontWeight: 600,
+            boxShadow: 'none',
+            '&:hover': { bgcolor: '#d97706', boxShadow: 'none' },
+            '&.Mui-disabled': { bgcolor: '#78350f', color: '#92400e' },
+          }}
+        >
+          Generate Certificates
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const inputSx = {
   '& .MuiOutlinedInput-root': {
     bgcolor: '#18181b',
@@ -130,6 +391,7 @@ export const CohortSelection = () => {
 
   const [activeTab, setActiveTab] = useState<string>('Active');
   const [generatingCohortId, setGeneratingCohortId] = useState<string | null>(null);
+  const [previewCohort, setPreviewCohort] = useState<{ id: string; name: string } | null>(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -456,34 +718,21 @@ export const CohortSelection = () => {
                   </Tooltip>
                 )}
                 {cohort.status === 'Completed' && (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={
-                      isGeneratingCerts && generatingCohortId === cohort.id
-                        ? <CircularProgress size={13} sx={{ color: '#fff' }} />
-                        : undefined
-                    }
-                    disabled={isGeneratingCerts && generatingCohortId === cohort.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleGenerateCertificates(cohort.id, cohort.name);
-                    }}
-                    sx={{
-                      bgcolor: '#f59e0b',
-                      color: '#000',
-                      textTransform: 'none',
-                      fontSize: '0.75rem',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      py: 0.5,
-                      boxShadow: 'none',
-                      '&:hover': { bgcolor: '#d97706', boxShadow: 'none' },
-                      '&.Mui-disabled': { bgcolor: '#78350f', color: '#92400e' },
-                    }}
-                  >
-                    Generate Certs
-                  </Button>
+                  <Tooltip title="Preview certificates" placement="top">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => { e.stopPropagation(); setPreviewCohort({ id: cohort.id, name: cohort.name }); }}
+                      sx={{
+                        border: '1px solid rgba(245,158,11,0.4)',
+                        borderRadius: 1,
+                        p: 0.75,
+                        color: '#f59e0b',
+                        '&:hover': { borderColor: '#f59e0b', bgcolor: 'rgba(245,158,11,0.08)' },
+                      }}
+                    >
+                      <Eye size={14} />
+                    </IconButton>
+                  </Tooltip>
                 )}
                 <BulkDownloadCertButton
                   cohortId={cohort.id}
@@ -609,6 +858,17 @@ export const CohortSelection = () => {
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* Certificate Preview Modal */}
+      {previewCohort && (
+        <CertificatePreviewModal
+          cohortId={previewCohort.id}
+          cohortName={previewCohort.name}
+          onClose={() => setPreviewCohort(null)}
+          onGenerate={() => handleGenerateCertificates(previewCohort.id, previewCohort.name)}
+          isGenerating={isGeneratingCerts && generatingCohortId === previewCohort.id}
+        />
+      )}
 
       {/* Snackbar */}
       <Snackbar

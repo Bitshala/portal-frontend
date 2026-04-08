@@ -1,6 +1,6 @@
 import apiService from '../services/apiService.ts';
 import { createUseMutation, createUseQuery } from '../http';
-import type { GetCertificateResponseDto } from '../types/api.ts';
+import type { GetCertificateResponseDto, CertificatePreviewResponseDto } from '../types/api.ts';
 
 // ===============
 // Queries
@@ -28,6 +28,14 @@ export const useCohortCertificates = createUseQuery<
 >(
   (cohortId) => ['certificates', 'cohort', cohortId],
   (cohortId) => () => apiService.getCohortCertificates(cohortId),
+);
+
+export const usePreviewCohortCertificates = createUseQuery<
+  CertificatePreviewResponseDto[],
+  string
+>(
+  (cohortId) => ['certificates', 'cohort', cohortId, 'preview'],
+  (cohortId) => () => apiService.previewCohortCertificates(cohortId),
 );
 
 // ===============
