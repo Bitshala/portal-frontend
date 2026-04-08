@@ -67,6 +67,8 @@ export interface WeeklyData {
   bonusScore: BonusScore;
   exerciseScore: ExerciseScore;
   total: number;
+  totalScore: number;
+  maxTotalScore: number;
   group: string;
   ta: string;
 }
