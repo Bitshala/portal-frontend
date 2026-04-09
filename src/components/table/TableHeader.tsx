@@ -469,17 +469,14 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
             <Button
               variant="outlined"
               size="small"
+              disabled
               startIcon={<CalendarClock size={15} />}
-              onClick={onScheduleDate}
               sx={{
-                color: '#a78bfa',
-                borderColor: 'rgba(167,139,250,0.4)',
                 textTransform: 'none',
                 fontWeight: 500,
                 fontSize: '0.8rem',
                 boxShadow: 'none',
                 whiteSpace: 'nowrap',
-                '&:hover': { borderColor: '#a78bfa', bgcolor: 'rgba(167,139,250,0.08)' },
               }}
             >
               Schedule Date
