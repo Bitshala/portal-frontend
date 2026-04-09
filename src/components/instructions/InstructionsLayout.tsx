@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -24,22 +24,40 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { WeekContent, BonusQuestion, RichQuestion } from '../../types/instructions';
+import { getAuthTokenFromStorage } from '../../services/authService';
 
 const isImageFile = (filename: string) => /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
 
 const Attachment: React.FC<{ filename: string; url: string }> = ({ filename, url }) => {
-  const [imgFailed, setImgFailed] = React.useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    if (!isImageFile(filename)) return;
+    let objectUrl: string;
+    const token = getAuthTokenFromStorage();
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => setImgFailed(true));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url, filename]);
 
   if (isImageFile(filename) && !imgFailed) {
-    return (
+    return blobUrl ? (
       <Box
         component="img"
-        src={url}
+        src={blobUrl}
         alt={filename}
-        onError={() => { console.error('Attachment load failed:', url); setImgFailed(true); }}
         sx={{ maxWidth: '100%', borderRadius: 2, border: '1px solid #3f3f46', display: 'block' }}
       />
-    );
+    ) : null;
   }
 
   return (
