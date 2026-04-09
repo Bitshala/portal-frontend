@@ -158,14 +158,7 @@ export const ResultPage: React.FC = () => {
   const handleStudentClick = useCallback(
     (student: StudentResult) => {
       if (!cohortData) return;
-      navigate(
-        `/detailPage?studentId=${student.userId}` +
-          `&cohortType=${cohortData.type}` +
-          `&cohortId=${cohortData.id}` +
-          `&studentName=${encodeURIComponent(student.name)}` +
-          `&studentDiscord=${encodeURIComponent(student.discordUsername)}` +
-          `&from=results`,
-      );
+      navigate(`/student/${student.userId}/${cohortData.id}`);
     },
     [navigate, cohortData],
   );
