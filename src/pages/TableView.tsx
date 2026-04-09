@@ -39,7 +39,6 @@ import { useCohort, useRemoveUserFromCohort, useUpdateCohortWeek } from '../hook
 import { useUser } from '../hooks/userHooks';
 import { UserRole } from '../types/enums';
 import { cohortTypeToName, formatCohortDate } from '../helpers/cohortHelpers.ts';
-import { mockWeeks } from '../data/mockTableData';
 
 
 const TableView: React.FC = () => {
@@ -59,7 +58,7 @@ const TableView: React.FC = () => {
 
   const weeks = useMemo(() => {
     const apiWeeks = cohortData?.weeks ?? [];
-    return apiWeeks.length > 0 ? apiWeeks : mockWeeks;
+    return apiWeeks;
   }, [cohortData]);
 
 
