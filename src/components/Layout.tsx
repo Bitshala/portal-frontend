@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import Sidebar from './Sidebar';
-import { useAuth } from '../hooks/useAuth';
+import { getAuthTokenFromStorage } from '../services/authService';
 
 interface LayoutProps {
   children: ReactNode;
@@ -10,10 +10,9 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
 
   const hideNavbarRoutes = ['/login', '/unauthorized', '/*'];
-  const showSidebar = isAuthenticated && !hideNavbarRoutes.includes(location.pathname);
+  const showSidebar = !!getAuthTokenFromStorage() && !hideNavbarRoutes.includes(location.pathname);
 
   if (!showSidebar) {
     return <>{children}</>;
