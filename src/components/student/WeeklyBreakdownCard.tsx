@@ -34,7 +34,7 @@ export interface WeekData {
   weekType?: string;
   totalScore: number;
   maxTotalScore: number;
-  groupDiscussionScores: GroupDiscussionScores;
+  groupDiscussionScores: GroupDiscussionScores | null;
   exerciseScores: ExerciseScores;
   attendance: boolean;
 }
@@ -100,7 +100,7 @@ export const WeeklyBreakdownList = ({ weeks, cohortType }: WeeklyBreakdownListPr
               </Box>
 
               {/* Group number */}
-              {gd.groupNumber !== null && (
+              {gd?.groupNumber != null && (
                 <Chip
                   label={`Group ${gd.groupNumber}`}
                   size="small"
@@ -122,7 +122,7 @@ export const WeeklyBreakdownList = ({ weeks, cohortType }: WeeklyBreakdownListPr
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
                 <Typography variant="caption" sx={{ color: '#a1a1aa', display: { xs: 'none', sm: 'block' } }}>GD</Typography>
                 <Typography variant="body2" sx={{ color: '#d4d4d8', fontWeight: 600, fontSize: '0.8rem' }}>
-                  {gd.totalScore}/{maxScores.gd}
+                  {gd?.totalScore ?? 0}/{maxScores.gd}
                 </Typography>
               </Box>
 
@@ -149,14 +149,18 @@ export const WeeklyBreakdownList = ({ weeks, cohortType }: WeeklyBreakdownListPr
                   <Typography variant="body2" sx={{ fontWeight: 600, color: '#fb923c', mb: 1.5, fontSize: '0.85rem' }}>
                     Group Discussion
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <ScoreRow label="Communication" score={gd.communicationScore} max={gd.maxCommunicationScore} />
-                    <ScoreRow label="Depth of Answer" score={gd.depthOfAnswerScore} max={gd.maxDepthOfAnswerScore} />
-                    <ScoreRow label="Technical Fluency" score={gd.technicalBitcoinFluencyScore} max={gd.maxTechnicalBitcoinFluencyScore} />
-                    <ScoreRow label="Engagement" score={gd.engagementScore} max={gd.maxEngagementScore} />
-                    <ScoreRow label="Bonus Answer" score={gd.bonusAnswerScore} max={gd.maxBonusAnswerScore} />
-                    <ScoreRow label="Bonus Followup" score={gd.bonusFollowupScore} max={gd.maxBonusFollowupScore} />
-                  </Box>
+                  {gd ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <ScoreRow label="Communication" score={gd.communicationScore} max={gd.maxCommunicationScore} />
+                      <ScoreRow label="Depth of Answer" score={gd.depthOfAnswerScore} max={gd.maxDepthOfAnswerScore} />
+                      <ScoreRow label="Technical Fluency" score={gd.technicalBitcoinFluencyScore} max={gd.maxTechnicalBitcoinFluencyScore} />
+                      <ScoreRow label="Engagement" score={gd.engagementScore} max={gd.maxEngagementScore} />
+                      <ScoreRow label="Bonus Answer" score={gd.bonusAnswerScore} max={gd.maxBonusAnswerScore} />
+                      <ScoreRow label="Bonus Followup" score={gd.bonusFollowupScore} max={gd.maxBonusFollowupScore} />
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#52525b', fontSize: '0.85rem' }}>No data</Typography>
+                  )}
                 </Box>
 
                 {/* Exercise Breakdown */}
