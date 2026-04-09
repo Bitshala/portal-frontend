@@ -22,10 +22,11 @@ export interface CreateCohortRequestDto {
 }
 
 export interface UpdateCohortWeekRequestDto {
-  questions: string[] | undefined;
-  bonusQuestion: string[] | undefined;
-  classroomUrl: string | undefined;
-  classroomInviteLink: string | undefined;
+  questions?: string[] | undefined;
+  bonusQuestion?: string[] | undefined;
+  classroomUrl?: string | undefined;
+  classroomInviteLink?: string | undefined;
+  scheduledDate?: string | undefined;
 }
 
 export interface JoinWaitlistRequestDto {
@@ -41,6 +42,7 @@ export interface GetCohortWeekResponseDto {
   bonusQuestion: string[];
   classroomUrl: string | null;
   classroomInviteLink: string | null;
+  scheduledDate: string | null;
 }
 
 export interface GetCohortResponseDto {

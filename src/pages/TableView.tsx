@@ -35,7 +35,7 @@ import {
 } from '../hooks/scoreHooks';
 import { useTeachingAssistants } from '../hooks/teachingAssistantHooks';
 import apiService from '../services/apiService';
-import { useCohort, useRemoveUserFromCohort } from '../hooks/cohortHooks';
+import { useCohort, useRemoveUserFromCohort, useUpdateCohortWeek } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
 import { UserRole } from '../types/enums';
 import { cohortTypeToName, formatCohortDate } from '../helpers/cohortHelpers.ts';
@@ -138,11 +138,16 @@ const TableView: React.FC = () => {
     attended: 0,
   });
 
-  // === Mutation ===
+  // === Schedule date dialog ===
+  const [scheduleDateOpen, setScheduleDateOpen] = useState(false);
+  const [pendingScheduledDates, setPendingScheduledDates] = useState<Record<string, string>>({});
+
+  // === Mutations ===
   const updateScoresMutation = useUpdateScoresForUserCohortAndWeek();
   const assignGroupsMutation = useAssignGroupsForCohortWeek();
   const { data: teachingAssistants } = useTeachingAssistants();
   const removeUserMutation = useRemoveUserFromCohort();
+  const updateCohortWeekMutation = useUpdateCohortWeek();
 
   // === Transform API scores to table rows ===
   useEffect(() => {
@@ -408,6 +413,33 @@ const TableView: React.FC = () => {
     downloadCSV(headers, csvRows, `students-${weekLabel}.csv`);
   }, [sortedFilteredData, cohortData?.type, weekIndex]);
 
+  const handleOpenScheduleDate = useCallback(() => {
+    const initial: Record<string, string> = {};
+    weeks.forEach(w => {
+      initial[w.id] = w.scheduledDate?.slice(0, 10) ?? '';
+    });
+    setPendingScheduledDates(initial);
+    setScheduleDateOpen(true);
+  }, [weeks]);
+
+  const handleSaveScheduledDate = useCallback(async () => {
+    if (!cohortIdParam) return;
+    try {
+      const updates = weeks
+        .filter(w => (pendingScheduledDates[w.id] ?? '') !== (w.scheduledDate?.slice(0, 10) ?? ''))
+        .map(w => updateCohortWeekMutation.mutateAsync({
+          cohortId: cohortIdParam,
+          cohortWeekId: w.id,
+          body: { scheduledDate: pendingScheduledDates[w.id] || undefined },
+        }));
+      await Promise.all(updates);
+      setScheduleDateOpen(false);
+      setSnackbar({ open: true, message: 'Session dates updated.', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to update session dates.', severity: 'error' });
+    }
+  }, [cohortIdParam, weeks, pendingScheduledDates, updateCohortWeekMutation]);
+
   const handleOpenAssignModal = useCallback(() => {
     // Always start from the config step so the user can (re-)assign groups
     setAssignStep('config');
@@ -597,6 +629,7 @@ const TableView: React.FC = () => {
           cohortType={cohortData?.type}
           cohortId={cohortIdParam}
           isTA={isTA}
+          onScheduleDate={handleOpenScheduleDate}
         />
 
         {isScoresLoading || isScoresPending ? (
@@ -843,6 +876,74 @@ const TableView: React.FC = () => {
               <Typography sx={{ color: '#71717a', fontSize: '0.9rem' }}>Assigning TAs...</Typography>
             </Box>
           )}
+        </Dialog>
+
+        {/* Schedule Date Dialog */}
+        <Dialog
+          open={scheduleDateOpen}
+          onClose={() => setScheduleDateOpen(false)}
+          PaperProps={{ sx: { bgcolor: '#18181b', border: '1px solid #27272a', borderRadius: 2, minWidth: 500 } }}
+        >
+          <DialogContent sx={{ pb: 1 }}>
+            <Typography sx={{ color: '#fafafa', fontWeight: 600, mb: 2.5, fontSize: '1rem' }}>
+              Schedule Session Dates
+            </Typography>
+
+            {/* Table header */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, mb: 1, px: 1 }}>
+              <Typography variant="caption" sx={{ color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>Week</Typography>
+              <Typography variant="caption" sx={{ color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>Current Date</Typography>
+              <Typography variant="caption" sx={{ color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>New Date</Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {weeks.map(w => (
+                <Box key={w.id} sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, alignItems: 'center', px: 1, py: 0.75, borderRadius: 1, bgcolor: selectedWeekId === w.id ? 'rgba(249,115,22,0.06)' : 'transparent' }}>
+                  <Typography sx={{ color: '#d4d4d8', fontSize: '0.85rem', fontWeight: selectedWeekId === w.id ? 600 : 400 }}>
+                    {w.type === 'ORIENTATION' ? 'Orientation' : w.type === 'GRADUATION' ? 'Graduation' : `Week ${w.week}`}
+                  </Typography>
+                  <Typography sx={{ color: w.scheduledDate ? '#a1a1aa' : '#3f3f46', fontSize: '0.85rem' }}>
+                    {w.scheduledDate ? new Date(w.scheduledDate).toLocaleDateString('en-GB') : '—'}
+                  </Typography>
+                  <TextField
+                    type="date"
+                    size="small"
+                    value={pendingScheduledDates[w.id] ?? ''}
+                    onChange={e => setPendingScheduledDates(prev => ({ ...prev, [w.id]: e.target.value }))}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        bgcolor: '#27272a',
+                        color: '#d4d4d8',
+                        fontSize: '0.8rem',
+                        '& fieldset': { borderColor: '#3f3f46' },
+                        '&:hover fieldset': { borderColor: '#a78bfa' },
+                        '&.Mui-focused fieldset': { borderColor: '#a78bfa' },
+                      },
+                      '& input[type="date"]::-webkit-calendar-picker-indicator': { filter: 'invert(0.7)' },
+                    }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+            <MuiButton
+              size="small"
+              onClick={() => setScheduleDateOpen(false)}
+              sx={{ color: '#a1a1aa', textTransform: 'none' }}
+            >
+              Cancel
+            </MuiButton>
+            <MuiButton
+              size="small"
+              variant="contained"
+              disabled={updateCohortWeekMutation.isPending}
+              onClick={handleSaveScheduledDate}
+              sx={{ bgcolor: '#7c3aed', textTransform: 'none', '&:hover': { bgcolor: '#6d28d9' }, boxShadow: 'none' }}
+            >
+              {updateCohortWeekMutation.isPending ? 'Saving...' : 'Update'}
+            </MuiButton>
+          </DialogActions>
         </Dialog>
 
         {/* Snackbar for success/error popups */}

@@ -25,8 +25,8 @@ import {
   UserCheck,
   UserX,
   Shuffle,
-  UserPlus,
   BookOpen,
+  CalendarClock,
 } from 'lucide-react';
 
 interface Week {
@@ -66,6 +66,7 @@ interface TableHeaderProps {
   cohortType?: string;
   cohortId?: string;
   isTA?: boolean;
+  onScheduleDate?: () => void;
 }
 
 const selectSx = {
@@ -104,6 +105,7 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
   cohortType,
   cohortId,
   isTA,
+  onScheduleDate,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -120,7 +122,7 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mb: 3 }}>
       {/* Week Selection */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
         {weeks.map(weekData => (
           <Chip
             key={weekData.id}
@@ -460,6 +462,27 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
               }}
             >
               Assign Groups
+            </Button>
+          )}
+
+          {isTA && onScheduleDate && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CalendarClock size={15} />}
+              onClick={onScheduleDate}
+              sx={{
+                color: '#a78bfa',
+                borderColor: 'rgba(167,139,250,0.4)',
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.8rem',
+                boxShadow: 'none',
+                whiteSpace: 'nowrap',
+                '&:hover': { borderColor: '#a78bfa', bgcolor: 'rgba(167,139,250,0.08)' },
+              }}
+            >
+              Schedule Date
             </Button>
           )}
 
