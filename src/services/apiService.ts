@@ -176,6 +176,18 @@ class ApiService {
     });
   };
 
+  public syncCohortQuestions = async (cohortId: string): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'POST',
+      url: `/cohorts/${cohortId}/sync-questions`,
+    });
+  };
+
+  public getAttachmentUrl = (cohortId: string, filename: string): string => {
+    return `${API_BASE_URL}/cohorts/attachments/${cohortId}/${filename}`;
+  };
+
   public joinCohort = async (cohortId: string): Promise<void> => {
     await this.request<void>({
       headers: this.getRequestHeaders(),
@@ -381,6 +393,14 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'POST',
       url: `/certificates/cohort/${cohortId}/generate`,
+    });
+  };
+
+  public sendCohortCertificateEmails = async (cohortId: string): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'POST',
+      url: `/certificates/cohort/${cohortId}/send-emails`,
     });
   };
 

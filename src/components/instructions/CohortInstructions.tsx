@@ -9,11 +9,12 @@ import {
 import { AlertTriangle } from 'lucide-react';
 import { useUser } from '../../hooks/userHooks';
 import { useMyScores } from '../../hooks/scoreHooks';
-import { useMyCohorts, useCohorts } from '../../hooks/cohortHooks';
+import { useMyCohorts, useCohorts, useSyncCohortQuestions } from '../../hooks/cohortHooks';
 import { UserRole } from '../../types/enums';
 import InstructionsLayout from './InstructionsLayout';
-import type { WeekContent } from '../../types/instructions';
-import type { GetCohortWeekResponseDto } from '../../types/api';
+import type { WeekContent, RichQuestion } from '../../types/instructions';
+import type { GetCohortWeekResponseDto, CohortWeekQuestion } from '../../types/api';
+import apiService from '../../services/apiService';
 
 interface CohortInstructionsProps {
   cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT';
@@ -56,6 +57,33 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
 
   const seasonNumber = apiCohort?.season ?? myCohort?.season;
 
+  const cohortId = apiCohort?.id;
+
+  const { mutate: syncQuestions } = useSyncCohortQuestions();
+
+  // Auto-sync questions from config on page load for admins/TAs
+  useEffect(() => {
+    if (isAdminOrTA && cohortId) {
+      syncQuestions({ cohortId });
+    }
+  }, [cohortId, isAdminOrTA]);
+
+  const toRichQuestions = React.useCallback(
+    (questions: CohortWeekQuestion[]): (string | RichQuestion)[] =>
+      questions.map((q) =>
+        q.attachments.length > 0 && cohortId
+          ? {
+              text: q.text,
+              attachments: q.attachments.map((filename) => ({
+                filename,
+                url: apiService.getAttachmentUrl(cohortId, filename),
+              })),
+            }
+          : q.text,
+      ),
+    [cohortId],
+  );
+
   // Merge API week data (questions, bonusQuestion, classroomUrl, classroomInviteLink) into static content
   const mergedWeeklyContent = React.useMemo(() => {
     const apiWeeks = apiCohort?.weeks;
@@ -67,13 +95,13 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
 
       return {
         ...staticWeek,
-        gdQuestions: apiWeek.questions.length > 0 ? apiWeek.questions : staticWeek.gdQuestions,
-        bonusQuestions: apiWeek.bonusQuestion.length > 0 ? apiWeek.bonusQuestion : staticWeek.bonusQuestions,
+        gdQuestions: apiWeek.questions.length > 0 ? toRichQuestions(apiWeek.questions) : staticWeek.gdQuestions,
+        bonusQuestions: apiWeek.bonusQuestion.length > 0 ? toRichQuestions(apiWeek.bonusQuestion) : staticWeek.bonusQuestions,
         classroomUrl: apiWeek.classroomUrl,
         classroomInviteLink: apiWeek.classroomInviteLink,
       };
     });
-  }, [weeklyContent, apiCohort]);
+  }, [weeklyContent, apiCohort, toRichQuestions]);
 
   const isLoading = isLoadingUser || isLoadingScores || isLoadingCohorts || isLoadingAllCohorts;
 

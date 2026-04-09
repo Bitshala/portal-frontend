@@ -34,8 +34,8 @@ interface Week {
   week: number;
   type: string;
   hasExercise: boolean;
-  questions: string[];
-  bonusQuestion: string[];
+  questions: { text: string; attachments: string[] }[];
+  bonusQuestion: { text: string; attachments: string[] }[];
   classroomUrl: string;
   classroomInviteLink: string;
 }
