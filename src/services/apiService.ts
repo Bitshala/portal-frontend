@@ -384,6 +384,14 @@ class ApiService {
     });
   };
 
+  public sendCohortCertificateEmails = async (cohortId: string): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'POST',
+      url: `/certificates/cohort/${cohortId}/send-emails`,
+    });
+  };
+
   public previewCohortCertificates = async (cohortId: string): Promise<CertificatePreviewResponseDto[]> => {
     const { data } = await this.request<CertificatePreviewResponseDto[]>({
       headers: this.getRequestHeaders(),
