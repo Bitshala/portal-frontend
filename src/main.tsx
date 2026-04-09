@@ -56,7 +56,7 @@ const router = createBrowserRouter([
     element: <Layout><TableView /></Layout>,
   },
   {
-    path: '/detailPage',
+    path: '/student/:studentId/:cohortId',
     element: <Layout><StudentDetailPage /></Layout>,
   },
   {

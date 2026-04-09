@@ -336,14 +336,7 @@ const MyStudentDashboard = () => {
           onRowClick={(cohort) => {
             const row = cohort as DashboardCohortRow;
             if (row.enrolled && userData?.id) {
-              const params = new URLSearchParams({
-                studentId: userData.id,
-                cohortType: row.type,
-                cohortId: row.id,
-                ...(userData.name && { studentName: userData.name }),
-                ...(userData.email && { studentEmail: userData.email }),
-              });
-              navigate(`/detailPage?${params.toString()}`);
+              navigate(`/student/${userData.id}/${row.id}`);
             }
           }}
           actions={(cohort) => {
@@ -359,14 +352,7 @@ const MyStudentDashboard = () => {
                       size="small"
                       onClick={() => {
                         if (userData?.id) {
-                          const params = new URLSearchParams({
-                            studentId: userData.id,
-                            cohortType: row.type,
-                            cohortId: row.id,
-                            ...(userData.name && { studentName: userData.name }),
-                            ...(userData.email && { studentEmail: userData.email }),
-                          });
-                          navigate(`/detailPage?${params.toString()}`);
+                          navigate(`/student/${userData.id}/${row.id}`);
                         }
                       }}
                       sx={{

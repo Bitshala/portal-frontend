@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -73,20 +73,9 @@ interface ScoresData {
   maxTotalScore: number;
 }
 
-interface StudentInfo {
-  name: string;
-  email: string;
-}
-
 const StudentDetailPage = () => {
-  const [searchParams] = useSearchParams();
+  const { studentId, cohortId: cohortIdParam } = useParams<{ studentId: string; cohortId: string }>();
   const navigate = useNavigate();
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-
-  const cohortIdParam = searchParams.get('cohortId');
-  const cohortTypeParam = searchParams.get('cohortType');
-  const studentId = searchParams.get('studentId');
-  const fromSource = searchParams.get('from');
 
   const { data: cohortData } = useCohort(cohortIdParam);
   const { data: currentUser } = useUser();
@@ -101,23 +90,14 @@ const StudentDetailPage = () => {
 
   const { data: studentProfileData } = useUserById(studentId || '', { enabled: canViewOtherScores && !!studentId });
 
-  // Set student info from URL params
-  useState(() => {
-    const studentName = searchParams.get('studentName');
-    const studentEmail = searchParams.get('studentEmail');
-    if (studentName || studentEmail) {
-      setStudentInfo({
-        name: studentName || 'Unknown',
-        email: studentEmail || 'N/A',
-      });
-    }
-  });
+  const displayName = isViewingOwnProfile
+    ? (currentUser?.name || currentUser?.discordUsername || 'Unknown')
+    : (studentProfileData?.name || studentProfileData?.discordUsername || '');
+  const displayEmail = isViewingOwnProfile
+    ? currentUser?.email
+    : studentProfileData?.email;
 
-  const selectedCohort = scoresData?.cohorts.find(cohort => {
-    if (cohortIdParam) return cohort.cohortId === cohortIdParam;
-    if (cohortTypeParam) return cohort.cohortType === cohortTypeParam;
-    return false;
-  }) || scoresData?.cohorts[0];
+  const selectedCohort = scoresData?.cohorts.find(cohort => cohort.cohortId === cohortIdParam) || scoresData?.cohorts[0];
 
   const sortedCohortWeeks = useMemo(() => {
     if (!cohortData?.weeks) return [];
@@ -147,7 +127,7 @@ const StudentDetailPage = () => {
 
   const totalWeeks = sortedWeeklyScores.length || 0;
   const attendedWeeks = sortedWeeklyScores.filter(w => w.attended ?? w.groupDiscussionScores?.attendance).length || 0;
-  const hasExercises = cohortHasExercises(selectedCohort?.cohortType || '');
+  const hasExercises = cohortHasExercises(cohortData?.type || selectedCohort?.cohortType || '');
 
   const stats = {
     totalScore: selectedCohort?.totalScore || 0,
@@ -220,15 +200,15 @@ const StudentDetailPage = () => {
         </Button>
 
         {/* Header */}
-        {studentInfo && (
+        {(displayName || displayEmail) && (
           <Box sx={{ mb: 3 }}>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', gap: 2 }}>
               <Box>
                 <Typography variant="h5" sx={{ fontWeight: 700, color: '#fff', fontSize: { xs: '1.5rem', sm: '1.75rem' } }}>
-                  {studentInfo.name}
+                  {displayName}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#a1a1aa', mt: 0.5 }}>
-                  {isViewingOwnProfile ? studentInfo.email : studentInfo.email}
+                  {displayEmail}
                 </Typography>
                 {selectedCohort && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
@@ -247,44 +227,42 @@ const StudentDetailPage = () => {
               </Box>
 
               {/* Action buttons */}
-              {!fromSource && (
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                  {selectedCohort && (selectedCohort.cohortType === "MASTERING_BITCOIN" || selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE" || selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK" || selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT") && (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      startIcon={<BookOpen size={16} />}
-                      onClick={() => {
-                        if (selectedCohort.cohortId) {
-                          navigate(`/${selectedCohort.cohortId}/instructions`);
-                        } else if (selectedCohort.cohortType === "MASTERING_BITCOIN") {
-                          navigate('/mb-instructions');
-                        } else if (selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE") {
-                          navigate('/lbtcl-instructions');
-                        } else if (selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK") {
-                          navigate('/ln-instructions');
-                        } else if (selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT") {
-                          navigate('/bpd-instructions');
-                        }
-                      }}
-                      sx={{ bgcolor: '#ea580c', textTransform: 'none', fontWeight: 600, boxShadow: 'none', '&:hover': { bgcolor: '#c2410c' } }}
-                    >
-                      Instructions
-                    </Button>
-                  )}
-                  {cohortIdParam && (
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Trophy size={16} />}
-                      onClick={() => navigate(`/results/${cohortIdParam}`)}
-                      sx={{ color: '#fb923c', borderColor: 'rgba(249,115,22,0.4)', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#fb923c', bgcolor: 'rgba(249,115,22,0.08)' } }}
-                    >
-                      View Ranking
-                    </Button>
-                  )}
-                </Box>
-              )}
+              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                {selectedCohort && (selectedCohort.cohortType === "MASTERING_BITCOIN" || selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE" || selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK" || selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT") && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<BookOpen size={16} />}
+                    onClick={() => {
+                      if (selectedCohort.cohortId) {
+                        navigate(`/${selectedCohort.cohortId}/instructions`);
+                      } else if (selectedCohort.cohortType === "MASTERING_BITCOIN") {
+                        navigate('/mb-instructions');
+                      } else if (selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE") {
+                        navigate('/lbtcl-instructions');
+                      } else if (selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK") {
+                        navigate('/ln-instructions');
+                      } else if (selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT") {
+                        navigate('/bpd-instructions');
+                      }
+                    }}
+                    sx={{ bgcolor: '#ea580c', textTransform: 'none', fontWeight: 600, boxShadow: 'none', '&:hover': { bgcolor: '#c2410c' } }}
+                  >
+                    Instructions
+                  </Button>
+                )}
+                {cohortIdParam && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Trophy size={16} />}
+                    onClick={() => navigate(`/results/${cohortIdParam}`)}
+                    sx={{ color: '#fb923c', borderColor: 'rgba(249,115,22,0.4)', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#fb923c', bgcolor: 'rgba(249,115,22,0.08)' } }}
+                  >
+                    View Ranking
+                  </Button>
+                )}
+              </Box>
             </Box>
           </Box>
         )}
