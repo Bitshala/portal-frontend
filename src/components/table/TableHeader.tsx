@@ -469,7 +469,7 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
             <Button
               variant="outlined"
               size="small"
-              disabled
+              onClick={onScheduleDate}
               startIcon={<CalendarClock size={15} />}
               sx={{
                 textTransform: 'none',
