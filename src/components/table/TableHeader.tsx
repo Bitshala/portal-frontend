@@ -34,8 +34,8 @@ interface Week {
   week: number;
   type: string;
   hasExercise: boolean;
-  questions: string[];
-  bonusQuestion: string[];
+  questions: { text: string; attachments: string[] }[];
+  bonusQuestion: { text: string; attachments: string[] }[];
   classroomUrl: string;
   classroomInviteLink: string;
 }
@@ -469,7 +469,7 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
             <Button
               variant="outlined"
               size="small"
-              disabled
+              onClick={onScheduleDate}
               startIcon={<CalendarClock size={15} />}
               sx={{
                 textTransform: 'none',

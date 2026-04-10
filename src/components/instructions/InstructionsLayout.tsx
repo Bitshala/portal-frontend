@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -23,7 +23,49 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import type { WeekContent, BonusQuestion } from '../../types/instructions';
+import type { WeekContent, BonusQuestion, RichQuestion } from '../../types/instructions';
+import { getAuthTokenFromStorage } from '../../services/authService';
+
+const isImageFile = (filename: string) => /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
+
+const Attachment: React.FC<{ filename: string; url: string }> = ({ filename, url }) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    if (!isImageFile(filename)) return;
+    let objectUrl: string;
+    const token = getAuthTokenFromStorage();
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => setImgFailed(true));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url, filename]);
+
+  if (isImageFile(filename) && !imgFailed) {
+    return blobUrl ? (
+      <Box
+        component="img"
+        src={blobUrl}
+        alt={filename}
+        sx={{ maxWidth: '100%', borderRadius: 2, border: '1px solid #3f3f46', display: 'block' }}
+      />
+    ) : null;
+  }
+
+  return (
+    <Link href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#60a5fa', fontSize: '0.9rem' }}>
+      {filename}
+    </Link>
+  );
+};
 
 interface InstructionsLayoutProps {
   cohortName: string;
@@ -52,14 +94,22 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
 
   const allSlides = useMemo(() => {
     if (!currentWeekData) return [];
-    const slides: { text: string; isBonus: boolean; image?: string }[] = [];
-    currentWeekData.gdQuestions.forEach(q => slides.push({ text: q, isBonus: false }));
+    const slides: { text: string; isBonus: boolean; image?: string; attachments?: { filename: string; url: string }[] }[] = [];
+    currentWeekData.gdQuestions.forEach(q => {
+      if (typeof q === 'string') {
+        slides.push({ text: q, isBonus: false });
+      } else {
+        slides.push({ text: (q as RichQuestion).text, isBonus: false, attachments: (q as RichQuestion).attachments });
+      }
+    });
     if (canViewBonusQuestions && currentWeekData.bonusQuestions) {
       currentWeekData.bonusQuestions.forEach(q => {
         if (typeof q === 'string') {
           slides.push({ text: q, isBonus: true });
-        } else {
+        } else if ('question' in q) {
           slides.push({ text: (q as BonusQuestion).question, isBonus: true, image: (q as BonusQuestion).image });
+        } else {
+          slides.push({ text: (q as RichQuestion).text, isBonus: true, attachments: (q as RichQuestion).attachments });
         }
       });
     }
@@ -386,16 +436,27 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#fafafa', mb: 3 }}>Group Round</Typography>
                     <Box component="ol" sx={{ listStyle: 'none', p: 0, m: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {currentWeek.gdQuestions.map((question, index) => (
-                        <Box key={index} component="li" sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                          <Typography sx={{ color: '#fb923c', fontWeight: 600, mr: 1.5, mt: 0.1, minWidth: 24, fontSize: '1.1rem' }}>
-                            {index + 1}.
-                          </Typography>
-                          <Typography sx={{ color: '#e4e4e7', lineHeight: 1.7, fontSize: '1.1rem' }}>
-                            {question}
-                          </Typography>
-                        </Box>
-                      ))}
+                      {currentWeek.gdQuestions.map((question, index) => {
+                        const text = typeof question === 'string' ? question : question.text;
+                        const attachments = typeof question === 'string' ? [] : question.attachments;
+                        return (
+                          <Box key={index} component="li">
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                              <Typography sx={{ color: '#fb923c', fontWeight: 600, mr: 1.5, mt: 0.1, minWidth: 24, fontSize: '1.1rem' }}>
+                                {index + 1}.
+                              </Typography>
+                              <Typography sx={{ color: '#e4e4e7', lineHeight: 1.7, fontSize: '1.1rem' }}>
+                                {text}
+                              </Typography>
+                            </Box>
+                            {attachments.length > 0 && (
+                              <Box sx={{ ml: 4.5, mt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {attachments.map((a) => <Attachment key={a.filename} {...a} />)}
+                              </Box>
+                            )}
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </Box>
 
@@ -405,8 +466,11 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                       <Typography variant="h6" sx={{ fontWeight: 700, color: '#fafafa', mb: 3 }}>Bonus Round</Typography>
                       <Box component="ol" sx={{ listStyle: 'none', p: 0, m: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {currentWeek.bonusQuestions.map((item, index) => {
-                          const question = typeof item === 'string' ? item : item.question;
-                          const image = typeof item === 'string' ? undefined : item.image;
+                          const isRich = typeof item !== 'string' && 'text' in item;
+                          const isBonusQuestion = typeof item !== 'string' && 'question' in item;
+                          const question = typeof item === 'string' ? item : isRich ? (item as RichQuestion).text : (item as BonusQuestion).question;
+                          const image = isBonusQuestion ? (item as BonusQuestion).image : undefined;
+                          const attachments = isRich ? (item as RichQuestion).attachments : [];
                           return (
                             <Box key={index} component="li">
                               <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -420,6 +484,11 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                               {image && (
                                 <Box sx={{ mt: 1.5, ml: 4 }}>
                                   <Box component="img" src={image} alt={`Question ${index + 1} reference`} sx={{ maxWidth: '100%', borderRadius: 2, border: '1px solid #3f3f46' }} />
+                                </Box>
+                              )}
+                              {attachments.length > 0 && (
+                                <Box sx={{ ml: 4.5, mt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                  {attachments.map((a) => <Attachment key={a.filename} {...a} />)}
                                 </Box>
                               )}
                             </Box>
@@ -555,6 +624,13 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                       border: '1px solid rgba(255,255,255,0.08)',
                     }}
                   />
+                )}
+
+                {/* Attachments if present */}
+                {(allSlides[gdSlideIndex]?.attachments?.length ?? 0) > 0 && (
+                  <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                    {allSlides[gdSlideIndex].attachments!.map((a) => <Attachment key={a.filename} {...a} />)}
+                  </Box>
                 )}
               </Box>
             ) : (

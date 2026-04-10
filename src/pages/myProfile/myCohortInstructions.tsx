@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useCohort } from '../../hooks/cohortHooks';
+import { useCohort, useSyncCohortQuestions } from '../../hooks/cohortHooks';
 import { useUser } from '../../hooks/userHooks';
 import { UserRole } from '../../types/enums';
 import InstructionsLayout from '../../components/instructions/InstructionsLayout';
@@ -8,7 +8,9 @@ import { lnWeeks } from '../../data/lnWeeks';
 import { lbtclWeeks } from '../../data/lbtclWeeks';
 import { mbWeeks } from '../../data/mbWeeks';
 import { bpdWeeks } from '../../data/bpdWeeks';
-import type { GetCohortWeekResponseDto } from '../../types/api';
+import type { GetCohortWeekResponseDto, CohortWeekQuestion } from '../../types/api';
+import type { RichQuestion } from '../../types/instructions';
+import apiService from '../../services/apiService';
 
 const cohortTypeToContent = {
   MASTERING_BITCOIN: { name: 'MB', weeks: mbWeeks },
@@ -24,12 +26,34 @@ const MyCohortInstructions: React.FC = () => {
 
   const { data: cohortData, isLoading: isLoadingCohort } = useCohort(cohortId);
   const { data: userData, isLoading: isLoadingUser } = useUser();
+  const { mutate: syncQuestions } = useSyncCohortQuestions();
+
+  const isAdminOrTA = userData?.role === UserRole.ADMIN || userData?.role === UserRole.TEACHING_ASSISTANT;
+
+  useEffect(() => {
+    if (isAdminOrTA && cohortId) {
+      syncQuestions({ cohortId });
+    }
+  }, [cohortId, isAdminOrTA]);
 
   const isLoading = isLoadingCohort || isLoadingUser;
 
   const content = cohortData
     ? cohortTypeToContent[cohortData.type as keyof typeof cohortTypeToContent]
     : undefined;
+
+  const toRichQuestions = (cohortId: string, questions: CohortWeekQuestion[]): (string | RichQuestion)[] =>
+    questions.map((q) =>
+      q.attachments.length > 0
+        ? {
+            text: q.text,
+            attachments: q.attachments.map((filename) => ({
+              filename,
+              url: apiService.getAttachmentUrl(cohortId, filename),
+            })),
+          }
+        : q.text,
+    );
 
   // useMemo must be called unconditionally before any early returns
   const mergedWeeklyContent = useMemo(() => {
@@ -43,8 +67,8 @@ const MyCohortInstructions: React.FC = () => {
 
       return {
         ...staticWeek,
-        gdQuestions: apiWeek.questions.length > 0 ? apiWeek.questions : staticWeek.gdQuestions,
-        bonusQuestions: apiWeek.bonusQuestion.length > 0 ? apiWeek.bonusQuestion : staticWeek.bonusQuestions,
+        gdQuestions: apiWeek.questions.length > 0 ? toRichQuestions(cohortData.id, apiWeek.questions) : staticWeek.gdQuestions,
+        bonusQuestions: apiWeek.bonusQuestion.length > 0 ? toRichQuestions(cohortData.id, apiWeek.bonusQuestion) : staticWeek.bonusQuestions,
         classroomUrl: apiWeek.classroomUrl,
         classroomInviteLink: apiWeek.classroomInviteLink,
       };
@@ -97,8 +121,6 @@ const MyCohortInstructions: React.FC = () => {
       </div>
     );
   }
-
-  const isAdminOrTA = userData?.role === UserRole.ADMIN || userData?.role === UserRole.TEACHING_ASSISTANT;
 
   return (
     <InstructionsLayout

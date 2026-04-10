@@ -82,6 +82,16 @@ export const useUpdateCohortWeek = createUseMutation<
   },
 );
 
+export const useSyncCohortQuestions = createUseMutation<void, { cohortId: string }>(
+  ({ cohortId }) => apiService.syncCohortQuestions(cohortId),
+  {
+    queryInvalidation: async ({ variables: { cohortId }, queryClient }) => {
+      await useCohort.invalidate(cohortId);
+      await queryClient.invalidateQueries({ queryKey: ['cohorts'] });
+    },
+  },
+);
+
 export const useJoinCohort = createUseMutation<void, { cohortId: string }>(
   ({ cohortId }) => apiService.joinCohort(cohortId),
   {

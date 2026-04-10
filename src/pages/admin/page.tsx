@@ -13,7 +13,6 @@ const AdminPage: React.FC = () => {
   const { data: cohortsData, isLoading, refetch } = useCohorts({ page: 0, pageSize: 100 });
   const createCohortMutation = useCreateCohort();
   const updateCohortMutation = useUpdateCohort();
-
   const [selectedCohortType, setSelectedCohortType] = useState<CohortType | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -331,6 +330,7 @@ const AdminPage: React.FC = () => {
                     : 'Submit'}
                 </button>
               </div>
+
             </form>
           </div>
         </div>

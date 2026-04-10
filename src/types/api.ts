@@ -21,9 +21,14 @@ export interface CreateCohortRequestDto {
   registrationDeadline: string;
 }
 
+export interface CohortWeekQuestion {
+  text: string;
+  attachments: string[];
+}
+
 export interface UpdateCohortWeekRequestDto {
-  questions?: string[] | undefined;
-  bonusQuestion?: string[] | undefined;
+  questions?: { text: string; attachments?: string[] }[] | undefined;
+  bonusQuestion?: { text: string; attachments?: string[] }[] | undefined;
   classroomUrl?: string | undefined;
   classroomInviteLink?: string | undefined;
   scheduledDate?: string | undefined;
@@ -38,8 +43,8 @@ export interface GetCohortWeekResponseDto {
   week: number;
   type: string;
   hasExercise: boolean;
-  questions: string[];
-  bonusQuestion: string[];
+  questions: CohortWeekQuestion[];
+  bonusQuestion: CohortWeekQuestion[];
   classroomUrl: string | null;
   classroomInviteLink: string | null;
   scheduledDate: string | null;
