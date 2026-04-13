@@ -393,6 +393,7 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'POST',
       url: `/certificates/cohort/${cohortId}/generate`,
+      data: { sendEmail: false },
     });
   };
 
@@ -456,6 +457,7 @@ class ApiService {
       method: 'GET',
       url: `/certificates/cohort/${cohortId}/download`,
       responseType: 'blob',
+      timeout: 120000, // 2 minutes — bulk certificate generation can be slow
     });
     const disposition = (response.headers as Record<string, string>)['content-disposition'] ?? '';
     const filename = disposition.match(/filename="(.+)"/)?.[1] ?? 'certificates.zip';

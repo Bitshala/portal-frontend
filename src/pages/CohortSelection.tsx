@@ -70,8 +70,19 @@ const BulkDownloadCertButton = ({ cohortId, onError }: { cohortId: string; onErr
     } catch (err) {
       let msg = 'Failed to download certificates.';
       if (typeof err === 'object' && err !== null && 'response' in err) {
-        const re = err as { response?: { data?: { message?: string } } };
-        if (re.response?.data?.message) msg = re.response.data.message;
+        const re = err as { response?: { data?: Blob | { message?: string } } };
+        if (re.response?.data instanceof Blob) {
+          try {
+            const text = await re.response.data.text();
+            const parsed = JSON.parse(text) as { message?: string };
+            if (parsed.message) msg = parsed.message;
+          } catch {
+            // keep default message
+          }
+        } else if (re.response?.data && typeof re.response.data === 'object' && 'message' in re.response.data) {
+          const message = (re.response.data as { message?: string }).message;
+          if (message) msg = message;
+        }
       }
       onError(msg);
     } finally {
