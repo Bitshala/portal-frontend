@@ -23,7 +23,10 @@ export const createQueryClient = () => {
             isNetworkError(error as AxiosError)
               ? Math.min(2500 * 2 ** failureCount, 30000)
               : defaultRetryDelay(failureCount),
-          retry(failureCount) {
+          retry(failureCount, error) {
+            if (axios.isAxiosError(error) && error.response?.status === 401) {
+              return false;
+            }
             return failureCount < 3;
           },
         },
