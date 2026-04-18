@@ -7,6 +7,7 @@ import { queryClient } from './http/queryClient.ts';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
 
 import '@fontsource/sora';
 import 'virtual:uno.css';
@@ -193,16 +194,16 @@ const router = createBrowserRouter([
       element: <ProtectedRoute>{fellowship(<Report />)}</ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/applications',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<ApplicationsAdmin />)}</ProtectedRoute>,
+      path: '/admin/fellowships',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<FellowshipsAdmin />)}</ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/fellowships',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<FellowshipsAdmin />)}</ProtectedRoute>,
+      path: '/admin/fellowships/applications',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<ApplicationsAdmin />)}</ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/reports',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<ReportsAdmin />)}</ProtectedRoute>,
+      path: '/admin/fellowships/reports',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<ReportsAdmin />)}</ProtectedRoute>,
     },
     {
       path: '/unauthorized',
@@ -219,8 +220,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

@@ -3,8 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -22,7 +20,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import FellowshipLayout from '../../../components/fellowship/FellowshipLayout';
+import AdminFellowshipLayout from '../../../components/fellowship/AdminFellowshipLayout';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
 import {
@@ -106,113 +104,119 @@ const ReportsAdmin = () => {
   };
 
   return (
-    <FellowshipLayout title="Reports review" maxWidth="lg">
+    <AdminFellowshipLayout title="Reports review">
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
         </Alert>
       )}
 
-      <Card variant="outlined" sx={{ borderColor: 'divider' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap' }}>
-            <TextField
-              select
-              label="Status"
-              size="small"
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as FellowshipReportStatus | '');
-                setPage(0);
-              }}
-              sx={{ minWidth: 160 }}
-            >
-              {STATUS_FILTERS.map((s) => (
-                <MenuItem key={s.label} value={s.value}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Month"
-              size="small"
-              value={month}
-              onChange={(e) => {
-                setMonth(e.target.value === '' ? '' : Number(e.target.value));
-                setPage(0);
-              }}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value="">Any</MenuItem>
-              {monthOptions.map((m) => (
-                <MenuItem key={m.value} value={m.value}>
-                  {m.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Year"
-              type="number"
-              size="small"
-              value={year}
-              onChange={(e) => {
-                setYear(e.target.value === '' ? '' : Number(e.target.value));
-                setPage(0);
-              }}
-              sx={{ minWidth: 120 }}
-            />
-          </Stack>
+      <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
+        <TextField
+          select
+          label="Status"
+          size="small"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value as FellowshipReportStatus | '');
+            setPage(0);
+          }}
+          sx={{ minWidth: 160, bgcolor: 'background.paper' }}
+        >
+          {STATUS_FILTERS.map((s) => (
+            <MenuItem key={s.label} value={s.value}>
+              {s.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Month"
+          size="small"
+          value={month}
+          onChange={(e) => {
+            setMonth(e.target.value === '' ? '' : Number(e.target.value));
+            setPage(0);
+          }}
+          sx={{ minWidth: 140, bgcolor: 'background.paper' }}
+        >
+          <MenuItem value="">Any</MenuItem>
+          {monthOptions.map((m) => (
+            <MenuItem key={m.value} value={m.value}>
+              {m.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          label="Year"
+          type="number"
+          size="small"
+          value={year}
+          onChange={(e) => {
+            setYear(e.target.value === '' ? '' : Number(e.target.value));
+            setPage(0);
+          }}
+          sx={{ minWidth: 120, bgcolor: 'background.paper' }}
+        />
+      </Stack>
 
-          {isLoading && <CircularProgress size={22} />}
-          {!isLoading && records.length === 0 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No reports match these filters.
-            </Typography>
-          )}
-          {!isLoading && records.length > 0 && (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fellow</TableCell>
-                  <TableCell>Month</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Submitted</TableCell>
-                  <TableCell>Reviewed by</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+      {isLoading && <CircularProgress size={22} />}
+      {!isLoading && records.length === 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No reports match these filters.
+        </Typography>
+      )}
+      {!isLoading && records.length > 0 && (
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            overflow: 'hidden',
+          }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <TableCell>Fellow</TableCell>
+                <TableCell>Month</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Submitted</TableCell>
+                <TableCell>Reviewed by</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {records.map((r) => (
+                <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
+                  <TableCell>{r.userName || '—'}</TableCell>
+                  <TableCell>
+                    {monthName(r.month)} {r.year}
+                  </TableCell>
+                  <TableCell>
+                    <StatusChip status={r.status} />
+                  </TableCell>
+                  <TableCell>
+                    {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell>{r.reviewerName ?? '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="text">
+                      Review
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {records.map((r) => (
-                  <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
-                    <TableCell>{r.userName || '—'}</TableCell>
-                    <TableCell>
-                      {monthName(r.month)} {r.year}
-                    </TableCell>
-                    <TableCell>
-                      <StatusChip status={r.status} />
-                    </TableCell>
-                    <TableCell>
-                      {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}
-                    </TableCell>
-                    <TableCell>{r.reviewerName ?? '—'}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" variant="text">
-                        Review
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {totalPages > 1 && (
-            <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
-              <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
+      {totalPages > 1 && (
+        <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+          <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
+        </Stack>
+      )}
 
       <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)}>
         <Box sx={{ width: { xs: '100vw', md: 640 }, p: 3 }}>
@@ -283,7 +287,7 @@ const ReportsAdmin = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </FellowshipLayout>
+    </AdminFellowshipLayout>
   );
 };
 

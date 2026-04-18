@@ -17,13 +17,8 @@ const navLinks = (role: UserRole | undefined) => {
     { label: 'Apply', path: '/fellowship/apply' },
     { label: 'My Fellowships', path: '/fellowship/me' },
   ];
-  if (role === UserRole.ADMIN) {
-    return [
-      ...base,
-      { label: 'Applications', path: '/fellowship/admin/applications' },
-      { label: 'Fellowships', path: '/fellowship/admin/fellowships' },
-      { label: 'Reports', path: '/fellowship/admin/reports' },
-    ];
+  if (role === UserRole.ADMIN || role === UserRole.TEACHING_ASSISTANT) {
+    return [...base, { label: 'Admin', path: '/admin/fellowships' }];
   }
   return base;
 };

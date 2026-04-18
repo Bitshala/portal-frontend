@@ -17,6 +17,7 @@
     "@fontsource/sora": "^5.2.8",
     "@mui/material": "^7.3.8",
     "@tanstack/react-query": "^5.62.8",
+    "@uiw/react-md-editor": "^4.1.0",
     "axios": "^1.13.5",
     "browserlist": "^1.0.1",
     "lucide-react": "^0.522.0",
