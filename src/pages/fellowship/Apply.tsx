@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
   Card,
   CardContent,
+  Collapse,
+  Fade,
   Grid,
+  Grow,
   Stack,
-  TextField,
   Typography,
   Alert,
-  CircularProgress,
-  Divider,
 } from '@mui/material';
 import { Trash2 } from 'lucide-react';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
 import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
-import StatusChip from '../../components/fellowship/StatusChip';
 import {
   useMyApplications,
   useApplication,
@@ -27,9 +30,9 @@ import {
 import {
   FellowshipApplicationStatus,
   FellowshipType,
-  type GetFellowshipApplicationResponseDto,
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { PROPOSAL_TEMPLATES, isTemplate } from './proposalTemplates';
 
 const TYPE_OPTIONS: { value: FellowshipType; title: string; description: string }[] = [
   { value: FellowshipType.DEVELOPER, title: 'Developer', description: 'Contribute to Bitcoin / Lightning open-source projects.' },
@@ -41,9 +44,11 @@ const isActiveStatus = (s: FellowshipApplicationStatus) =>
   s === FellowshipApplicationStatus.DRAFT || s === FellowshipApplicationStatus.SUBMITTED;
 
 const Apply = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const appIdFromUrl = searchParams.get('appId');
   const [selectedType, setSelectedType] = useState<FellowshipType | null>(null);
   const [proposal, setProposal] = useState('');
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const myList = useMyApplications({ page: 0, pageSize: 20 });
@@ -51,6 +56,10 @@ const Apply = () => {
   const loadedProposal = useApplicationProposal(activeId ?? '', {
     enabled: !!activeId && loadedApp.data?.status === FellowshipApplicationStatus.DRAFT,
   });
+
+  useEffect(() => {
+    if (appIdFromUrl && appIdFromUrl !== activeId) setActiveId(appIdFromUrl);
+  }, [appIdFromUrl, activeId]);
 
   const createMut = useCreateApplication();
   const updateMut = useUpdateApplication();
@@ -79,11 +88,17 @@ const Apply = () => {
     setActiveId(null);
     setProposal('');
     setSelectedType(null);
+    if (searchParams.has('appId')) {
+      searchParams.delete('appId');
+      setSearchParams(searchParams, { replace: true });
+    }
   };
 
-  const handleSelectRow = (app: GetFellowshipApplicationResponseDto) => {
-    setActiveId(app.id);
-    setSelectedType(app.type);
+  const handleTypeSelect = (type: FellowshipType) => {
+    setSelectedType(type);
+    if (activeId) return;
+    const template = PROPOSAL_TEMPLATES[type];
+    setProposal((prev) => (prev.trim() === '' || isTemplate(prev) ? template : prev));
   };
 
   const handleSaveDraft = async () => {
@@ -138,133 +153,124 @@ const Apply = () => {
       )}
 
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 8 }}>
+        <Grid size={{ xs: 12 }}>
           <Card variant="outlined" sx={{ borderColor: 'divider' }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1 }}>
                 1. Choose fellowship type
               </Typography>
-              <Grid container spacing={1.5} sx={{ mb: 3 }}>
-                {TYPE_OPTIONS.map((opt) => {
+              <Grid container spacing={1.5} sx={{ mb: 3 }} alignItems="stretch">
+                {TYPE_OPTIONS.map((opt, idx) => {
                   const disabled = !isEditable || (usedTypes.has(opt.value) && opt.value !== selectedType);
                   const active = selectedType === opt.value;
                   return (
-                    <Grid size={{ xs: 12, sm: 4 }} key={opt.value}>
-                      <Box
-                        onClick={() => !disabled && setSelectedType(opt.value)}
-                        sx={{
-                          p: 2,
-                          borderRadius: 1.5,
-                          border: '1.5px solid',
-                          borderColor: active ? 'primary.main' : 'divider',
-                          bgcolor: active ? 'rgba(249,115,22,0.06)' : 'background.paper',
-                          cursor: disabled ? 'not-allowed' : 'pointer',
-                          opacity: disabled ? 0.5 : 1,
-                          transition: 'all 0.15s ease',
-                          '&:hover': disabled ? {} : { borderColor: 'primary.light' },
-                        }}
-                      >
-                        <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{opt.title}</Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {opt.description}
-                        </Typography>
-                      </Box>
+                    <Grid size={{ xs: 12, sm: 4 }} key={opt.value} sx={{ display: 'flex' }}>
+                      <Grow in timeout={400 + idx * 120} style={{ transformOrigin: 'top center', width: '100%' }}>
+                        <Box
+                          onClick={() => !disabled && handleTypeSelect(opt.value)}
+                          sx={{
+                            p: 2,
+                            borderRadius: 1.5,
+                            border: '1.5px solid',
+                            borderColor: active ? 'primary.main' : 'divider',
+                            bgcolor: active ? 'rgba(249,115,22,0.06)' : 'background.paper',
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.5 : 1,
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            transform: active ? 'translateY(-2px)' : 'none',
+                            boxShadow: active ? '0 6px 20px rgba(249,115,22,0.15)' : 'none',
+                            '&:hover': disabled
+                              ? {}
+                              : {
+                                  borderColor: 'primary.light',
+                                  transform: 'translateY(-2px)',
+                                  boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+                                },
+                          }}
+                        >
+                          <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{opt.title}</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {opt.description}
+                          </Typography>
+                        </Box>
+                      </Grow>
                     </Grid>
                   );
                 })}
               </Grid>
 
-              <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1 }}>
-                2. Proposal
-              </Typography>
-              {currentApp && currentApp.status === FellowshipApplicationStatus.REJECTED && currentApp.reviewerRemarks && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  <strong>Reviewer remarks:</strong> {currentApp.reviewerRemarks}
-                </Alert>
-              )}
-              <TextField
-                multiline
-                fullWidth
-                minRows={12}
-                maxRows={24}
-                placeholder="Write your proposal in markdown. What do you want to build, why, and how? Include links, milestones, prior work, and a rough timeline."
-                value={proposal}
-                onChange={(e) => setProposal(e.target.value)}
-                disabled={!isEditable || (!!activeId && loadedProposal.isLoading)}
-              />
-
-              <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  onClick={handleSaveDraft}
-                  disabled={!isEditable || !selectedType || !proposal.trim() || createMut.isPending || updateMut.isPending}
-                >
-                  {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
-                </Button>
-                <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit}>
-                  {submitMut.isPending ? 'Submitting…' : 'Submit application'}
-                </Button>
-                {activeId && isEditable && (
-                  <Button
-                    variant="text"
-                    color="error"
-                    startIcon={<Trash2 size={16} />}
-                    onClick={handleDiscard}
-                    disabled={deleteMut.isPending}
-                  >
-                    Discard draft
-                  </Button>
-                )}
-                {activeId && (
-                  <Button variant="text" onClick={resetEditor}>
-                    New application
-                  </Button>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined" sx={{ borderColor: 'divider' }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                My applications
-              </Typography>
-              {myList.isLoading && <CircularProgress size={20} />}
-              {!myList.isLoading && records.length === 0 && (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  You haven't applied yet.
-                </Typography>
-              )}
-              <Stack spacing={1} divider={<Divider flexItem />}>
-                {records.map((app) => {
-                  const selected = app.id === activeId;
-                  return (
+              <Collapse in={!!selectedType} timeout={450} unmountOnExit>
+                <Fade in={!!selectedType} timeout={600}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1 }}>
+                      2. Proposal
+                    </Typography>
+                    {currentApp && currentApp.status === FellowshipApplicationStatus.REJECTED && currentApp.reviewerRemarks && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        <strong>Reviewer remarks:</strong> {currentApp.reviewerRemarks}
+                      </Alert>
+                    )}
                     <Box
-                      key={app.id}
-                      onClick={() => handleSelectRow(app)}
+                      data-color-mode="light"
                       sx={{
-                        p: 1.25,
-                        borderRadius: 1,
-                        cursor: 'pointer',
-                        bgcolor: selected ? 'rgba(249,115,22,0.06)' : 'transparent',
-                        '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+                        '& .w-md-editor': {
+                          boxShadow: 'none',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        },
+                        opacity: !isEditable || (!!activeId && loadedProposal.isLoading) ? 0.6 : 1,
+                        pointerEvents:
+                          !isEditable || (!!activeId && loadedProposal.isLoading) ? 'none' : 'auto',
                       }}
                     >
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {app.type}
-                        </Typography>
-                        <StatusChip status={app.status} />
-                      </Stack>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        Updated {new Date(app.updatedAt).toLocaleDateString()}
-                      </Typography>
+                      <MDEditor
+                        value={proposal}
+                        onChange={(v) => setProposal(v ?? '')}
+                        height={640}
+                        visibleDragbar
+                        preview="live"
+                        textareaProps={{
+                          placeholder:
+                            'Write your proposal in markdown. What do you want to build, why, and how? Include links, milestones, prior work, and a rough timeline.',
+                        }}
+                      />
                     </Box>
-                  );
-                })}
-              </Stack>
+
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="outlined"
+                        onClick={handleSaveDraft}
+                        disabled={!isEditable || !selectedType || !proposal.trim() || createMut.isPending || updateMut.isPending}
+                      >
+                        {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
+                      </Button>
+                      <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit}>
+                        {submitMut.isPending ? 'Submitting…' : 'Submit application'}
+                      </Button>
+                      {activeId && isEditable && (
+                        <Button
+                          variant="text"
+                          color="error"
+                          startIcon={<Trash2 size={16} />}
+                          onClick={handleDiscard}
+                          disabled={deleteMut.isPending}
+                        >
+                          Discard draft
+                        </Button>
+                      )}
+                      {activeId && (
+                        <Button variant="text" onClick={resetEditor}>
+                          New application
+                        </Button>
+                      )}
+                    </Stack>
+                  </Box>
+                </Fade>
+              </Collapse>
             </CardContent>
           </Card>
         </Grid>

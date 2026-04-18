@@ -19,7 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import FellowshipLayout from '../../../components/fellowship/FellowshipLayout';
+import AdminFellowshipLayout from '../../../components/fellowship/AdminFellowshipLayout';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import {
   useFellowship,
@@ -230,73 +230,79 @@ const FellowshipsAdmin = () => {
   const totalPages = data ? Math.ceil(data.totalRecords / PAGE_SIZE) : 1;
 
   return (
-    <FellowshipLayout title="Fellowships management" maxWidth="lg">
+    <AdminFellowshipLayout title="Fellowships management">
       {toast && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast}
         </Alert>
       )}
 
-      <Card variant="outlined" sx={{ borderColor: 'divider' }}>
-        <CardContent>
-          {isLoading && <CircularProgress size={22} />}
-          {!isLoading && records.length === 0 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No fellowships yet.
-            </Typography>
-          )}
-          {!isLoading && records.length > 0 && (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fellow</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Dates</TableCell>
-                  <TableCell>Amount</TableCell>
-                  <TableCell>Project</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+      {isLoading && <CircularProgress size={22} />}
+      {!isLoading && records.length === 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No fellowships yet.
+        </Typography>
+      )}
+      {!isLoading && records.length > 0 && (
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            overflow: 'hidden',
+          }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <TableCell>Fellow</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Dates</TableCell>
+                <TableCell>Amount</TableCell>
+                <TableCell>Project</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {records.map((f) => (
+                <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(f.id)}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {f.userName || f.userEmail || '—'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {f.userEmail}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{f.type}</TableCell>
+                  <TableCell>
+                    <StatusChip status={f.status} />
+                  </TableCell>
+                  <TableCell>
+                    {f.startDate && f.endDate
+                      ? `${new Date(f.startDate).toLocaleDateString()} – ${new Date(f.endDate).toLocaleDateString()}`
+                      : '—'}
+                  </TableCell>
+                  <TableCell>{formatAmount(f.amountUsd)}</TableCell>
+                  <TableCell>{f.projectName || '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="text">
+                      {f.status === FellowshipStatus.PENDING ? 'Start contract' : 'View'}
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {records.map((f) => (
-                  <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(f.id)}>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {f.userName || f.userEmail || '—'}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {f.userEmail}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{f.type}</TableCell>
-                    <TableCell>
-                      <StatusChip status={f.status} />
-                    </TableCell>
-                    <TableCell>
-                      {f.startDate && f.endDate
-                        ? `${new Date(f.startDate).toLocaleDateString()} – ${new Date(f.endDate).toLocaleDateString()}`
-                        : '—'}
-                    </TableCell>
-                    <TableCell>{formatAmount(f.amountUsd)}</TableCell>
-                    <TableCell>{f.projectName || '—'}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" variant="text">
-                        {f.status === FellowshipStatus.PENDING ? 'Start contract' : 'View'}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {totalPages > 1 && (
-            <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
-              <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
+      {totalPages > 1 && (
+        <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+          <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
+        </Stack>
+      )}
 
       <Drawer anchor="right" open={!!selectedId} onClose={() => setSelectedId(null)}>
         {selectedId && (
@@ -307,7 +313,7 @@ const FellowshipsAdmin = () => {
           />
         )}
       </Drawer>
-    </FellowshipLayout>
+    </AdminFellowshipLayout>
   );
 };
 

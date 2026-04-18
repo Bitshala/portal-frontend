@@ -37,6 +37,7 @@ import CohortMetrics from './pages/CohortMetrics.tsx';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
 import Apply from './pages/fellowship/Apply.tsx';
 import MyFellowships from './pages/fellowship/MyFellowships.tsx';
 import FellowshipDashboard from './pages/fellowship/FellowshipDashboard.tsx';
@@ -173,16 +174,16 @@ const router = createBrowserRouter([
       element: <ProtectedRoute><Report /></ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/applications',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><ApplicationsAdmin /></ProtectedRoute>,
+      path: '/admin/fellowships',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><FellowshipsAdmin /></ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/fellowships',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><FellowshipsAdmin /></ProtectedRoute>,
+      path: '/admin/fellowships/applications',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ApplicationsAdmin /></ProtectedRoute>,
     },
     {
-      path: '/fellowship/admin/reports',
-      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><ReportsAdmin /></ProtectedRoute>,
+      path: '/admin/fellowships/reports',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ReportsAdmin /></ProtectedRoute>,
     },
     {
       path: '/unauthorized',
@@ -199,8 +200,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

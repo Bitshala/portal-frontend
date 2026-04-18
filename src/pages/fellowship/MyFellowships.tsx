@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Divider,
   Grid,
   Stack,
   Typography,
@@ -12,12 +13,14 @@ import {
 } from '@mui/material';
 import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
-import { useMyFellowships } from '../../hooks/fellowshipHooks';
+import { useMyApplications, useMyFellowships } from '../../hooks/fellowshipHooks';
 
 const MyFellowships = () => {
   const navigate = useNavigate();
   const { data, isLoading } = useMyFellowships({ page: 0, pageSize: 20 });
   const records = data?.records ?? [];
+  const applicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
+  const applications = applicationsQuery.data?.records ?? [];
 
   useEffect(() => {
     if (!isLoading && records.length === 1) {
@@ -80,6 +83,44 @@ const MyFellowships = () => {
           </Grid>
         ))}
       </Grid>
+
+      <Card variant="outlined" sx={{ borderColor: 'divider', mt: 3 }}>
+        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+            My applications
+          </Typography>
+          {applicationsQuery.isLoading && <CircularProgress size={20} />}
+          {!applicationsQuery.isLoading && applications.length === 0 && (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              You haven't applied yet.
+            </Typography>
+          )}
+          <Stack spacing={1} divider={<Divider flexItem />}>
+            {applications.map((app) => (
+              <Box
+                key={app.id}
+                onClick={() => navigate(`/fellowship/apply?appId=${app.id}`)}
+                sx={{
+                  p: 1.25,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {app.type}
+                  </Typography>
+                  <StatusChip status={app.status} />
+                </Stack>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Updated {new Date(app.updatedAt).toLocaleDateString()}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </CardContent>
+      </Card>
     </FellowshipLayout>
   );
 };
