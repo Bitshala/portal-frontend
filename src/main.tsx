@@ -1,4 +1,4 @@
-import { StrictMode, lazy, Suspense } from 'react';
+import { StrictMode, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -37,6 +37,18 @@ const AdminPage = lazy(() => import('./pages/admin/page.tsx'));
 const FeedbackAdmin = lazy(() => import('./pages/admin/FeedbackAdmin.tsx'));
 const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
 const GDPresentation = lazy(() => import('./pages/GDPresentation.tsx'));
+const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
+const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
+const FellowshipDashboard = lazy(() => import('./pages/fellowship/FellowshipDashboard.tsx'));
+const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
+const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/ApplicationsAdmin.tsx'));
+const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/FellowshipsAdmin.tsx'));
+const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
+
+// Fellowship routes render outside Layout, so they need their own Suspense boundary.
+const fellowship = (node: ReactNode) => (
+  <Suspense fallback={<div style={{ minHeight: '100vh' }} />}>{node}</Suspense>
+);
 
 const router = createBrowserRouter([
   {
@@ -159,6 +171,38 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         </Layout>
       ),
+    },
+    {
+      path: '/fellowship',
+      element: <ProtectedRoute>{fellowship(<Apply />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/apply',
+      element: <ProtectedRoute>{fellowship(<Apply />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/me',
+      element: <ProtectedRoute>{fellowship(<MyFellowships />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:id',
+      element: <ProtectedRoute>{fellowship(<FellowshipDashboard />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
+      element: <ProtectedRoute>{fellowship(<Report />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/applications',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<ApplicationsAdmin />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/fellowships',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<FellowshipsAdmin />)}</ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/reports',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}>{fellowship(<ReportsAdmin />)}</ProtectedRoute>,
     },
     {
       path: '/unauthorized',
