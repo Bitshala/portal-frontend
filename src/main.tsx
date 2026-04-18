@@ -37,6 +37,13 @@ import CohortMetrics from './pages/CohortMetrics.tsx';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
+import Apply from './pages/fellowship/Apply.tsx';
+import MyFellowships from './pages/fellowship/MyFellowships.tsx';
+import FellowshipDashboard from './pages/fellowship/FellowshipDashboard.tsx';
+import Report from './pages/fellowship/Report.tsx';
+import ApplicationsAdmin from './pages/fellowship/admin/ApplicationsAdmin.tsx';
+import FellowshipsAdmin from './pages/fellowship/admin/FellowshipsAdmin.tsx';
+import ReportsAdmin from './pages/fellowship/admin/ReportsAdmin.tsx';
 
 const router = createBrowserRouter([
   {
@@ -144,6 +151,38 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         </Layout>
       ),
+    },
+    {
+      path: '/fellowship',
+      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/apply',
+      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/me',
+      element: <ProtectedRoute><MyFellowships /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:id',
+      element: <ProtectedRoute><FellowshipDashboard /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
+      element: <ProtectedRoute><Report /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/applications',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><ApplicationsAdmin /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/fellowships',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><FellowshipsAdmin /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/admin/reports',
+      element: <ProtectedRoute requiredRole={UserRole.ADMIN}><ReportsAdmin /></ProtectedRoute>,
     },
     {
       path: '/unauthorized',
