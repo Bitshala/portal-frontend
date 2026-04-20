@@ -111,7 +111,7 @@ export type UpdateFellowshipOnboardingRequestDto = Partial<FellowshipOnboardingD
 export interface StartFellowshipContractRequestDto {
   startDate: string;
   endDate: string;
-  amountUsd: string;
+  amountUsd: number;
 }
 
 // =========================
