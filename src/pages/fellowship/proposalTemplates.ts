@@ -3,11 +3,17 @@ import { FellowshipType } from '../../types/fellowship';
 const DEVELOPER_TEMPLATE = `# Application for Bitshala Fellowship
 
 **Name:**
+
 **Email:**
+
 **Location:**
+
 **Timezone:**
+
 **GitHub:**
+
 **LinkedIn:**
+
 **Twitter / Nostr:**
 
 ## Background & Prior Contributions
@@ -69,13 +75,21 @@ and the wider Bitcoin / Lightning ecosystem.
 const DESIGNER_TEMPLATE = `# Application for Bitshala Fellowship
 
 **Name:**
+
 **Email:**
+
 **Location:**
+
 **Timezone:**
+
 **Portfolio:**
+
 **Dribbble / Behance:**
+
 **GitHub:**
+
 **LinkedIn:**
+
 **Twitter / Nostr:**
 
 ## Background & Prior Contributions
@@ -135,12 +149,19 @@ design systems, mentorship, ongoing collaboration, etc.
 const EDUCATOR_TEMPLATE = `# Application for Bitshala Fellowship
 
 **Name:**
+
 **Email:**
+
 **Location:**
+
 **Timezone:**
+
 **Blog / YouTube / Newsletter:**
+
 **GitHub:**
+
 **LinkedIn:**
+
 **Twitter / Nostr:**
 
 ## Background & Prior Contributions

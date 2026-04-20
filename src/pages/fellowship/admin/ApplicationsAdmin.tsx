@@ -219,13 +219,29 @@ const ApplicationsAdmin = () => {
         </Stack>
       )}
 
-      <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)}>
-        <Box sx={{ width: { xs: '100vw', md: 640 }, p: 3 }}>
+      <Drawer
+        anchor="right"
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        PaperProps={{ sx: { width: '100vw', maxWidth: '100vw' } }}
+      >
+        <Box sx={{ width: '100%', maxWidth: 1100, mx: 'auto', p: { xs: 3, md: 5 } }}>
           {selected && (
             <>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+              <Button
+                onClick={() => setSelected(null)}
+                sx={{ mb: 3, pl: 0, color: 'text.secondary', '&:hover': { bgcolor: 'transparent', color: 'text.primary' } }}
+              >
+                ← Back to applications
+              </Button>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={3}
+              >
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
                     {selected.userName || selected.userEmail || 'Applicant'}
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -238,7 +254,7 @@ const ApplicationsAdmin = () => {
                 <StatusChip status={selected.status} />
               </Stack>
 
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
                 Proposal
               </Typography>
               {proposalQuery.isLoading && <CircularProgress size={18} />}
