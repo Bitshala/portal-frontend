@@ -37,6 +37,14 @@ import CohortMetrics from './pages/CohortMetrics.tsx';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
+import Apply from './pages/fellowship/Apply.tsx';
+import MyFellowships from './pages/fellowship/MyFellowships.tsx';
+import FellowshipDashboard from './pages/fellowship/FellowshipDashboard.tsx';
+import Report from './pages/fellowship/Report.tsx';
+import ApplicationsAdmin from './pages/fellowship/admin/ApplicationsAdmin.tsx';
+import FellowshipsAdmin from './pages/fellowship/admin/FellowshipsAdmin.tsx';
+import ReportsAdmin from './pages/fellowship/admin/ReportsAdmin.tsx';
 
 const router = createBrowserRouter([
   {
@@ -146,6 +154,38 @@ const router = createBrowserRouter([
       ),
     },
     {
+      path: '/fellowship',
+      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/apply',
+      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/me',
+      element: <ProtectedRoute><MyFellowships /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:id',
+      element: <ProtectedRoute><FellowshipDashboard /></ProtectedRoute>,
+    },
+    {
+      path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
+      element: <ProtectedRoute><Report /></ProtectedRoute>,
+    },
+    {
+      path: '/admin/fellowships',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><FellowshipsAdmin /></ProtectedRoute>,
+    },
+    {
+      path: '/admin/fellowships/applications',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ApplicationsAdmin /></ProtectedRoute>,
+    },
+    {
+      path: '/admin/fellowships/reports',
+      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ReportsAdmin /></ProtectedRoute>,
+    },
+    {
       path: '/unauthorized',
       element: <Layout><div className="min-h-screen bg-zinc-900 text-zinc-100 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -160,8 +200,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
