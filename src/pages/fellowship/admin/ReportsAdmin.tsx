@@ -11,6 +11,7 @@ import {
   Drawer,
   MenuItem,
   Pagination,
+  Paper,
   Stack,
   Table,
   TableBody,
@@ -20,9 +21,18 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import AdminFellowshipLayout from '../../../components/fellowship/AdminFellowshipLayout';
+import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
+import Tabs from '../../../components/ui/Tabs';
+import {
+  adminCardSx,
+  adminToolbarSx,
+  emptyStateSx,
+  tableBodyCellSx,
+  tableHeaderCellSx,
+  tableRowSx,
+} from '../../../components/fellowship/tableStyles';
 import {
   useReportContent,
   useReports,
@@ -36,11 +46,11 @@ import { extractErrorMessage } from '../../../utils/errorUtils';
 
 const PAGE_SIZE = 20;
 
-const STATUS_FILTERS: { value: FellowshipReportStatus | ''; label: string }[] = [
-  { value: FellowshipReportStatus.SUBMITTED, label: 'Submitted' },
-  { value: FellowshipReportStatus.APPROVED, label: 'Approved' },
-  { value: FellowshipReportStatus.REJECTED, label: 'Rejected' },
-  { value: '', label: 'All (no drafts)' },
+const STATUS_TABS: { label: string; value: FellowshipReportStatus | 'ALL' }[] = [
+  { label: 'Submitted', value: FellowshipReportStatus.SUBMITTED },
+  { label: 'Approved', value: FellowshipReportStatus.APPROVED },
+  { label: 'Rejected', value: FellowshipReportStatus.REJECTED },
+  { label: 'All', value: 'ALL' },
 ];
 
 const monthName = (m: number) =>
@@ -51,13 +61,17 @@ const monthOptions = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label
 const ReportsAdmin = () => {
   const now = new Date();
   const [page, setPage] = useState(0);
-  const [status, setStatus] = useState<FellowshipReportStatus | ''>(FellowshipReportStatus.SUBMITTED);
+  const [statusTab, setStatusTab] = useState<FellowshipReportStatus | 'ALL'>(
+    FellowshipReportStatus.SUBMITTED,
+  );
   const [month, setMonth] = useState<number | ''>(now.getMonth() + 1);
   const [year, setYear] = useState<number | ''>(now.getFullYear());
   const [selected, setSelected] = useState<GetFellowshipReportResponseDto | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const status = statusTab === 'ALL' ? '' : statusTab;
 
   const query = {
     page,
@@ -104,105 +118,124 @@ const ReportsAdmin = () => {
   };
 
   return (
-    <AdminFellowshipLayout title="Reports review">
+    <FellowshipPageLayout title="Reports" subtitle="Review monthly fellowship reports." badge="Admin">
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
         </Alert>
       )}
 
-      <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
-        <TextField
-          select
-          label="Status"
-          size="small"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as FellowshipReportStatus | '');
-            setPage(0);
-          }}
-          sx={{ minWidth: 160, bgcolor: 'background.paper' }}
-        >
-          {STATUS_FILTERS.map((s) => (
-            <MenuItem key={s.label} value={s.value}>
-              {s.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Month"
-          size="small"
-          value={month}
-          onChange={(e) => {
-            setMonth(e.target.value === '' ? '' : Number(e.target.value));
-            setPage(0);
-          }}
-          sx={{ minWidth: 140, bgcolor: 'background.paper' }}
-        >
-          <MenuItem value="">Any</MenuItem>
-          {monthOptions.map((m) => (
-            <MenuItem key={m.value} value={m.value}>
-              {m.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          label="Year"
-          type="number"
-          size="small"
-          value={year}
-          onChange={(e) => {
-            setYear(e.target.value === '' ? '' : Number(e.target.value));
-            setPage(0);
-          }}
-          sx={{ minWidth: 120, bgcolor: 'background.paper' }}
-        />
-      </Stack>
+      <Paper elevation={0} sx={adminCardSx}>
+        <Box sx={adminToolbarSx}>
+          <Tabs
+            tabs={STATUS_TABS.map((t) => ({ label: t.label, value: t.value }))}
+            activeTab={statusTab}
+            onChange={(v) => {
+              setStatusTab(v as FellowshipReportStatus | 'ALL');
+              setPage(0);
+            }}
+          />
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: { xs: 0, sm: 0.5 } }}>
+            <TextField
+              select
+              size="small"
+              value={month}
+              onChange={(e) => {
+                setMonth(e.target.value === '' ? '' : Number(e.target.value));
+                setPage(0);
+              }}
+              sx={{
+                minWidth: 140,
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: '#18181b',
+                  color: '#fafafa',
+                  '& fieldset': { borderColor: '#3f3f46' },
+                  '&:hover fieldset': { borderColor: '#52525b' },
+                  '&.Mui-focused fieldset': { borderColor: '#f97316' },
+                },
+                '& .MuiSelect-icon': { color: '#a1a1aa' },
+              }}
+              SelectProps={{
+                MenuProps: {
+                  PaperProps: { sx: { bgcolor: '#18181b', border: '1px solid #27272a', color: '#fafafa' } },
+                },
+                displayEmpty: true,
+                renderValue: (v) => (v === '' ? 'Any month' : monthName(Number(v))),
+              }}
+            >
+              <MenuItem value="">Any month</MenuItem>
+              {monthOptions.map((m) => (
+                <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              size="small"
+              value={year}
+              onChange={(e) => {
+                setYear(e.target.value === '' ? '' : Number(e.target.value));
+                setPage(0);
+              }}
+              placeholder="Year"
+              sx={{
+                minWidth: 100,
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: '#18181b',
+                  color: '#fafafa',
+                  '& fieldset': { borderColor: '#3f3f46' },
+                  '&:hover fieldset': { borderColor: '#52525b' },
+                  '&.Mui-focused fieldset': { borderColor: '#f97316' },
+                },
+                '& input': { colorScheme: 'dark' },
+              }}
+            />
+          </Stack>
+        </Box>
 
-      {isLoading && <CircularProgress size={22} />}
-      {!isLoading && records.length === 0 && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No reports match these filters.
-        </Typography>
-      )}
-      {!isLoading && records.length > 0 && (
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-            overflow: 'hidden',
-          }}
-        >
-          <Table size="small">
+        {isLoading ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 10 }}>
+            <CircularProgress size={36} sx={{ color: '#f97316' }} />
+            <Typography variant="body2" sx={{ color: '#71717a' }}>Loading reports…</Typography>
+          </Box>
+        ) : records.length === 0 ? (
+          <Box sx={emptyStateSx}>
+            <Typography variant="body2" sx={{ color: '#71717a' }}>No reports match these filters.</Typography>
+          </Box>
+        ) : (
+          <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                <TableCell>Fellow</TableCell>
-                <TableCell>Month</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Submitted</TableCell>
-                <TableCell>Reviewed by</TableCell>
-                <TableCell align="right">Actions</TableCell>
+              <TableRow>
+                <TableCell sx={tableHeaderCellSx}>Fellow</TableCell>
+                <TableCell sx={tableHeaderCellSx}>Month</TableCell>
+                <TableCell sx={tableHeaderCellSx}>Status</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Submitted</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Reviewed by</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((r) => (
-                <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
-                  <TableCell>{r.userName || '—'}</TableCell>
-                  <TableCell>
-                    {monthName(r.month)} {r.year}
+                <TableRow key={r.id} hover sx={tableRowSx} onClick={() => setSelected(r)}>
+                  <TableCell sx={tableBodyCellSx}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#fafafa' }}>
+                      {r.userName || '—'}
+                    </Typography>
                   </TableCell>
-                  <TableCell>
-                    <StatusChip status={r.status} />
-                  </TableCell>
-                  <TableCell>
+                  <TableCell sx={tableBodyCellSx}>{monthName(r.month)} {r.year}</TableCell>
+                  <TableCell sx={tableBodyCellSx}><StatusChip status={r.status} /></TableCell>
+                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
                     {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}
                   </TableCell>
-                  <TableCell>{r.reviewerName ?? '—'}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" variant="text">
+                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
+                    {r.reviewerName ?? '—'}
+                  </TableCell>
+                  <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={(e) => { e.stopPropagation(); setSelected(r); }}
+                      sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
+                    >
                       Review
                     </Button>
                   </TableCell>
@@ -210,10 +243,11 @@ const ReportsAdmin = () => {
               ))}
             </TableBody>
           </Table>
-        </Box>
-      )}
+        )}
+      </Paper>
+
       {totalPages > 1 && (
-        <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+        <Stack direction="row" justifyContent="center" sx={{ mt: 3 }}>
           <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
         </Stack>
       )}
@@ -298,7 +332,7 @@ const ReportsAdmin = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </AdminFellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

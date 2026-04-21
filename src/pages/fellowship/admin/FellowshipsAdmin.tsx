@@ -10,6 +10,7 @@ import {
   Drawer,
   Grid,
   Pagination,
+  Paper,
   Stack,
   Table,
   TableBody,
@@ -19,8 +20,17 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import AdminFellowshipLayout from '../../../components/fellowship/AdminFellowshipLayout';
+import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../../components/fellowship/StatusChip';
+import Tabs from '../../../components/ui/Tabs';
+import {
+  adminCardSx,
+  adminToolbarSx,
+  emptyStateSx,
+  tableBodyCellSx,
+  tableHeaderCellSx,
+  tableRowSx,
+} from '../../../components/fellowship/tableStyles';
 import {
   useFellowship,
   useFellowships,
@@ -33,6 +43,13 @@ import {
 import { extractErrorMessage } from '../../../utils/errorUtils';
 
 const PAGE_SIZE = 50;
+
+const STATUS_TABS: { label: string; value: FellowshipStatus | 'ALL' }[] = [
+  { label: 'All', value: 'ALL' },
+  { label: 'Pending', value: FellowshipStatus.PENDING },
+  { label: 'Active', value: FellowshipStatus.ACTIVE },
+  { label: 'Completed', value: FellowshipStatus.COMPLETED },
+];
 
 const formatAmount = (amount: string | null) => {
   if (!amount) return '—';
@@ -222,73 +239,98 @@ const FellowshipDetail = ({
 
 const FellowshipsAdmin = () => {
   const [page, setPage] = useState(0);
+  const [statusTab, setStatusTab] = useState<FellowshipStatus | 'ALL'>('ALL');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const { data, isLoading } = useFellowships({ page, pageSize: PAGE_SIZE });
-  const records = data?.records ?? [];
+  const allRecords = data?.records ?? [];
+  const records = statusTab === 'ALL'
+    ? allRecords
+    : allRecords.filter((f) => f.status === statusTab);
   const totalPages = data ? Math.ceil(data.totalRecords / PAGE_SIZE) : 1;
 
   return (
-    <AdminFellowshipLayout title="Fellowships management">
+    <FellowshipPageLayout title="Fellowships" subtitle="Manage active fellowships and start contracts." badge="Admin">
       {toast && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast}
         </Alert>
       )}
 
-      {isLoading && <CircularProgress size={22} />}
-      {!isLoading && records.length === 0 && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No fellowships yet.
-        </Typography>
-      )}
-      {!isLoading && records.length > 0 && (
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-            overflow: 'hidden',
-          }}
-        >
-          <Table size="small">
+      <Paper elevation={0} sx={adminCardSx}>
+        <Box sx={adminToolbarSx}>
+          <Tabs
+            tabs={STATUS_TABS.map((t) => ({
+              label: t.label,
+              value: t.value,
+              count: t.value === 'ALL'
+                ? allRecords.length
+                : allRecords.filter((f) => f.status === t.value).length,
+            }))}
+            activeTab={statusTab}
+            onChange={(v) => {
+              setStatusTab(v as FellowshipStatus | 'ALL');
+              setPage(0);
+            }}
+          />
+        </Box>
+
+        {isLoading ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 10 }}>
+            <CircularProgress size={36} sx={{ color: '#f97316' }} />
+            <Typography variant="body2" sx={{ color: '#71717a' }}>Loading fellowships…</Typography>
+          </Box>
+        ) : records.length === 0 ? (
+          <Box sx={emptyStateSx}>
+            <Typography variant="body2" sx={{ color: '#71717a' }}>No fellowships yet.</Typography>
+          </Box>
+        ) : (
+          <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                <TableCell>Fellow</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Dates</TableCell>
-                <TableCell>Amount</TableCell>
-                <TableCell>Project</TableCell>
-                <TableCell align="right">Actions</TableCell>
+              <TableRow>
+                <TableCell sx={tableHeaderCellSx}>Fellow</TableCell>
+                <TableCell sx={tableHeaderCellSx}>Type</TableCell>
+                <TableCell sx={tableHeaderCellSx}>Status</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Dates</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', sm: 'table-cell' } }}>Amount</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Project</TableCell>
+                <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((f) => (
-                <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(f.id)}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                <TableRow key={f.id} hover sx={tableRowSx} onClick={() => setSelectedId(f.id)}>
+                  <TableCell sx={tableBodyCellSx}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#fafafa' }}>
                       {f.userName || f.userEmail || '—'}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      {f.userEmail}
-                    </Typography>
+                    {f.userEmail && (
+                      <Typography variant="caption" sx={{ color: '#71717a' }}>{f.userEmail}</Typography>
+                    )}
                   </TableCell>
-                  <TableCell>{f.type}</TableCell>
-                  <TableCell>
+                  <TableCell sx={tableBodyCellSx}>{f.type}</TableCell>
+                  <TableCell sx={tableBodyCellSx}>
                     <StatusChip status={f.status} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
                     {f.startDate && f.endDate
                       ? `${new Date(f.startDate).toLocaleDateString()} – ${new Date(f.endDate).toLocaleDateString()}`
                       : '—'}
                   </TableCell>
-                  <TableCell>{formatAmount(f.amountUsd)}</TableCell>
-                  <TableCell>{f.projectName || '—'}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" variant="text">
+                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', sm: 'table-cell' } }}>
+                    {formatAmount(f.amountUsd)}
+                  </TableCell>
+                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' } }}>
+                    {f.projectName || '—'}
+                  </TableCell>
+                  <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
+                      sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
+                    >
                       {f.status === FellowshipStatus.PENDING ? 'Start contract' : 'View'}
                     </Button>
                   </TableCell>
@@ -296,10 +338,11 @@ const FellowshipsAdmin = () => {
               ))}
             </TableBody>
           </Table>
-        </Box>
-      )}
+        )}
+      </Paper>
+
       {totalPages > 1 && (
-        <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
+        <Stack direction="row" justifyContent="center" sx={{ mt: 3 }}>
           <Pagination count={totalPages} page={page + 1} onChange={(_, p) => setPage(p - 1)} color="primary" />
         </Stack>
       )}
@@ -313,7 +356,7 @@ const FellowshipsAdmin = () => {
           />
         )}
       </Drawer>
-    </AdminFellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

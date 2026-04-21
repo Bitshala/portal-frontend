@@ -17,7 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
+import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
 import {
   useFellowship,
@@ -180,9 +180,9 @@ const FellowshipDashboard = () => {
 
   if (isLoading || !fellowship) {
     return (
-      <FellowshipLayout>
+      <FellowshipPageLayout>
         <CircularProgress size={22} />
-      </FellowshipLayout>
+      </FellowshipPageLayout>
     );
   }
 
@@ -190,7 +190,7 @@ const FellowshipDashboard = () => {
   const isCompleted = fellowship.status === FellowshipStatus.COMPLETED;
 
   return (
-    <FellowshipLayout>
+    <FellowshipPageLayout>
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
@@ -363,7 +363,7 @@ const FellowshipDashboard = () => {
           </Stack>
         </CardContent>
       </Card>
-    </FellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

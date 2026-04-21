@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
   CircularProgress,
@@ -9,11 +11,96 @@ import {
   Grid,
   Stack,
   Typography,
-  Button,
 } from '@mui/material';
-import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
+import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
-import { useMyApplications, useMyFellowships } from '../../hooks/fellowshipHooks';
+import MarkdownView from '../../components/fellowship/MarkdownView';
+import {
+  useApplication,
+  useApplicationProposal,
+  useMyApplications,
+  useMyFellowships,
+} from '../../hooks/fellowshipHooks';
+import { FellowshipApplicationStatus } from '../../types/fellowship';
+
+const ApplicationDetailView = ({
+  id,
+  onClose,
+}: {
+  id: string;
+  onClose: () => void;
+}) => {
+  const navigate = useNavigate();
+  const appQuery = useApplication(id);
+  const proposalQuery = useApplicationProposal(id);
+  const app = appQuery.data;
+
+  return (
+    <Box>
+      <Button
+        onClick={onClose}
+        sx={{
+          mb: 3,
+          pl: 0,
+          color: 'text.secondary',
+          '&:hover': { bgcolor: 'transparent', color: 'text.primary' },
+        }}
+      >
+        ← Back to my fellowships
+      </Button>
+
+      {appQuery.isLoading || !app ? (
+        <CircularProgress size={22} />
+      ) : (
+        <>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                {app.type} application
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Updated {new Date(app.updatedAt).toLocaleDateString()}
+                {app.submittedAt && (
+                  <> · submitted {new Date(app.submittedAt).toLocaleDateString()}</>
+                )}
+              </Typography>
+            </Box>
+            <StatusChip status={app.status} />
+          </Stack>
+
+          {app.status === FellowshipApplicationStatus.REJECTED && app.reviewerRemarks && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              <strong>Reviewer remarks:</strong> {app.reviewerRemarks}
+            </Alert>
+          )}
+
+          {app.status === FellowshipApplicationStatus.ACCEPTED && (
+            <Alert severity="success" sx={{ mb: 3 }}>
+              Application accepted. A fellowship entry has been created for you.
+            </Alert>
+          )}
+
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
+            Proposal
+          </Typography>
+          {proposalQuery.isLoading && <CircularProgress size={18} />}
+          {proposalQuery.data && <MarkdownView content={proposalQuery.data.proposal} />}
+
+          {app.status === FellowshipApplicationStatus.DRAFT && (
+            <Stack direction="row" spacing={1.5} sx={{ mt: 3 }}>
+              <Button
+                variant="contained"
+                onClick={() => navigate(`/fellowship/apply?appId=${app.id}`)}
+              >
+                Edit draft
+              </Button>
+            </Stack>
+          )}
+        </>
+      )}
+    </Box>
+  );
+};
 
 const MyFellowships = () => {
   const navigate = useNavigate();
@@ -22,14 +109,27 @@ const MyFellowships = () => {
   const applicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
   const applications = applicationsQuery.data?.records ?? [];
 
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!isLoading && records.length === 1) {
+    if (!isLoading && records.length === 1 && !selectedAppId) {
       navigate(`/fellowship/fellowships/${records[0].id}`, { replace: true });
     }
-  }, [isLoading, records, navigate]);
+  }, [isLoading, records, navigate, selectedAppId]);
+
+  if (selectedAppId) {
+    return (
+      <FellowshipPageLayout>
+        <ApplicationDetailView
+          id={selectedAppId}
+          onClose={() => setSelectedAppId(null)}
+        />
+      </FellowshipPageLayout>
+    );
+  }
 
   return (
-    <FellowshipLayout title="My fellowships">
+    <FellowshipPageLayout title="My fellowships" subtitle="Track your fellowships, applications, and reports.">
       {isLoading && <CircularProgress size={22} />}
       {!isLoading && records.length === 0 && (
         <Card variant="outlined" sx={{ borderColor: 'divider' }}>
@@ -99,12 +199,12 @@ const MyFellowships = () => {
             {applications.map((app) => (
               <Box
                 key={app.id}
-                onClick={() => navigate(`/fellowship/apply?appId=${app.id}`)}
+                onClick={() => setSelectedAppId(app.id)}
                 sx={{
                   p: 1.25,
                   borderRadius: 1,
                   cursor: 'pointer',
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
                 }}
               >
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -121,7 +221,7 @@ const MyFellowships = () => {
           </Stack>
         </CardContent>
       </Card>
-    </FellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

@@ -12,18 +12,18 @@ type AnyStatus =
 
 const COLOR_MAP: Record<string, { bg: string; color: string; border: string }> = {
   // grey — draft
-  DRAFT: { bg: '#f4f4f5', color: '#52525b', border: '#e4e4e7' },
+  DRAFT: { bg: 'rgba(161,161,170,0.12)', color: '#d4d4d8', border: 'rgba(161,161,170,0.25)' },
   // amber — awaiting action
-  SUBMITTED: { bg: '#fef3c7', color: '#92400e', border: '#fde68a' },
-  PENDING: { bg: '#fef3c7', color: '#92400e', border: '#fde68a' },
+  SUBMITTED: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  PENDING: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
   // green — good
-  ACCEPTED: { bg: '#dcfce7', color: '#166534', border: '#bbf7d0' },
-  ACTIVE: { bg: '#dcfce7', color: '#166534', border: '#bbf7d0' },
-  APPROVED: { bg: '#dcfce7', color: '#166534', border: '#bbf7d0' },
+  ACCEPTED: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
+  ACTIVE: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
+  APPROVED: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
   // red — bad
-  REJECTED: { bg: '#fee2e2', color: '#991b1b', border: '#fecaca' },
+  REJECTED: { bg: 'rgba(248,113,113,0.12)', color: '#f87171', border: 'rgba(248,113,113,0.3)' },
   // blue — closed
-  COMPLETED: { bg: '#dbeafe', color: '#1e40af', border: '#bfdbfe' },
+  COMPLETED: { bg: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: 'rgba(96,165,250,0.3)' },
 };
 
 interface Props {

@@ -1,5 +1,6 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Box, CircularProgress } from '@mui/material';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 
@@ -38,13 +39,31 @@ import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
-import Apply from './pages/fellowship/Apply.tsx';
-import MyFellowships from './pages/fellowship/MyFellowships.tsx';
-import FellowshipDashboard from './pages/fellowship/FellowshipDashboard.tsx';
-import Report from './pages/fellowship/Report.tsx';
-import ApplicationsAdmin from './pages/fellowship/admin/ApplicationsAdmin.tsx';
-import FellowshipsAdmin from './pages/fellowship/admin/FellowshipsAdmin.tsx';
-import ReportsAdmin from './pages/fellowship/admin/ReportsAdmin.tsx';
+const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
+const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
+const FellowshipDashboard = lazy(() => import('./pages/fellowship/FellowshipDashboard.tsx'));
+const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
+const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/ApplicationsAdmin.tsx'));
+const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/FellowshipsAdmin.tsx'));
+const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
+
+const FellowshipFallback = () => (
+  <Box
+    sx={{
+      minHeight: '100vh',
+      bgcolor: '#000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <CircularProgress size={28} sx={{ color: '#f97316' }} />
+  </Box>
+);
+
+const withFellowshipFallback = (node: JSX.Element) => (
+  <Suspense fallback={<FellowshipFallback />}>{node}</Suspense>
+);
 
 const router = createBrowserRouter([
   {
@@ -155,35 +174,53 @@ const router = createBrowserRouter([
     },
     {
       path: '/fellowship',
-      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Apply />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/apply',
-      element: <ProtectedRoute><Apply /></ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Apply />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/me',
-      element: <ProtectedRoute><MyFellowships /></ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyFellowships />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/fellowships/:id',
-      element: <ProtectedRoute><FellowshipDashboard /></ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<FellowshipDashboard />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
-      element: <ProtectedRoute><Report /></ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Report />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/admin/fellowships',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><FellowshipsAdmin /></ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<FellowshipsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/admin/fellowships/applications',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ApplicationsAdmin /></ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<ApplicationsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/admin/fellowships/reports',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}><ReportsAdmin /></ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<ReportsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/unauthorized',
