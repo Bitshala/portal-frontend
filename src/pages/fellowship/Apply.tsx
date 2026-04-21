@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -17,9 +17,8 @@ import { Trash2 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
-import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
+import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import {
-  useMyApplications,
   useApplication,
   useApplicationProposal,
   useCreateApplication,
@@ -40,9 +39,6 @@ const TYPE_OPTIONS: { value: FellowshipType; title: string; description: string 
   { value: FellowshipType.EDUCATOR, title: 'Educator', description: 'Teach, write, and build curriculum on Bitcoin protocol.' },
 ];
 
-const isActiveStatus = (s: FellowshipApplicationStatus) =>
-  s === FellowshipApplicationStatus.DRAFT || s === FellowshipApplicationStatus.SUBMITTED;
-
 const Apply = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const appIdFromUrl = searchParams.get('appId');
@@ -51,10 +47,9 @@ const Apply = () => {
   const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  const myList = useMyApplications({ page: 0, pageSize: 20 });
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', {
-    enabled: !!activeId && loadedApp.data?.status === FellowshipApplicationStatus.DRAFT,
+    enabled: !!activeId,
   });
 
   useEffect(() => {
@@ -65,14 +60,6 @@ const Apply = () => {
   const updateMut = useUpdateApplication();
   const submitMut = useSubmitApplication();
   const deleteMut = useDeleteApplication();
-
-  const records = myList.data?.records ?? [];
-
-  const usedTypes = useMemo(() => {
-    const set = new Set<FellowshipType>();
-    for (const r of records) if (isActiveStatus(r.status)) set.add(r.type);
-    return set;
-  }, [records]);
 
   useEffect(() => {
     if (activeId && loadedProposal.data?.proposal !== undefined) {
@@ -145,7 +132,7 @@ const Apply = () => {
   const canSubmit = !!activeId && isEditable && proposal.trim().length > 0 && !submitMut.isPending;
 
   return (
-    <FellowshipLayout title="Apply for a Fellowship">
+    <FellowshipPageLayout title="Apply for a Fellowship" subtitle="Submit a proposal for a Bitshala fellowship.">
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
@@ -161,7 +148,7 @@ const Apply = () => {
               </Typography>
               <Grid container spacing={1.5} sx={{ mb: 3 }} alignItems="stretch">
                 {TYPE_OPTIONS.map((opt, idx) => {
-                  const disabled = !isEditable || (usedTypes.has(opt.value) && opt.value !== selectedType);
+                  const disabled = !isEditable;
                   const active = selectedType === opt.value;
                   return (
                     <Grid size={{ xs: 12, sm: 4 }} key={opt.value} sx={{ display: 'flex' }}>
@@ -214,13 +201,14 @@ const Apply = () => {
                       </Alert>
                     )}
                     <Box
-                      data-color-mode="light"
+                      data-color-mode="dark"
                       sx={{
                         '& .w-md-editor': {
                           boxShadow: 'none',
                           border: '1px solid',
                           borderColor: 'divider',
                           borderRadius: 1,
+                          backgroundColor: '#18181b',
                         },
                         opacity: !isEditable || (!!activeId && loadedProposal.isLoading) ? 0.6 : 1,
                         pointerEvents:
@@ -275,7 +263,7 @@ const Apply = () => {
           </Card>
         </Grid>
       </Grid>
-    </FellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

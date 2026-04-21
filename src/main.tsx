@@ -1,5 +1,6 @@
-import { StrictMode, lazy, Suspense, type ReactNode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Box, CircularProgress } from '@mui/material';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 
@@ -46,9 +47,22 @@ const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/Applicatio
 const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/FellowshipsAdmin.tsx'));
 const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
 
-// Fellowship routes render outside Layout, so they need their own Suspense boundary.
-const fellowship = (node: ReactNode) => (
-  <Suspense fallback={<div style={{ minHeight: '100vh' }} />}>{node}</Suspense>
+const FellowshipFallback = () => (
+  <Box
+    sx={{
+      minHeight: '100vh',
+      bgcolor: '#000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <CircularProgress size={28} sx={{ color: '#f97316' }} />
+  </Box>
+);
+
+const withFellowshipFallback = (node: JSX.Element) => (
+  <Suspense fallback={<FellowshipFallback />}>{node}</Suspense>
 );
 
 const router = createBrowserRouter([
@@ -175,35 +189,53 @@ const router = createBrowserRouter([
     },
     {
       path: '/fellowship',
-      element: <ProtectedRoute>{fellowship(<Apply />)}</ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Apply />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/apply',
-      element: <ProtectedRoute>{fellowship(<Apply />)}</ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Apply />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/me',
-      element: <ProtectedRoute>{fellowship(<MyFellowships />)}</ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyFellowships />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/fellowships/:id',
-      element: <ProtectedRoute>{fellowship(<FellowshipDashboard />)}</ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<FellowshipDashboard />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
-      element: <ProtectedRoute>{fellowship(<Report />)}</ProtectedRoute>,
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Report />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/admin/fellowships',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<FellowshipsAdmin />)}</ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<FellowshipsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/admin/fellowships/applications',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<ApplicationsAdmin />)}</ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<ApplicationsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/admin/fellowships/reports',
-      element: <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>{fellowship(<ReportsAdmin />)}</ProtectedRoute>,
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+            {withFellowshipFallback(<ReportsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
     },
     {
       path: '/unauthorized',

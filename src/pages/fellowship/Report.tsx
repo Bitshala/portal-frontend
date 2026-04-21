@@ -15,7 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Trash2 } from 'lucide-react';
-import FellowshipLayout from '../../components/fellowship/FellowshipLayout';
+import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
 import {
   useCreateReport,
@@ -126,7 +126,7 @@ const Report = () => {
   };
 
   return (
-    <FellowshipLayout>
+    <FellowshipPageLayout>
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
@@ -261,7 +261,7 @@ const Report = () => {
           </Card>
         </Grid>
       </Grid>
-    </FellowshipLayout>
+    </FellowshipPageLayout>
   );
 };
 

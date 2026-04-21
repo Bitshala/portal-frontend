@@ -212,11 +212,10 @@ const renderMarkdown = (md: string): ReactNode[] => {
 export const MarkdownView = ({ content }: Props) => (
   <Box
     sx={{
-      bgcolor: '#fdfdfb',
+      bgcolor: 'rgba(24,24,27,0.8)',
       border: '1px solid',
       borderColor: 'divider',
       borderRadius: 1.5,
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
       p: { xs: 3, md: 6 },
       maxWidth: 780,
       mx: 'auto',
