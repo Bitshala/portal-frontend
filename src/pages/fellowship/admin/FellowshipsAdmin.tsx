@@ -91,7 +91,7 @@ const ContractForm = ({
     try {
       await startMut.mutateAsync({
         id: fellowship.id,
-        body: { startDate, endDate, amountUsd },
+        body: { startDate, endDate, amountUsd: Number(amountUsd) },
       });
       onSubmitted('Contract started.');
     } catch (e) {
@@ -136,7 +136,7 @@ const ContractForm = ({
           fullWidth
           value={amountUsd}
           onChange={(e) => setAmountUsd(e.target.value)}
-          placeholder="5000.00"
+          placeholder="500.00"
           sx={{ mb: 2 }}
         />
         <Button variant="contained" onClick={handleSubmit} disabled={startMut.isPending}>
