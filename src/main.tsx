@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Box, CircularProgress } from '@mui/material';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
@@ -236,11 +236,9 @@ const router = createBrowserRouter([
 
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </StrictMode>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </ErrorBoundary>
 );

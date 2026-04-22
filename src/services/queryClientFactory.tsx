@@ -17,15 +17,21 @@ export const createQueryClient = () => {
     {
       defaultOptions: {
         queries: {
-          refetchOnWindowFocus: true,
-          staleTime: 1000 * 60, // 1 minute
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+          staleTime: 1000 * 60 * 5, // 5 minutes — avoid refetching on navigation
+          gcTime: 1000 * 60 * 15, // 15 minutes — keep cache around
+          retryOnMount: false, // don't auto-retry a failed query just because a component remounts
           retryDelay: (failureCount, error) =>
             isNetworkError(error as AxiosError)
               ? Math.min(2500 * 2 ** failureCount, 30000)
               : defaultRetryDelay(failureCount),
           retry(failureCount, error) {
-            if (axios.isAxiosError(error) && error.response?.status === 401) {
-              return false;
+            if (axios.isAxiosError(error)) {
+              const status = error.response?.status;
+              if (status && status >= 400 && status < 500) {
+                return false;
+              }
             }
             return failureCount < 3;
           },
