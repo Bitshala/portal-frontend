@@ -182,10 +182,10 @@ export const mbWeeks: WeekContent[] = [
     week: 8,
     title: "Sparrow Wallet Hands-on",
     content: `
-## Pre-requisites
+## Reading Material
 
-1. Download Sparrow Wallet: [https://sparrowwallet.com/](https://sparrowwallet.com/)
-2. Get Bitcoin Testnet 4 coins from faucet: [https://coinfaucet.eu/en/btc-testnet4/](https://coinfaucet.eu/en/btc-testnet4/)
+1. [Download Sparrow Wallet](https://sparrowwallet.com/)
+2. [Bitcoin Testnet4 Faucet](https://coinfaucet.eu/en/btc-testnet4/)
     `,
     gdQuestions: [
       "How to run Sparrow Wallet in Mainnet, Testnet4, Signet, etc.?",
