@@ -177,5 +177,25 @@ export const mbWeeks: WeekContent[] = [
       "Explain at least two use-cases of applications build on top of Bitcoin.",
       "Can a Bitcoin transaction be cancelled? Explain asymmetric revocable transactions."
     ]
+  },
+  {
+    week: 8,
+    title: "Sparrow Wallet Hands-on",
+    content: `
+## Pre-requisites
+
+1. Download Sparrow Wallet: [https://sparrowwallet.com/](https://sparrowwallet.com/)
+2. Get Bitcoin Testnet 4 coins from faucet: [https://coinfaucet.eu/en/btc-testnet4/](https://coinfaucet.eu/en/btc-testnet4/)
+    `,
+    gdQuestions: [
+      "How to run Sparrow Wallet in Mainnet, Testnet4, Signet, etc.?",
+      "How to create a single-sig Native SegWit (P2WPKH) wallet?",
+      "How to create a Multisig wallet?",
+      "How to sign a transaction?",
+      "How to broadcast a transaction?",
+      "How to connect to our own full node?",
+      "How to create a watch-only wallet?",
+      "How to sign and verify a message?"
+    ]
   }
 ];
