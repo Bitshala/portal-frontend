@@ -250,11 +250,6 @@ const Apply = () => {
                           Discard draft
                         </Button>
                       )}
-                      {activeId && (
-                        <Button variant="text" onClick={resetEditor}>
-                          New application
-                        </Button>
-                      )}
                     </Stack>
                   </Box>
                 </Fade>
