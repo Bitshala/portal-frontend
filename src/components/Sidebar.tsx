@@ -88,6 +88,7 @@ const Sidebar = () => {
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [instructionsHover, setInstructionsHover] = useState(false);
   const instructionsAnchorRef = useRef<HTMLDivElement>(null);
+  const instructionsCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [fellowshipsOpen, setFellowshipsOpen] = useState(
     () =>
@@ -96,6 +97,39 @@ const Sidebar = () => {
   );
   const [fellowshipsHover, setFellowshipsHover] = useState(false);
   const fellowshipsAnchorRef = useRef<HTMLDivElement>(null);
+  const fellowshipsCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const HOVER_CLOSE_DELAY = 150;
+
+  const openFellowshipsHover = () => {
+    if (fellowshipsCloseTimer.current) {
+      clearTimeout(fellowshipsCloseTimer.current);
+      fellowshipsCloseTimer.current = null;
+    }
+    setFellowshipsHover(true);
+  };
+  const closeFellowshipsHover = () => {
+    if (fellowshipsCloseTimer.current) clearTimeout(fellowshipsCloseTimer.current);
+    fellowshipsCloseTimer.current = setTimeout(
+      () => setFellowshipsHover(false),
+      HOVER_CLOSE_DELAY,
+    );
+  };
+
+  const openInstructionsHover = () => {
+    if (instructionsCloseTimer.current) {
+      clearTimeout(instructionsCloseTimer.current);
+      instructionsCloseTimer.current = null;
+    }
+    setInstructionsHover(true);
+  };
+  const closeInstructionsHover = () => {
+    if (instructionsCloseTimer.current) clearTimeout(instructionsCloseTimer.current);
+    instructionsCloseTimer.current = setTimeout(
+      () => setInstructionsHover(false),
+      HOVER_CLOSE_DELAY,
+    );
+  };
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -223,8 +257,8 @@ const Sidebar = () => {
         <List disablePadding>
           <Box
             ref={fellowshipsAnchorRef}
-            onMouseEnter={() => collapsed && setFellowshipsHover(true)}
-            onMouseLeave={() => setFellowshipsHover(false)}
+            onMouseEnter={() => collapsed && openFellowshipsHover()}
+            onMouseLeave={() => collapsed && closeFellowshipsHover()}
           >
             <ListItemButton
               onClick={() =>
@@ -270,14 +304,14 @@ const Sidebar = () => {
               sx={{ zIndex: 1300 }}
             >
               <Paper
-                onMouseEnter={() => setFellowshipsHover(true)}
-                onMouseLeave={() => setFellowshipsHover(false)}
+                onMouseEnter={openFellowshipsHover}
+                onMouseLeave={closeFellowshipsHover}
                 sx={{
                   bgcolor: '#1c1c1f',
                   border: '1px solid #27272a',
                   borderRadius: 1.5,
                   py: 0.5,
-                  ml: 1,
+                  ml: 0,
                   minWidth: 200,
                 }}
               >
@@ -437,8 +471,8 @@ const Sidebar = () => {
         <List disablePadding>
           <Box
             ref={instructionsAnchorRef}
-            onMouseEnter={() => collapsed && setInstructionsHover(true)}
-            onMouseLeave={() => setInstructionsHover(false)}
+            onMouseEnter={() => collapsed && openInstructionsHover()}
+            onMouseLeave={() => collapsed && closeInstructionsHover()}
           >
             <ListItemButton
               onClick={() => collapsed ? navigate('/general-instructions') : setInstructionsOpen(!instructionsOpen)}
@@ -481,14 +515,14 @@ const Sidebar = () => {
               sx={{ zIndex: 1300 }}
             >
               <Paper
-                onMouseEnter={() => setInstructionsHover(true)}
-                onMouseLeave={() => setInstructionsHover(false)}
+                onMouseEnter={openInstructionsHover}
+                onMouseLeave={closeInstructionsHover}
                 sx={{
                   bgcolor: '#1c1c1f',
                   border: '1px solid #27272a',
                   borderRadius: 1.5,
                   py: 0.5,
-                  ml: 1,
+                  ml: 0,
                   minWidth: 180,
                 }}
               >
