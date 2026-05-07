@@ -9,6 +9,7 @@ import {
   Divider,
   Drawer,
   Grid,
+  Link,
   Pagination,
   Paper,
   Stack,
@@ -30,6 +31,8 @@ import {
   tableBodyCellSx,
   tableHeaderCellSx,
   tableRowSx,
+  tableScrollSx,
+  tableSx,
 } from '../../../components/fellowship/tableStyles';
 import {
   useFellowship,
@@ -56,6 +59,19 @@ const formatAmount = (amount: string | null) => {
   const n = Number(amount);
   if (Number.isNaN(n)) return amount;
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const formatDate = (date: string | null) => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const linkCellSx = {
+  color: '#fb923c',
+  textDecoration: 'none',
+  '&:hover': { textDecoration: 'underline' },
 };
 
 const ContractForm = ({
@@ -286,58 +302,95 @@ const FellowshipsAdmin = () => {
             <Typography variant="body2" sx={{ color: '#71717a' }}>No fellowships yet.</Typography>
           </Box>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={tableHeaderCellSx}>Fellow</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Type</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Status</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Dates</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', sm: 'table-cell' } }}>Amount</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Project</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {records.map((f) => (
-                <TableRow key={f.id} hover sx={tableRowSx} onClick={() => setSelectedId(f.id)}>
-                  <TableCell sx={tableBodyCellSx}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#fafafa' }}>
-                      {f.userName || f.userEmail || '—'}
-                    </Typography>
-                    {f.userEmail && (
-                      <Typography variant="caption" sx={{ color: '#71717a' }}>{f.userEmail}</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell sx={tableBodyCellSx}>{f.type}</TableCell>
-                  <TableCell sx={tableBodyCellSx}>
-                    <StatusChip status={f.status} />
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
-                    {f.startDate && f.endDate
-                      ? `${new Date(f.startDate).toLocaleDateString()} – ${new Date(f.endDate).toLocaleDateString()}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', sm: 'table-cell' } }}>
-                    {formatAmount(f.amountUsd)}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' } }}>
-                    {f.projectName || '—'}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
-                      sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
-                    >
-                      {f.status === FellowshipStatus.PENDING ? 'Start contract' : 'View'}
-                    </Button>
-                  </TableCell>
+          <Box sx={tableScrollSx}>
+            <Table sx={tableSx} stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={tableHeaderCellSx}>Name</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Email</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Type</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Status</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Location</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>GitHub</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Project</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Project Repo</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Mentor</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Contract Start</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Contract End</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Amount</TableCell>
+                  <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {records.map((f) => (
+                  <TableRow key={f.id} hover sx={tableRowSx} onClick={() => setSelectedId(f.id)}>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#fafafa', fontWeight: 600 }}>
+                      {f.userName || '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {f.userEmail || '—'}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>{f.type}</TableCell>
+                    <TableCell sx={tableBodyCellSx}>
+                      <StatusChip status={f.status} />
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {f.location || '—'}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>
+                      {f.githubProfile ? (
+                        <Link
+                          href={f.githubProfile}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={linkCellSx}
+                        >
+                          {f.githubProfile.replace(/^https?:\/\/(www\.)?github\.com\//, '@')}
+                        </Link>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>{f.projectName || '—'}</TableCell>
+                    <TableCell sx={tableBodyCellSx}>
+                      {f.projectGithubLink ? (
+                        <Link
+                          href={f.projectGithubLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={linkCellSx}
+                        >
+                          repo
+                        </Link>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {f.mentorContact || '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(f.startDate)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(f.endDate)}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>
+                      {formatAmount(f.amountUsd)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
+                        sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
+                      >
+                        {f.status === FellowshipStatus.PENDING ? 'Start contract' : 'View'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
 

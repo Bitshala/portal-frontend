@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
-  MenuItem,
   Pagination,
   Paper,
   Stack,
@@ -32,6 +31,8 @@ import {
   tableBodyCellSx,
   tableHeaderCellSx,
   tableRowSx,
+  tableScrollSx,
+  tableSx,
 } from '../../../components/fellowship/tableStyles';
 import {
   useApplications,
@@ -40,7 +41,6 @@ import {
 } from '../../../hooks/fellowshipHooks';
 import {
   FellowshipApplicationStatus,
-  FellowshipType,
   type GetFellowshipApplicationResponseDto,
 } from '../../../types/fellowship';
 import { extractErrorMessage } from '../../../utils/errorUtils';
@@ -54,19 +54,18 @@ const STATUS_TABS: { label: string; value: FellowshipApplicationStatus | 'ALL' }
   { label: 'All', value: 'ALL' },
 ];
 
-const TYPE_FILTERS: { value: FellowshipType | ''; label: string }[] = [
-  { value: '', label: 'All types' },
-  { value: FellowshipType.DEVELOPER, label: 'Developer' },
-  { value: FellowshipType.DESIGNER, label: 'Designer' },
-  { value: FellowshipType.EDUCATOR, label: 'Educator' },
-];
+const formatDate = (date: string | null) => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
 
 const ApplicationsAdmin = () => {
   const [page, setPage] = useState(0);
   const [statusTab, setStatusTab] = useState<FellowshipApplicationStatus | 'ALL'>(
     FellowshipApplicationStatus.SUBMITTED,
   );
-  const [type, setType] = useState<FellowshipType | ''>('');
   const [selected, setSelected] = useState<GetFellowshipApplicationResponseDto | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
@@ -78,7 +77,6 @@ const ApplicationsAdmin = () => {
     page,
     pageSize: PAGE_SIZE,
     ...(status ? { status } : {}),
-    ...(type ? { type } : {}),
   });
   const proposalQuery = useApplicationProposal(selected?.id ?? '', { enabled: !!selected });
   const reviewMut = useReviewApplication();
@@ -134,38 +132,6 @@ const ApplicationsAdmin = () => {
               setPage(0);
             }}
           />
-          <TextField
-            select
-            size="small"
-            value={type}
-            onChange={(e) => {
-              setType(e.target.value as FellowshipType | '');
-              setPage(0);
-            }}
-            sx={{
-              minWidth: 160,
-              mb: { xs: 0, sm: 0.5 },
-              '& .MuiOutlinedInput-root': {
-                bgcolor: '#18181b',
-                color: '#fafafa',
-                '& fieldset': { borderColor: '#3f3f46' },
-                '&:hover fieldset': { borderColor: '#52525b' },
-                '&.Mui-focused fieldset': { borderColor: '#f97316' },
-              },
-              '& .MuiSelect-icon': { color: '#a1a1aa' },
-            }}
-            SelectProps={{
-              MenuProps: {
-                PaperProps: { sx: { bgcolor: '#18181b', border: '1px solid #27272a', color: '#fafafa' } },
-              },
-            }}
-          >
-            {TYPE_FILTERS.map((t) => (
-              <MenuItem key={t.label} value={t.value}>
-                {t.label}
-              </MenuItem>
-            ))}
-          </TextField>
         </Box>
 
         {isLoading ? (
@@ -180,56 +146,61 @@ const ApplicationsAdmin = () => {
             </Typography>
           </Box>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={tableHeaderCellSx}>Applicant</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Type</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Status</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Submitted</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Reviewed by</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {records.map((r) => (
-                <TableRow key={r.id} hover sx={tableRowSx} onClick={() => setSelected(r)}>
-                  <TableCell sx={tableBodyCellSx}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#fafafa' }}>
-                      {r.userName || r.userEmail || '—'}
-                    </Typography>
-                    {r.userEmail && (
-                      <Typography variant="caption" sx={{ color: '#71717a' }}>
-                        {r.userEmail}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell sx={tableBodyCellSx}>{r.type}</TableCell>
-                  <TableCell sx={tableBodyCellSx}>
-                    <StatusChip status={r.status} />
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
-                    {r.submittedAt
-                      ? new Date(r.submittedAt).toLocaleDateString()
-                      : new Date(r.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
-                    {r.reviewerName ?? '—'}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={(e) => { e.stopPropagation(); setSelected(r); }}
-                      sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
-                    >
-                      Review
-                    </Button>
-                  </TableCell>
+          <Box sx={tableScrollSx}>
+            <Table sx={tableSx} stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={tableHeaderCellSx}>Name</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Email</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Type</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Status</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Submitted</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Reviewed</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Reviewed by</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Remarks</TableCell>
+                  <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {records.map((r) => (
+                  <TableRow key={r.id} hover sx={tableRowSx} onClick={() => setSelected(r)}>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#fafafa', fontWeight: 600 }}>
+                      {r.userName || '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {r.userEmail || '—'}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>{r.type}</TableCell>
+                    <TableCell sx={tableBodyCellSx}>
+                      <StatusChip status={r.status} />
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(r.submittedAt ?? r.createdAt)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(r.reviewedAt)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {r.reviewerName ?? '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {r.reviewerRemarks ?? '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={(e) => { e.stopPropagation(); setSelected(r); }}
+                        sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
+                      >
+                        Review
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
 

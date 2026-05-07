@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
-  MenuItem,
   Pagination,
   Paper,
   Stack,
@@ -32,6 +31,8 @@ import {
   tableBodyCellSx,
   tableHeaderCellSx,
   tableRowSx,
+  tableScrollSx,
+  tableSx,
 } from '../../../components/fellowship/tableStyles';
 import {
   useReportContent,
@@ -56,16 +57,18 @@ const STATUS_TABS: { label: string; value: FellowshipReportStatus | 'ALL' }[] = 
 const monthName = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'long' });
 
-const monthOptions = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: monthName(i + 1) }));
+const formatDate = (date: string | null) => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
 
 const ReportsAdmin = () => {
-  const now = new Date();
   const [page, setPage] = useState(0);
   const [statusTab, setStatusTab] = useState<FellowshipReportStatus | 'ALL'>(
     FellowshipReportStatus.SUBMITTED,
   );
-  const [month, setMonth] = useState<number | ''>(now.getMonth() + 1);
-  const [year, setYear] = useState<number | ''>(now.getFullYear());
   const [selected, setSelected] = useState<GetFellowshipReportResponseDto | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
@@ -77,8 +80,6 @@ const ReportsAdmin = () => {
     page,
     pageSize: PAGE_SIZE,
     ...(status ? { status } : {}),
-    ...(month ? { month } : {}),
-    ...(year ? { year } : {}),
   };
   const { data, isLoading } = useReports(query);
   const contentQuery = useReportContent(selected?.id ?? '', { enabled: !!selected });
@@ -135,61 +136,6 @@ const ReportsAdmin = () => {
               setPage(0);
             }}
           />
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: { xs: 0, sm: 0.5 } }}>
-            <TextField
-              select
-              size="small"
-              value={month}
-              onChange={(e) => {
-                setMonth(e.target.value === '' ? '' : Number(e.target.value));
-                setPage(0);
-              }}
-              sx={{
-                minWidth: 140,
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: '#18181b',
-                  color: '#fafafa',
-                  '& fieldset': { borderColor: '#3f3f46' },
-                  '&:hover fieldset': { borderColor: '#52525b' },
-                  '&.Mui-focused fieldset': { borderColor: '#f97316' },
-                },
-                '& .MuiSelect-icon': { color: '#a1a1aa' },
-              }}
-              SelectProps={{
-                MenuProps: {
-                  PaperProps: { sx: { bgcolor: '#18181b', border: '1px solid #27272a', color: '#fafafa' } },
-                },
-                displayEmpty: true,
-                renderValue: (v) => (v === '' ? 'Any month' : monthName(Number(v))),
-              }}
-            >
-              <MenuItem value="">Any month</MenuItem>
-              {monthOptions.map((m) => (
-                <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              type="number"
-              size="small"
-              value={year}
-              onChange={(e) => {
-                setYear(e.target.value === '' ? '' : Number(e.target.value));
-                setPage(0);
-              }}
-              placeholder="Year"
-              sx={{
-                minWidth: 100,
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: '#18181b',
-                  color: '#fafafa',
-                  '& fieldset': { borderColor: '#3f3f46' },
-                  '&:hover fieldset': { borderColor: '#52525b' },
-                  '&.Mui-focused fieldset': { borderColor: '#f97316' },
-                },
-                '& input': { colorScheme: 'dark' },
-              }}
-            />
-          </Stack>
         </Box>
 
         {isLoading ? (
@@ -202,47 +148,57 @@ const ReportsAdmin = () => {
             <Typography variant="body2" sx={{ color: '#71717a' }}>No reports match these filters.</Typography>
           </Box>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={tableHeaderCellSx}>Fellow</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Month</TableCell>
-                <TableCell sx={tableHeaderCellSx}>Status</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Submitted</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, display: { xs: 'none', md: 'table-cell' } }}>Reviewed by</TableCell>
-                <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {records.map((r) => (
-                <TableRow key={r.id} hover sx={tableRowSx} onClick={() => setSelected(r)}>
-                  <TableCell sx={tableBodyCellSx}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#fafafa' }}>
-                      {r.userName || '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={tableBodyCellSx}>{monthName(r.month)} {r.year}</TableCell>
-                  <TableCell sx={tableBodyCellSx}><StatusChip status={r.status} /></TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
-                    {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, display: { xs: 'none', md: 'table-cell' }, color: '#a1a1aa' }}>
-                    {r.reviewerName ?? '—'}
-                  </TableCell>
-                  <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={(e) => { e.stopPropagation(); setSelected(r); }}
-                      sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
-                    >
-                      Review
-                    </Button>
-                  </TableCell>
+          <Box sx={tableScrollSx}>
+            <Table sx={tableSx} stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={tableHeaderCellSx}>Fellow</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Month</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Year</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Status</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Submitted</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Reviewed</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Reviewed by</TableCell>
+                  <TableCell sx={tableHeaderCellSx}>Remarks</TableCell>
+                  <TableCell sx={{ ...tableHeaderCellSx, textAlign: 'right' }}>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {records.map((r) => (
+                  <TableRow key={r.id} hover sx={tableRowSx} onClick={() => setSelected(r)}>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#fafafa', fontWeight: 600 }}>
+                      {r.userName || '—'}
+                    </TableCell>
+                    <TableCell sx={tableBodyCellSx}>{monthName(r.month)}</TableCell>
+                    <TableCell sx={tableBodyCellSx}>{r.year}</TableCell>
+                    <TableCell sx={tableBodyCellSx}><StatusChip status={r.status} /></TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(r.submittedAt)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {formatDate(r.reviewedAt)}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {r.reviewerName ?? '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, color: '#a1a1aa' }}>
+                      {r.reviewerRemarks ?? '—'}
+                    </TableCell>
+                    <TableCell sx={{ ...tableBodyCellSx, textAlign: 'right' }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={(e) => { e.stopPropagation(); setSelected(r); }}
+                        sx={{ color: '#fb923c', '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' } }}
+                      >
+                        Review
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
 
