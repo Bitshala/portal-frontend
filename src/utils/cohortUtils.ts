@@ -21,6 +21,7 @@ export const isRegistrationOpen = (registrationDeadline: string): boolean => {
 export const isCohortActive = (endDate: string): boolean => {
   const now = new Date();
   const cohortEndDate = new Date(endDate);
+  cohortEndDate.setHours(23, 59, 59, 999);
   return now <= cohortEndDate;
 };
 
@@ -33,6 +34,9 @@ export const computeStatus = (startISO: string, endISO: string): CohortStatus =>
   const end = new Date(endISO);
   const now = new Date();
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return 'Completed';
+  // Treat end date as end-of-day in local time so a cohort stays Active
+  // through 23:59:59 of its endDate instead of flipping at UTC midnight.
+  end.setHours(23, 59, 59, 999);
   if (now < start) return 'Upcoming';
   if (now > end) return 'Completed';
   return 'Active';
