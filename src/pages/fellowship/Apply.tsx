@@ -1,60 +1,117 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  Collapse,
-  Fade,
-  Grid,
-  Grow,
   Stack,
+  TextField,
   Typography,
-  Alert,
 } from '@mui/material';
-import { Trash2 } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor';
-import '@uiw/react-md-editor/markdown-editor.css';
-import '@uiw/react-markdown-preview/markdown.css';
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  CircleDashed,
+  Code2,
+  Lightbulb,
+  PenTool,
+  Trash2,
+} from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
+import FellowshipTopTabs from '../../components/fellowship/FellowshipTopTabs';
 import {
   useApplication,
   useApplicationProposal,
   useCreateApplication,
-  useUpdateApplication,
-  useSubmitApplication,
   useDeleteApplication,
+  useSubmitApplication,
+  useUpdateApplication,
 } from '../../hooks/fellowshipHooks';
 import {
   FellowshipApplicationStatus,
   FellowshipType,
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { PROPOSAL_TEMPLATES, isTemplate } from './proposalTemplates';
+import {
+  EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
+  parseProposal,
+  serializeProposal,
+  type ProposalFields,
+} from '../../utils/proposalFormat';
 
-const TYPE_OPTIONS: { value: FellowshipType; title: string; description: string }[] = [
-  { value: FellowshipType.DEVELOPER, title: 'Developer', description: 'Contribute to Bitcoin / Lightning open-source projects.' },
-  { value: FellowshipType.DESIGNER, title: 'Designer', description: 'Design Bitcoin-native products, docs, and learning experiences.' },
-  { value: FellowshipType.EDUCATOR, title: 'Educator', description: 'Teach, write, and build curriculum on Bitcoin protocol.' },
+type TrackOption = {
+  value: FellowshipType;
+  title: string;
+  description: string;
+  icon: typeof Code2;
+};
+
+const TRACK_OPTIONS: TrackOption[] = [
+  {
+    value: FellowshipType.DEVELOPER,
+    title: 'Developer',
+    description: 'Contribute to Bitcoin / Lightning open-source projects.',
+    icon: Code2,
+  },
+  {
+    value: FellowshipType.DESIGNER,
+    title: 'Designer',
+    description: 'Design Bitcoin-native products, docs, and learning experiences.',
+    icon: PenTool,
+  },
+  {
+    value: FellowshipType.EDUCATOR,
+    title: 'Educator',
+    description: 'Teach, write, and build curriculum on Bitcoin protocol.',
+    icon: BookOpen,
+  },
 ];
+
+const TRACK_BY_VALUE: Record<FellowshipType, TrackOption> = TRACK_OPTIONS.reduce(
+  (acc, opt) => ({ ...acc, [opt.value]: opt }),
+  {} as Record<FellowshipType, TrackOption>,
+);
+
+const CYCLE_CLOSE_DATE = new Date('2026-05-28T00:00:00Z');
+
+const formatCycleClose = (d: Date) =>
+  d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+const formatRelativeTime = (date: Date | null, now: number): string => {
+  if (!date) return '';
+  const diffSec = Math.floor((now - date.getTime()) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const min = Math.floor(diffSec / 60);
+  if (min === 1) return 'one min ago';
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr === 1) return '1 hr ago';
+  if (hr < 24) return `${hr} hr ago`;
+  return date.toLocaleDateString();
+};
+
+type StepIndex = 0 | 1 | 2;
+
+const STEP_LABELS = ['Track', 'Proposal', 'Review & submit'] as const;
 
 const Apply = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const appIdFromUrl = searchParams.get('appId');
+
   const [selectedType, setSelectedType] = useState<FellowshipType | null>(null);
-  const [proposal, setProposal] = useState('');
+  const [fields, setFields] = useState<ProposalFields>(EMPTY_FIELDS);
   const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
+  const [step, setStep] = useState<StepIndex>(0);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
-  const loadedProposal = useApplicationProposal(activeId ?? '', {
-    enabled: !!activeId,
-  });
-
-  useEffect(() => {
-    if (appIdFromUrl && appIdFromUrl !== activeId) setActiveId(appIdFromUrl);
-  }, [appIdFromUrl, activeId]);
+  const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
 
   const createMut = useCreateApplication();
   const updateMut = useUpdateApplication();
@@ -62,8 +119,12 @@ const Apply = () => {
   const deleteMut = useDeleteApplication();
 
   useEffect(() => {
+    if (appIdFromUrl && appIdFromUrl !== activeId) setActiveId(appIdFromUrl);
+  }, [appIdFromUrl, activeId]);
+
+  useEffect(() => {
     if (activeId && loadedProposal.data?.proposal !== undefined) {
-      setProposal(loadedProposal.data.proposal);
+      setFields(parseProposal(loadedProposal.data.proposal));
     }
   }, [activeId, loadedProposal.data?.proposal]);
 
@@ -71,42 +132,106 @@ const Apply = () => {
     if (activeId && loadedApp.data?.type) setSelectedType(loadedApp.data.type);
   }, [activeId, loadedApp.data?.type]);
 
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const currentApp = activeId ? loadedApp.data : null;
+  const isEditable = !activeId || currentApp?.status === FellowshipApplicationStatus.DRAFT;
+
+  const proposalReady = useMemo(
+    () => fields.problemStatement.trim().length > 0 && fields.plan.trim().length > 0,
+    [fields.problemStatement, fields.plan],
+  );
+
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!activeId || !isEditable) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(async () => {
+      try {
+        await updateMut.mutateAsync({
+          id: activeId,
+          body: { proposal: serializeProposal(fields) },
+        });
+        setLastSavedAt(new Date());
+      } catch {
+        // silent — user can use the Save draft button to surface the error
+      }
+    }, 1500);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, activeId, isEditable]);
+
   const resetEditor = () => {
     setActiveId(null);
-    setProposal('');
+    setFields(EMPTY_FIELDS);
     setSelectedType(null);
+    setStep(0);
+    setLastSavedAt(null);
     if (searchParams.has('appId')) {
       searchParams.delete('appId');
       setSearchParams(searchParams, { replace: true });
     }
   };
 
-  const handleTypeSelect = (type: FellowshipType) => {
-    setSelectedType(type);
-    if (activeId) return;
-    const template = PROPOSAL_TEMPLATES[type];
-    setProposal((prev) => (prev.trim() === '' || isTemplate(prev) ? template : prev));
+  const ensureDraftExists = async (): Promise<string | null> => {
+    if (activeId) return activeId;
+    if (!selectedType) return null;
+    try {
+      const created = await createMut.mutateAsync({
+        type: selectedType,
+        proposal: serializeProposal(fields),
+      });
+      setActiveId(created.id);
+      setLastSavedAt(new Date());
+      return created.id;
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+      return null;
+    }
   };
 
   const handleSaveDraft = async () => {
-    if (!selectedType || !proposal.trim()) return;
+    if (!selectedType) return;
     try {
       if (activeId) {
-        await updateMut.mutateAsync({ id: activeId, body: { proposal } });
+        await updateMut.mutateAsync({
+          id: activeId,
+          body: { proposal: serializeProposal(fields) },
+        });
+        setLastSavedAt(new Date());
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
-        const created = await createMut.mutateAsync({ type: selectedType, proposal });
-        setActiveId(created.id);
-        setToast({ kind: 'success', msg: 'Draft created.' });
+        const id = await ensureDraftExists();
+        if (id) setToast({ kind: 'success', msg: 'Draft created.' });
       }
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
   };
 
+  const handleContinueFromTrack = async () => {
+    if (!selectedType) return;
+    await ensureDraftExists();
+    setStep(1);
+  };
+
+  const handleContinueFromProposal = () => {
+    if (!proposalReady) return;
+    setStep(2);
+  };
+
   const handleSubmit = async () => {
     if (!activeId) return;
     try {
+      await updateMut.mutateAsync({
+        id: activeId,
+        body: { proposal: serializeProposal(fields) },
+      });
       await submitMut.mutateAsync({ id: activeId });
       setToast({ kind: 'success', msg: 'Application submitted — check your email.' });
       resetEditor();
@@ -127,138 +252,712 @@ const Apply = () => {
     }
   };
 
-  const currentApp = activeId ? loadedApp.data : null;
-  const isEditable = !activeId || currentApp?.status === FellowshipApplicationStatus.DRAFT;
-  const canSubmit = !!activeId && isEditable && proposal.trim().length > 0 && !submitMut.isPending;
+  const setField = <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) =>
+    setFields((prev) => ({ ...prev, [k]: v }));
 
   return (
-    <FellowshipPageLayout title="Apply for a Fellowship" subtitle="Submit a proposal for a Bitshala fellowship.">
+    <FellowshipPageLayout
+      title="Apply for a Fellowship"
+      subtitle="Submit a proposal to work on Bitcoin/Lightning open-source for 6 months."
+      hideIcon
+    >
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12 }}>
-          <Card variant="outlined" sx={{ borderColor: 'divider' }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1 }}>
-                1. Choose fellowship type
-              </Typography>
-              <Grid container spacing={1.5} sx={{ mb: 3 }} alignItems="stretch">
-                {TYPE_OPTIONS.map((opt, idx) => {
-                  const disabled = !isEditable;
-                  const active = selectedType === opt.value;
-                  return (
-                    <Grid size={{ xs: 12, sm: 4 }} key={opt.value} sx={{ display: 'flex' }}>
-                      <Grow in timeout={400 + idx * 120} style={{ transformOrigin: 'top center', width: '100%' }}>
-                        <Box
-                          onClick={() => !disabled && handleTypeSelect(opt.value)}
-                          sx={{
-                            p: 2,
-                            borderRadius: 1.5,
-                            border: '1.5px solid',
-                            borderColor: active ? 'primary.main' : 'divider',
-                            bgcolor: active ? 'rgba(249,115,22,0.06)' : 'background.paper',
-                            cursor: disabled ? 'not-allowed' : 'pointer',
-                            opacity: disabled ? 0.5 : 1,
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
-                            width: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            transform: active ? 'translateY(-2px)' : 'none',
-                            boxShadow: active ? '0 6px 20px rgba(249,115,22,0.15)' : 'none',
-                            '&:hover': disabled
-                              ? {}
-                              : {
-                                  borderColor: 'primary.light',
-                                  transform: 'translateY(-2px)',
-                                  boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-                                },
-                          }}
-                        >
-                          <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{opt.title}</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {opt.description}
-                          </Typography>
-                        </Box>
-                      </Grow>
-                    </Grid>
-                  );
-                })}
-              </Grid>
+      <FellowshipTopTabs active="Apply" />
 
-              <Collapse in={!!selectedType} timeout={450} unmountOnExit>
-                <Fade in={!!selectedType} timeout={600}>
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1 }}>
-                      2. Proposal
-                    </Typography>
-                    {currentApp && currentApp.status === FellowshipApplicationStatus.REJECTED && currentApp.reviewerRemarks && (
-                      <Alert severity="error" sx={{ mb: 2 }}>
-                        <strong>Reviewer remarks:</strong> {currentApp.reviewerRemarks}
-                      </Alert>
-                    )}
-                    <Box
-                      data-color-mode="dark"
-                      sx={{
-                        '& .w-md-editor': {
-                          boxShadow: 'none',
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          borderRadius: 1,
-                          backgroundColor: '#18181b',
-                        },
-                        opacity: !isEditable || (!!activeId && loadedProposal.isLoading) ? 0.6 : 1,
-                        pointerEvents:
-                          !isEditable || (!!activeId && loadedProposal.isLoading) ? 'none' : 'auto',
-                      }}
-                    >
-                      <MDEditor
-                        value={proposal}
-                        onChange={(v) => setProposal(v ?? '')}
-                        height={640}
-                        visibleDragbar
-                        preview="live"
-                        textareaProps={{
-                          placeholder:
-                            'Write your proposal in markdown. What do you want to build, why, and how? Include links, milestones, prior work, and a rough timeline.',
-                        }}
-                      />
-                    </Box>
+      <Stepper
+        step={step}
+        trackLabel={selectedType ? TRACK_BY_VALUE[selectedType].title : null}
+        onJump={(i) => {
+          if (i === 0) setStep(0);
+          if (i === 1 && selectedType) setStep(1);
+          if (i === 2 && selectedType && proposalReady) setStep(2);
+        }}
+      />
 
-                    <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
-                      <Button
-                        variant="outlined"
-                        onClick={handleSaveDraft}
-                        disabled={!isEditable || !selectedType || !proposal.trim() || createMut.isPending || updateMut.isPending}
-                      >
-                        {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
-                      </Button>
-                      <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit}>
-                        {submitMut.isPending ? 'Submitting…' : 'Submit application'}
-                      </Button>
-                      {activeId && isEditable && (
-                        <Button
-                          variant="text"
-                          color="error"
-                          startIcon={<Trash2 size={16} />}
-                          onClick={handleDiscard}
-                          disabled={deleteMut.isPending}
-                        >
-                          Discard draft
-                        </Button>
-                      )}
-                    </Stack>
-                  </Box>
-                </Fade>
-              </Collapse>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {step === 0 && (
+        <TrackStep
+          selectedType={selectedType}
+          disabled={!isEditable}
+          onSelect={setSelectedType}
+          onSaveDraft={handleSaveDraft}
+          onContinue={handleContinueFromTrack}
+          canSaveDraft={!!selectedType && !createMut.isPending && !updateMut.isPending}
+          isSaving={createMut.isPending}
+          isContinuing={createMut.isPending}
+        />
+      )}
+
+      {step === 1 && (
+        <ProposalStep
+          fields={fields}
+          disabled={!isEditable}
+          autosavedLabel={formatRelativeTime(lastSavedAt, now)}
+          onChange={setField}
+          onBack={() => setStep(0)}
+          onSaveDraft={handleSaveDraft}
+          onContinue={handleContinueFromProposal}
+          isSaving={updateMut.isPending || createMut.isPending}
+          canContinue={proposalReady}
+          showDiscard={!!activeId && isEditable}
+          onDiscard={handleDiscard}
+          isDiscarding={deleteMut.isPending}
+        />
+      )}
+
+      {step === 2 && selectedType && (
+        <ReviewStep
+          track={TRACK_BY_VALUE[selectedType]}
+          fields={fields}
+          onBack={() => setStep(1)}
+          onSubmit={handleSubmit}
+          isSubmitting={submitMut.isPending || updateMut.isPending}
+          canSubmit={!!activeId && isEditable && proposalReady && !submitMut.isPending}
+        />
+      )}
     </FellowshipPageLayout>
+  );
+};
+
+// ---- Stepper ----
+
+const Stepper = ({
+  step,
+  trackLabel,
+  onJump,
+}: {
+  step: StepIndex;
+  trackLabel: string | null;
+  onJump: (i: StepIndex) => void;
+}) => {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
+        py: 2,
+        px: { xs: 2.5, md: 3.5 },
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        mb: 2.5,
+      }}
+    >
+      {STEP_LABELS.map((label, i) => {
+        const idx = i as StepIndex;
+        const isActive = step === idx;
+        const isDone = step > idx;
+        const showTrackName = i === 0 && isDone && trackLabel;
+        return (
+          <Box
+            key={label}
+            onClick={() => onJump(idx)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.25,
+              cursor: 'pointer',
+              opacity: isActive || isDone ? 1 : 0.55,
+              transition: 'opacity 0.2s ease',
+              '&:hover': { opacity: 1 },
+            }}
+          >
+            <Box
+              sx={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: isActive ? 'primary.main' : isDone ? 'rgba(74,222,128,0.15)' : 'transparent',
+                border: '1.5px solid',
+                borderColor: isActive ? 'primary.main' : isDone ? 'success.main' : 'divider',
+                color: isActive ? '#fff' : isDone ? 'success.main' : 'text.secondary',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {isDone ? <Check size={14} strokeWidth={3} /> : i + 1}
+            </Box>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.92rem',
+                color: isActive ? 'text.primary' : isDone ? 'text.primary' : 'text.secondary',
+              }}
+            >
+              {label}
+              {showTrackName && (
+                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                  {' '}
+                  · {trackLabel}
+                </Box>
+              )}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
+// ---- Step 1: Track ----
+
+const TrackStep = ({
+  selectedType,
+  disabled,
+  onSelect,
+  onSaveDraft,
+  onContinue,
+  canSaveDraft,
+  isSaving,
+  isContinuing,
+}: {
+  selectedType: FellowshipType | null;
+  disabled: boolean;
+  onSelect: (t: FellowshipType) => void;
+  onSaveDraft: () => void;
+  onContinue: () => void;
+  canSaveDraft: boolean;
+  isSaving: boolean;
+  isContinuing: boolean;
+}) => {
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        p: { xs: 2.5, md: 3.5 },
+      }}
+    >
+      <Typography
+        variant="caption"
+        sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
+      >
+        STEP 1 OF 3
+      </Typography>
+      <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
+        Choose your fellowship track
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+        You can apply to one track per cycle. Selection determines reviewers and rubric.
+      </Typography>
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        {TRACK_OPTIONS.map((opt) => {
+          const active = selectedType === opt.value;
+          const Icon = opt.icon;
+          return (
+            <Box
+              key={opt.value}
+              onClick={() => !disabled && onSelect(opt.value)}
+              sx={{
+                position: 'relative',
+                p: 2.25,
+                borderRadius: 0.6,
+                border: '1.5px solid',
+                borderColor: active ? 'primary.main' : 'divider',
+                bgcolor: active ? 'rgba(249,115,22,0.06)' : 'transparent',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.5 : 1,
+                transition: 'all 0.2s ease',
+                '&:hover': disabled
+                  ? {}
+                  : {
+                      borderColor: active ? 'primary.main' : 'primary.light',
+                      bgcolor: active ? 'rgba(249,115,22,0.08)' : 'rgba(249,115,22,0.03)',
+                    },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: active ? 'rgba(249,115,22,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: '1px solid',
+                  borderColor: active ? 'rgba(249,115,22,0.25)' : 'divider',
+                  mb: 1.5,
+                }}
+              >
+                <Icon size={16} color={active ? '#fb923c' : '#a1a1aa'} />
+              </Box>
+              {active && (
+                <Box sx={{ position: 'absolute', top: 12, right: 12, color: 'primary.main' }}>
+                  <CheckCircle2 size={18} fill="#f97316" color="#0a0a0a" strokeWidth={2.5} />
+                </Box>
+              )}
+              <Typography sx={{ fontWeight: 600, mb: 0.25 }}>{opt.title}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+                {opt.description}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontFamily: 'monospace',
+                  fontSize: '0.72rem',
+                  letterSpacing: 0.4,
+                }}
+              >
+                6 MO · 0.05 BTC/MO
+              </Typography>
+            </Box>
+          );
+        })}
+      </Box>
+
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
+        spacing={1.5}
+      >
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Cycle closes{' '}
+          <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+            {formatCycleClose(CYCLE_CLOSE_DATE)}
+          </Box>
+        </Typography>
+        <Stack direction="row" spacing={1.25} justifyContent={{ xs: 'flex-end', sm: 'flex-end' }}>
+          <Button variant="outlined" onClick={onSaveDraft} disabled={!canSaveDraft}>
+            {isSaving ? 'Saving…' : 'Save draft'}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onContinue}
+            disabled={!selectedType || disabled || isContinuing}
+            endIcon={<ArrowRight size={16} />}
+          >
+            Continue
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+};
+
+// ---- Step 2: Proposal ----
+
+const RUBRIC_ITEMS: { label: string; hint: string; emphasis?: boolean }[] = [
+  { label: 'Scope', hint: 'feasible in 6 mo' },
+  { label: 'Impact', hint: 'benefits OSS ecosystem' },
+  { label: 'Skill fit', hint: 'prior work shows it' },
+  { label: 'Clarity', hint: 'readable plan', emphasis: true },
+];
+
+const ProposalStep = ({
+  fields,
+  disabled,
+  autosavedLabel,
+  onChange,
+  onBack,
+  onSaveDraft,
+  onContinue,
+  isSaving,
+  canContinue,
+  showDiscard,
+  onDiscard,
+  isDiscarding,
+}: {
+  fields: ProposalFields;
+  disabled: boolean;
+  autosavedLabel: string;
+  onChange: <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) => void;
+  onBack: () => void;
+  onSaveDraft: () => void;
+  onContinue: () => void;
+  isSaving: boolean;
+  canContinue: boolean;
+  showDiscard: boolean;
+  onDiscard: () => void;
+  isDiscarding: boolean;
+}) => {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' },
+        gap: 2.5,
+      }}
+    >
+      <Box
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 0.75,
+          bgcolor: 'background.paper',
+          p: { xs: 2.5, md: 3.5 },
+        }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
+          >
+            STEP 2 OF 3
+          </Typography>
+          {autosavedLabel && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'success.main',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.5,
+              }}
+            >
+              <CircleDashed size={12} /> Autosaved {autosavedLabel}
+            </Typography>
+          )}
+        </Stack>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
+          Proposal
+        </Typography>
+
+        <FieldLabel>Project title</FieldLabel>
+        <TextField
+          fullWidth
+          value={fields.title}
+          onChange={(e) => onChange('title', e.target.value)}
+          disabled={disabled}
+          placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
+          sx={{ mb: 2.5 }}
+        />
+
+        <FieldLabel>Problem statement</FieldLabel>
+        <TextField
+          fullWidth
+          multiline
+          minRows={4}
+          value={fields.problemStatement}
+          onChange={(e) => onChange('problemStatement', e.target.value)}
+          disabled={disabled}
+          placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
+          sx={{ mb: 2.5 }}
+        />
+
+        <FieldLabel>6-month plan & milestones</FieldLabel>
+        <TextField
+          fullWidth
+          multiline
+          minRows={6}
+          value={fields.plan}
+          onChange={(e) => onChange('plan', e.target.value)}
+          disabled={disabled}
+          placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
+          sx={{ mb: 2.5 }}
+        />
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 2,
+            mb: 2,
+          }}
+        >
+          <Box>
+            <FieldLabel>GitHub handle</FieldLabel>
+            <TextField
+              fullWidth
+              value={fields.github}
+              onChange={(e) => onChange('github', e.target.value)}
+              disabled={disabled}
+              placeholder="@aarav-m"
+            />
+          </Box>
+          <Box>
+            <FieldLabel>Linked work / portfolio</FieldLabel>
+            <TextField
+              fullWidth
+              value={fields.portfolio}
+              onChange={(e) => onChange('portfolio', e.target.value)}
+              disabled={disabled}
+              placeholder="https://github.com/aarav-m"
+            />
+          </Box>
+        </Box>
+
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.25}
+          justifyContent="space-between"
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider' }}
+        >
+          <Button
+            onClick={onBack}
+            startIcon={<ArrowLeft size={16} />}
+            sx={{ color: 'text.secondary', alignSelf: { xs: 'flex-start', sm: 'center' } }}
+          >
+            Back
+          </Button>
+          <Stack direction="row" spacing={1.25} flexWrap="wrap" justifyContent="flex-end">
+            {showDiscard && (
+              <Button
+                variant="text"
+                color="error"
+                startIcon={<Trash2 size={16} />}
+                onClick={onDiscard}
+                disabled={isDiscarding}
+              >
+                Discard
+              </Button>
+            )}
+            <Button variant="outlined" onClick={onSaveDraft} disabled={isSaving || disabled}>
+              {isSaving ? 'Saving…' : 'Save draft'}
+            </Button>
+            <Button
+              variant="contained"
+              onClick={onContinue}
+              disabled={!canContinue || disabled}
+              endIcon={<ArrowRight size={16} />}
+            >
+              Continue
+            </Button>
+          </Stack>
+        </Stack>
+      </Box>
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 0.75,
+            bgcolor: 'background.paper',
+            p: 2.5,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              letterSpacing: 1.2,
+              fontWeight: 600,
+              display: 'block',
+              mb: 1.5,
+            }}
+          >
+            REVIEWER RUBRIC
+          </Typography>
+          <Stack spacing={1.25}>
+            {RUBRIC_ITEMS.map((item) => (
+              <Stack key={item.label} direction="row" spacing={1.25} alignItems="flex-start">
+                <Box sx={{ color: item.emphasis ? 'warning.main' : 'success.main', mt: '2px' }}>
+                  <Check size={14} strokeWidth={3} />
+                </Box>
+                <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
+                  <Box component="span" sx={{ fontWeight: 600 }}>
+                    {item.label}
+                  </Box>
+                  <Box component="span" sx={{ color: 'text.secondary' }}>
+                    {' '}
+                    — {item.hint}
+                  </Box>
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 0.75,
+            bgcolor: 'background.paper',
+            p: 2.5,
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <Lightbulb size={14} color="#fbbf24" />
+            <Typography
+              variant="caption"
+              sx={{ color: 'warning.main', letterSpacing: 1.2, fontWeight: 700 }}
+            >
+              TIP
+            </Typography>
+          </Stack>
+          <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
+            Link to existing PRs or sketches. Concrete examples win reviewer trust faster than abstract pitches.
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+  <Typography
+    variant="caption"
+    sx={{
+      color: 'text.secondary',
+      letterSpacing: 1.2,
+      fontWeight: 600,
+      display: 'block',
+      mb: 0.75,
+      textTransform: 'uppercase',
+    }}
+  >
+    {children}
+  </Typography>
+);
+
+// ---- Step 3: Review ----
+
+const ReviewStep = ({
+  track,
+  fields,
+  onBack,
+  onSubmit,
+  isSubmitting,
+  canSubmit,
+}: {
+  track: TrackOption;
+  fields: ProposalFields;
+  onBack: () => void;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+  canSubmit: boolean;
+}) => {
+  const Icon = track.icon;
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        p: { xs: 2.5, md: 3.5 },
+      }}
+    >
+      <Typography
+        variant="caption"
+        sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
+      >
+        STEP 3 OF 3
+      </Typography>
+      <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, mb: 3 }}>
+        Review & submit
+      </Typography>
+
+      <Stack spacing={2.5}>
+        <Box>
+          <FieldLabel>Track</FieldLabel>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'rgba(249,115,22,0.12)',
+                border: '1px solid rgba(249,115,22,0.25)',
+              }}
+            >
+              <Icon size={16} color="#fb923c" />
+            </Box>
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>{track.title}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {track.description}
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+
+        {fields.title.trim() && (
+          <Box>
+            <FieldLabel>Project title</FieldLabel>
+            <Typography>{fields.title}</Typography>
+          </Box>
+        )}
+
+        <Box>
+          <FieldLabel>Problem statement</FieldLabel>
+          <Typography
+            variant="body2"
+            sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+          >
+            {fields.problemStatement || '—'}
+          </Typography>
+        </Box>
+
+        <Box>
+          <FieldLabel>6-month plan & milestones</FieldLabel>
+          <Typography
+            variant="body2"
+            sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+          >
+            {fields.plan || '—'}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 2,
+          }}
+        >
+          <Box>
+            <FieldLabel>GitHub handle</FieldLabel>
+            <Typography variant="body2">{fields.github || '—'}</Typography>
+          </Box>
+          <Box>
+            <FieldLabel>Linked work / portfolio</FieldLabel>
+            <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+              {fields.portfolio || '—'}
+            </Typography>
+          </Box>
+        </Box>
+      </Stack>
+
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.25}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider' }}
+      >
+        <Button
+          onClick={onBack}
+          startIcon={<ArrowLeft size={16} />}
+          sx={{ color: 'text.secondary', alignSelf: { xs: 'flex-start', sm: 'center' } }}
+        >
+          Back
+        </Button>
+        <Button variant="contained" onClick={onSubmit} disabled={!canSubmit}>
+          {isSubmitting ? 'Submitting…' : 'Submit application'}
+        </Button>
+      </Stack>
+    </Box>
   );
 };
 

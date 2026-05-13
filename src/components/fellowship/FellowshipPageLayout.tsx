@@ -8,16 +8,17 @@ interface Props {
   title?: string;
   subtitle?: string;
   badge?: string;
+  hideIcon?: boolean;
 }
 
-export const FellowshipPageLayout = ({ children, title, subtitle, badge }: Props) => {
+export const FellowshipPageLayout = ({ children, title, subtitle, badge, hideIcon }: Props) => {
   return (
     <ThemeProvider theme={fellowshipDarkTheme}>
       <CssBaseline />
       <Box
         sx={{
           minHeight: '100vh',
-          bgcolor: '#000',
+          bgcolor: '#0e0e10',
           color: '#fafafa',
           px: { xs: 2, md: 5, lg: 8 },
           py: 3,
@@ -34,21 +35,23 @@ export const FellowshipPageLayout = ({ children, title, subtitle, badge }: Props
               mb: 4,
             }}
           >
-            <Box
-              sx={{
-                display: { xs: 'none', md: 'flex' },
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 48,
-                height: 48,
-                borderRadius: 2.5,
-                bgcolor: 'rgba(249,115,22,0.15)',
-                border: '1px solid rgba(249,115,22,0.25)',
-                flexShrink: 0,
-              }}
-            >
-              <Award size={24} color="#fb923c" />
-            </Box>
+            {!hideIcon && (
+              <Box
+                sx={{
+                  display: { xs: 'none', md: 'flex' },
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 2.5,
+                  bgcolor: 'rgba(249,115,22,0.15)',
+                  border: '1px solid rgba(249,115,22,0.25)',
+                  flexShrink: 0,
+                }}
+              >
+                <Award size={24} color="#fb923c" />
+              </Box>
+            )}
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Typography

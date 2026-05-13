@@ -14,8 +14,8 @@ export const fellowshipDarkTheme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#000000',
-      paper: '#18181b',
+      default: '#0e0e10',
+      paper: '#19191d',
     },
     text: {
       primary: '#fafafa',
@@ -37,7 +37,7 @@ export const fellowshipDarkTheme = createTheme({
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        body: { backgroundColor: '#000000' },
+        body: { backgroundColor: '#0e0e10' },
       },
     },
     MuiButton: {
@@ -63,7 +63,7 @@ export const fellowshipDarkTheme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          backgroundColor: '#18181b',
+          backgroundColor: '#19191d',
           '& fieldset': { borderColor: '#3f3f46' },
           '&:hover fieldset': { borderColor: '#52525b' },
           '&.Mui-focused fieldset': { borderColor: ORANGE, borderWidth: 1.5 },
@@ -84,7 +84,7 @@ export const fellowshipDarkTheme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#18181b',
+          backgroundColor: '#19191d',
           backgroundImage: 'none',
           border: '1px solid #27272a',
         },
@@ -92,7 +92,7 @@ export const fellowshipDarkTheme = createTheme({
     },
     MuiDrawer: {
       styleOverrides: {
-        paper: { backgroundColor: '#0f0f0f', backgroundImage: 'none' },
+        paper: { backgroundColor: '#0e0e10', backgroundImage: 'none' },
       },
     },
   },
