@@ -261,7 +261,7 @@ const ApplicationsAdmin = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 320px) minmax(0, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 380px) minmax(0, 1fr)' },
           gap: 2,
           mt: 2,
         }}
@@ -365,9 +365,9 @@ const Toolbar = ({
             key={f.value}
             onClick={() => onFilter(f.value)}
             sx={{
-              px: 1.5,
+              px: 1.75,
               py: 0.6,
-              borderRadius: 0.6,
+              borderRadius: 999,
               border: '1px solid',
               borderColor: active ? 'primary.main' : 'divider',
               bgcolor: active ? 'rgba(249,115,22,0.08)' : 'background.paper',
