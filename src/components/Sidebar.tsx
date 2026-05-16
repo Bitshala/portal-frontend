@@ -17,24 +17,24 @@ import {
   Paper,
 } from '@mui/material';
 import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   GraduationCap,
   LayoutDashboard,
   User,
   LogOut,
-  ChevronLeft,
-  ChevronRight,
   BookOpen,
-  ChevronDown,
-  ChevronUp,
   BarChart3,
   Award,
   FileText,
   ClipboardList,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useUser } from '../hooks/userHooks';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types/enums';
-import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -232,16 +232,11 @@ const Sidebar = () => {
                     ...(active ? activeItemSx : inactiveItemSx),
                   }}
                 >
-                  <ListItemIcon
-                    sx={{
-                      minWidth: collapsed ? 0 : 36,
-                      color: 'inherit',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
-                  </ListItemIcon>
-                  {!collapsed && (
+                  {collapsed ? (
+                    <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                      <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                    </ListItemIcon>
+                  ) : (
                     <ListItemText
                       primary={item.label}
                       primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
@@ -276,16 +271,11 @@ const Sidebar = () => {
                 ...(fellowshipsSectionActive ? activeItemSx : inactiveItemSx),
               }}
             >
-              <ListItemIcon
-                sx={{
-                  minWidth: collapsed ? 0 : 36,
-                  color: 'inherit',
-                  justifyContent: 'center',
-                }}
-              >
-                <Award size={20} strokeWidth={fellowshipsSectionActive ? 2.2 : 1.8} />
-              </ListItemIcon>
-              {!collapsed && (
+              {collapsed ? (
+                <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                  <Award size={20} strokeWidth={fellowshipsSectionActive ? 2.2 : 1.8} />
+                </ListItemIcon>
+              ) : (
                 <>
                   <ListItemText
                     primary="Fellowships"
@@ -486,16 +476,11 @@ const Sidebar = () => {
                 ...(instructionLinks.some(l => isActive(l.path)) ? activeItemSx : inactiveItemSx),
               }}
             >
-              <ListItemIcon
-                sx={{
-                  minWidth: collapsed ? 0 : 36,
-                  color: 'inherit',
-                  justifyContent: 'center',
-                }}
-              >
-                <BookOpen size={20} strokeWidth={instructionLinks.some(l => isActive(l.path)) ? 2.2 : 1.8} />
-              </ListItemIcon>
-              {!collapsed && (
+              {collapsed ? (
+                <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                  <BookOpen size={20} strokeWidth={instructionLinks.some(l => isActive(l.path)) ? 2.2 : 1.8} />
+                </ListItemIcon>
+              ) : (
                 <>
                   <ListItemText
                     primary="Instructions"
@@ -646,16 +631,11 @@ const Sidebar = () => {
               '&:hover': { color: '#ef4444', bgcolor: 'rgba(239,68,68,0.1)' },
             }}
           >
-            <ListItemIcon
-              sx={{
-                minWidth: collapsed ? 0 : 36,
-                color: 'inherit',
-                justifyContent: 'center',
-              }}
-            >
-              <LogOut size={20} strokeWidth={1.8} />
-            </ListItemIcon>
-            {!collapsed && (
+            {collapsed ? (
+              <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                <LogOut size={20} strokeWidth={1.8} />
+              </ListItemIcon>
+            ) : (
               <ListItemText
                 primary="Logout"
                 primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}

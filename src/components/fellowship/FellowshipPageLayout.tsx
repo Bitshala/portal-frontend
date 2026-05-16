@@ -22,7 +22,7 @@ export const FellowshipPageLayout = ({ children, title, subtitle, badge, hideIco
           color: '#fafafa',
           px: { xs: 2, md: 5, lg: 8 },
           py: 3,
-          fontFamily: 'Sora, sans-serif',
+          fontFamily: 'Inter, sans-serif',
         }}
       >
         {title && (

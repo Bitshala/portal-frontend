@@ -26,7 +26,6 @@ import {
   X,
 } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import FellowshipTopTabs from '../../../components/fellowship/FellowshipTopTabs';
 import {
   useApplications,
   useApplicationProposal,
@@ -244,8 +243,6 @@ const ApplicationsAdmin = () => {
           {toast.msg}
         </Alert>
       )}
-
-      <FellowshipTopTabs active="Applications" />
 
       <Toolbar
         filter={filter}

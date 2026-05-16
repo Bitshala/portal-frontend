@@ -13,7 +13,7 @@ const MyError = ({ code = 404, label }: MyErrorProps) => {
         alignItems: 'center',
         justifyContent: 'center',
         background: '#ffffff',
-        fontFamily: 'Sora, system-ui, sans-serif',
+        fontFamily: 'Inter, system-ui, sans-serif',
       }}
     >
       <div style={{ textAlign: 'center', color: '#111827' }}>

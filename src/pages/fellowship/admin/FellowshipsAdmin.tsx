@@ -18,7 +18,6 @@ import {
 } from '@mui/material';
 import { MoreHorizontal, Plus } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import FellowshipTopTabs from '../../../components/fellowship/FellowshipTopTabs';
 import {
   useFellowships,
   useReports,
@@ -176,8 +175,6 @@ const FellowshipsAdmin = () => {
           {toast.msg}
         </Alert>
       )}
-
-      <FellowshipTopTabs active="Manage" />
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}

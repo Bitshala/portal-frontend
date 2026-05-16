@@ -28,7 +28,7 @@ export const fellowshipDarkTheme = createTheme({
     info: { main: '#60a5fa' },
   },
   typography: {
-    fontFamily: 'Sora, sans-serif',
+    fontFamily: 'Inter, sans-serif',
     button: { textTransform: 'none', fontWeight: 600 },
   },
   shape: {
@@ -122,7 +122,7 @@ export const fellowshipLightTheme = createTheme({
     info: { main: '#2563eb' },
   },
   typography: {
-    fontFamily: 'Sora, sans-serif',
+    fontFamily: 'Inter, sans-serif',
     button: { textTransform: 'none', fontWeight: 600 },
   },
   shape: {

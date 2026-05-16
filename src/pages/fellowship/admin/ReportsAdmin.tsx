@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { Check, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import FellowshipTopTabs from '../../../components/fellowship/FellowshipTopTabs';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
 import {
   useFellowships,
@@ -250,8 +249,6 @@ const ReportsAdmin = () => {
           {toast.msg}
         </Alert>
       )}
-
-      <FellowshipTopTabs active="Reports" />
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}

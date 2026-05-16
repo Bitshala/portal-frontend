@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -21,7 +21,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
-import FellowshipTopTabs from '../../components/fellowship/FellowshipTopTabs';
 import {
   useApplication,
   useApplicationProposal,
@@ -74,11 +73,6 @@ const TRACK_BY_VALUE: Record<FellowshipType, TrackOption> = TRACK_OPTIONS.reduce
   (acc, opt) => ({ ...acc, [opt.value]: opt }),
   {} as Record<FellowshipType, TrackOption>,
 );
-
-const CYCLE_CLOSE_DATE = new Date('2026-05-28T00:00:00Z');
-
-const formatCycleClose = (d: Date) =>
-  d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
 const formatRelativeTime = (date: Date | null, now: number): string => {
   if (!date) return '';
@@ -267,8 +261,6 @@ const Apply = () => {
         </Alert>
       )}
 
-      <FellowshipTopTabs active="Apply" />
-
       <Stepper
         step={step}
         trackLabel={selectedType ? TRACK_BY_VALUE[selectedType].title : null}
@@ -339,7 +331,6 @@ const Stepper = ({
       sx={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
         gap: 2,
         py: 2,
         px: { xs: 2.5, md: 3.5 },
@@ -355,55 +346,70 @@ const Stepper = ({
         const isActive = step === idx;
         const isDone = step > idx;
         const showTrackName = i === 0 && isDone && trackLabel;
+        const segmentDone = step > idx;
         return (
-          <Box
-            key={label}
-            onClick={() => onJump(idx)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.25,
-              cursor: 'pointer',
-              opacity: isActive || isDone ? 1 : 0.55,
-              transition: 'opacity 0.2s ease',
-              '&:hover': { opacity: 1 },
-            }}
-          >
+          <Fragment key={label}>
             <Box
+              onClick={() => onJump(idx)}
               sx={{
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: isActive ? 'primary.main' : isDone ? 'rgba(74,222,128,0.15)' : 'transparent',
-                border: '1.5px solid',
-                borderColor: isActive ? 'primary.main' : isDone ? 'success.main' : 'divider',
-                color: isActive ? '#fff' : isDone ? 'success.main' : 'text.secondary',
-                fontSize: '0.78rem',
-                fontWeight: 700,
+                gap: 1.25,
+                cursor: 'pointer',
+                opacity: isActive || isDone ? 1 : 0.55,
+                transition: 'opacity 0.2s ease',
+                '&:hover': { opacity: 1 },
                 flexShrink: 0,
               }}
             >
-              {isDone ? <Check size={14} strokeWidth={3} /> : i + 1}
+              <Box
+                sx={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: isActive ? 'primary.main' : isDone ? 'rgba(74,222,128,0.15)' : 'transparent',
+                  border: '1.5px solid',
+                  borderColor: isActive ? 'primary.main' : isDone ? 'success.main' : 'divider',
+                  color: isActive ? '#fff' : isDone ? 'success.main' : 'text.secondary',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {isDone ? <Check size={14} strokeWidth={3} /> : i + 1}
+              </Box>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.92rem',
+                  color: isActive || isDone ? 'text.primary' : 'text.secondary',
+                }}
+              >
+                {label}
+                {showTrackName && (
+                  <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                    {' '}
+                    · {trackLabel}
+                  </Box>
+                )}
+              </Typography>
             </Box>
-            <Typography
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.92rem',
-                color: isActive ? 'text.primary' : isDone ? 'text.primary' : 'text.secondary',
-              }}
-            >
-              {label}
-              {showTrackName && (
-                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  {' '}
-                  · {trackLabel}
-                </Box>
-              )}
-            </Typography>
-          </Box>
+            {i < STEP_LABELS.length - 1 && (
+              <Box
+                sx={{
+                  flex: 1,
+                  height: '1px',
+                  minWidth: 24,
+                  bgcolor: segmentDone ? 'success.main' : 'divider',
+                  opacity: segmentDone ? 0.5 : 1,
+                  transition: 'background-color 0.2s ease',
+                }}
+              />
+            )}
+          </Fragment>
         );
       })}
     </Box>
@@ -451,7 +457,7 @@ const TrackStep = ({
         Choose your fellowship track
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        You can apply to one track per cycle. Selection determines reviewers and rubric.
+        Selection determines reviewers and rubric.
       </Typography>
 
       <Box
@@ -509,19 +515,8 @@ const TrackStep = ({
                 </Box>
               )}
               <Typography sx={{ fontWeight: 600, mb: 0.25 }}>{opt.title}</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                 {opt.description}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: 'text.secondary',
-                  fontFamily: 'monospace',
-                  fontSize: '0.72rem',
-                  letterSpacing: 0.4,
-                }}
-              >
-                6 MO · 0.05 BTC/MO
               </Typography>
             </Box>
           );
@@ -529,30 +524,21 @@ const TrackStep = ({
       </Box>
 
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        alignItems={{ xs: 'stretch', sm: 'center' }}
-        justifyContent="space-between"
-        spacing={1.5}
+        direction="row"
+        spacing={1.25}
+        justifyContent="flex-end"
       >
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Cycle closes{' '}
-          <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
-            {formatCycleClose(CYCLE_CLOSE_DATE)}
-          </Box>
-        </Typography>
-        <Stack direction="row" spacing={1.25} justifyContent={{ xs: 'flex-end', sm: 'flex-end' }}>
-          <Button variant="outlined" onClick={onSaveDraft} disabled={!canSaveDraft}>
-            {isSaving ? 'Saving…' : 'Save draft'}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={onContinue}
-            disabled={!selectedType || disabled || isContinuing}
-            endIcon={<ArrowRight size={16} />}
-          >
-            Continue
-          </Button>
-        </Stack>
+        <Button variant="outlined" onClick={onSaveDraft} disabled={!canSaveDraft}>
+          {isSaving ? 'Saving…' : 'Save draft'}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={onContinue}
+          disabled={!selectedType || disabled || isContinuing}
+          endIcon={<ArrowRight size={16} />}
+        >
+          Continue
+        </Button>
       </Stack>
     </Box>
   );

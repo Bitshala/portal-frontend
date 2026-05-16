@@ -11,7 +11,6 @@ import {
 } from '@mui/material';
 import { Check, Eye, FileText } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
-import FellowshipTopTabs from '../../components/fellowship/FellowshipTopTabs';
 import StatusChip from '../../components/fellowship/StatusChip';
 import MarkdownView from '../../components/fellowship/MarkdownView';
 import {
@@ -105,8 +104,6 @@ const MyFellowships = () => {
       subtitle="Track progress, submit reports, request payouts."
       hideIcon
     >
-      <FellowshipTopTabs active="My fellowships" />
-
       {isLoading && <CircularProgress size={22} />}
 
       {!isLoading && !activeFellowship && (
