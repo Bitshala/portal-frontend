@@ -10,7 +10,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Info, CheckCircle2 } from 'lucide-react';
+import { Info, CheckCircle2, XCircle } from 'lucide-react';
 import type { TableRowData } from '../../types/student';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -193,13 +193,24 @@ export const StudentRow: React.FC<StudentRowProps> = ({
           <Typography variant="body2" fontWeight={500} color="text.primary">
             {person.discordGlobalName}
           </Typography>
-          {person.discordRoleAssigned && (
-            <Tooltip title="Discord role assigned" arrow placement="top" slotProps={tooltipSx}>
-              <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center' }} aria-label="Discord role assigned">
+          <Tooltip
+            title={person.discordRoleAssigned ? 'Discord role assigned' : 'Discord role not assigned'}
+            arrow
+            placement="top"
+            slotProps={tooltipSx}
+          >
+            <Box
+              component="span"
+              sx={{ display: 'inline-flex', alignItems: 'center' }}
+              aria-label={person.discordRoleAssigned ? 'Discord role assigned' : 'Discord role not assigned'}
+            >
+              {person.discordRoleAssigned ? (
                 <CheckCircle2 size={16} color="#16a34a" />
-              </Box>
-            </Tooltip>
-          )}
+              ) : (
+                <XCircle size={16} color="#dc2626" />
+              )}
+            </Box>
+          </Tooltip>
         </Box>
       </TableCell>
 
