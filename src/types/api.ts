@@ -135,6 +135,7 @@ export interface UsersWeekScoreResponseDto extends WeeklyScore {
   discordUsername: string;
   discordGlobalName: string | null;
   name: string | null;
+  discordRoleAssigned: boolean;
   teachingAssistant: {
     id: string;
     name: string | null;

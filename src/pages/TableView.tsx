@@ -200,6 +200,7 @@ const TableView: React.FC = () => {
         } : null,
         week: weekIndex,
         total: score.totalScore ?? 0,
+        discordRoleAssigned: Boolean(score.discordRoleAssigned),
       };
     });
 

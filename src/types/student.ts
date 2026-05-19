@@ -57,6 +57,7 @@ export interface TableRowData {
   exerciseScore: ExerciseScore | null;
   week?: number;
   total: number;
+  discordRoleAssigned: boolean;
 }
 
 // Weekly data for student detail view
