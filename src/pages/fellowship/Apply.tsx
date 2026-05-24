@@ -18,8 +18,11 @@ import {
   Code2,
   Lightbulb,
   PenTool,
+  Plus,
   Trash2,
+  X,
 } from 'lucide-react';
+import { IconButton } from '@mui/material';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import {
   useApplication,
@@ -38,6 +41,8 @@ import {
   EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
   parseProposal,
   serializeProposal,
+  validateGithub,
+  validateLink,
   type ProposalFields,
 } from '../../utils/proposalFormat';
 
@@ -134,10 +139,13 @@ const Apply = () => {
   const currentApp = activeId ? loadedApp.data : null;
   const isEditable = !activeId || currentApp?.status === FellowshipApplicationStatus.DRAFT;
 
-  const proposalReady = useMemo(
-    () => fields.problemStatement.trim().length > 0 && fields.plan.trim().length > 0,
-    [fields.problemStatement, fields.plan],
-  );
+  const proposalReady = useMemo(() => {
+    if (fields.problemStatement.trim().length === 0) return false;
+    if (fields.plan.trim().length === 0) return false;
+    if (validateGithub(fields.github)) return false;
+    if (fields.links.some((l) => validateLink(l))) return false;
+    return true;
+  }, [fields.problemStatement, fields.plan, fields.github, fields.links]);
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -657,35 +665,64 @@ const ProposalStep = ({
           sx={{ mb: 2.5 }}
         />
 
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-            gap: 2,
-            mb: 2,
-          }}
+        <FieldLabel>GitHub handle</FieldLabel>
+        <TextField
+          fullWidth
+          value={fields.github}
+          onChange={(e) => onChange('github', e.target.value)}
+          disabled={disabled}
+          placeholder="@aarav-m"
+          error={!!validateGithub(fields.github)}
+          helperText={validateGithub(fields.github) ?? ' '}
+          sx={{ mb: 2 }}
+        />
+
+        <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
+        <Stack spacing={1.25} sx={{ mb: 1 }}>
+          {fields.links.map((link, idx) => {
+            const error = validateLink(link);
+            const showRemove = fields.links.length > 1;
+            return (
+              <Stack key={idx} direction="row" spacing={1} alignItems="flex-start">
+                <TextField
+                  fullWidth
+                  value={link}
+                  onChange={(e) => {
+                    const next = [...fields.links];
+                    next[idx] = e.target.value;
+                    onChange('links', next);
+                  }}
+                  disabled={disabled}
+                  placeholder="https://linkedin.com/in/aarav-m"
+                  error={!!error}
+                  helperText={error ?? ' '}
+                />
+                {showRemove && !disabled && (
+                  <IconButton
+                    aria-label="Remove link"
+                    onClick={() => {
+                      const next = fields.links.filter((_, i) => i !== idx);
+                      onChange('links', next.length ? next : ['']);
+                    }}
+                    sx={{ mt: 0.5, color: 'text.secondary' }}
+                  >
+                    <X size={16} />
+                  </IconButton>
+                )}
+              </Stack>
+            );
+          })}
+        </Stack>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<Plus size={14} />}
+          disabled={disabled || fields.links.some((l) => !l.trim())}
+          onClick={() => onChange('links', [...fields.links, ''])}
+          sx={{ mb: 2, alignSelf: 'flex-start' }}
         >
-          <Box>
-            <FieldLabel>GitHub handle</FieldLabel>
-            <TextField
-              fullWidth
-              value={fields.github}
-              onChange={(e) => onChange('github', e.target.value)}
-              disabled={disabled}
-              placeholder="@aarav-m"
-            />
-          </Box>
-          <Box>
-            <FieldLabel>Linked work / portfolio</FieldLabel>
-            <TextField
-              fullWidth
-              value={fields.portfolio}
-              onChange={(e) => onChange('portfolio', e.target.value)}
-              disabled={disabled}
-              placeholder="https://github.com/aarav-m"
-            />
-          </Box>
-        </Box>
+          Add another link
+        </Button>
 
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -905,23 +942,31 @@ const ReviewStep = ({
           </Typography>
         </Box>
 
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-            gap: 2,
-          }}
-        >
-          <Box>
-            <FieldLabel>GitHub handle</FieldLabel>
-            <Typography variant="body2">{fields.github || '—'}</Typography>
-          </Box>
-          <Box>
-            <FieldLabel>Linked work / portfolio</FieldLabel>
-            <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-              {fields.portfolio || '—'}
+        <Box>
+          <FieldLabel>GitHub handle</FieldLabel>
+          <Typography variant="body2">{fields.github || '—'}</Typography>
+        </Box>
+        <Box>
+          <FieldLabel>Links</FieldLabel>
+          {fields.links.filter((l) => l.trim()).length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              —
             </Typography>
-          </Box>
+          ) : (
+            <Stack spacing={0.5}>
+              {fields.links
+                .filter((l) => l.trim())
+                .map((l, i) => (
+                  <Typography
+                    key={i}
+                    variant="body2"
+                    sx={{ wordBreak: 'break-all', color: 'text.primary' }}
+                  >
+                    {l}
+                  </Typography>
+                ))}
+            </Stack>
+          )}
         </Box>
       </Stack>
 

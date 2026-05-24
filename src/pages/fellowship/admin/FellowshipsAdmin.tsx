@@ -5,31 +5,19 @@ import {
   Box,
   Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Menu,
-  MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
-import { MoreHorizontal, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import {
-  useFellowships,
-  useReports,
-  useStartFellowshipContract,
-} from '../../../hooks/fellowshipHooks';
+import StartContractDialog from '../../../components/fellowship/StartContractDialog';
+import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
 import {
   FellowshipStatus,
   FellowshipType,
   type GetFellowshipResponseDto,
   type GetFellowshipReportResponseDto,
 } from '../../../types/fellowship';
-import { extractErrorMessage } from '../../../utils/errorUtils';
 
 const PAGE_SIZE = 50;
 
@@ -90,23 +78,17 @@ const handleFor = (f: GetFellowshipResponseDto): string => {
   return '—';
 };
 
-const totalMonths = (f: GetFellowshipResponseDto): number => {
-  if (!f.startDate || !f.endDate) return 6;
-  const start = new Date(f.startDate);
-  const end = new Date(f.endDate);
-  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
-};
-
-const elapsedMonths = (f: GetFellowshipResponseDto, now: Date): number => {
-  if (!f.startDate || !f.endDate) return 0;
-  const start = new Date(f.startDate);
-  const elapsed =
-    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
-  return Math.max(0, Math.min(elapsed, totalMonths(f)));
-};
-
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+
+const formatEndDate = (iso: string | null): string => {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 const formatPayoutPerMonth = (amountUsd: string | null): string => {
   if (!amountUsd) return '—';
@@ -232,7 +214,6 @@ const FellowshipsAdmin = () => {
               fellowship={f}
               lastReport={lastReportByFellowship.get(f.id)}
               onOpen={() => navigate(`/fellowship/fellowships/${f.id}`)}
-              onStartContract={() => setContractFor(f)}
             />
           ))
         )}
@@ -301,13 +282,16 @@ const FilterPill = ({
 
 // ---- table header ----
 
-const COLS = '220px 110px minmax(0, 1fr) 160px 110px 110px 110px 36px';
+const COLS =
+  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 100px';
+const COL_GAP = 2;
 
 const HeaderRow = () => (
   <Box
     sx={{
       display: 'grid',
       gridTemplateColumns: COLS,
+      columnGap: COL_GAP,
       px: 2,
       py: 1,
       borderBottom: '1px solid',
@@ -322,11 +306,11 @@ const HeaderRow = () => (
     <Box>Fellow</Box>
     <Box>Track</Box>
     <Box>Project</Box>
-    <Box>Progress</Box>
+    <Box>Maintainer</Box>
+    <Box>End date</Box>
     <Box>Payout</Box>
     <Box>Last report</Box>
     <Box>Status</Box>
-    <Box />
   </Box>
 );
 
@@ -336,22 +320,14 @@ const FellowshipRow = ({
   fellowship,
   lastReport,
   onOpen,
-  onStartContract,
 }: {
   fellowship: GetFellowshipResponseDto;
   lastReport?: GetFellowshipReportResponseDto;
   onOpen: () => void;
-  onStartContract: () => void;
 }) => {
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const now = useMemo(() => new Date(), []);
-  const total = totalMonths(fellowship);
-  const elapsed = elapsedMonths(fellowship, now);
-  const pct = total > 0 ? Math.round((elapsed / total) * 100) : 0;
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
   const dot = STATUS_DOT[fellowship.status];
-  const isPending = fellowship.status === FellowshipStatus.PENDING;
 
   return (
     <Box
@@ -359,6 +335,7 @@ const FellowshipRow = ({
       sx={{
         display: 'grid',
         gridTemplateColumns: COLS,
+        columnGap: COL_GAP,
         alignItems: 'center',
         px: 2,
         py: 1.5,
@@ -439,33 +416,30 @@ const FellowshipRow = ({
         )}
       </Typography>
 
-      {/* Progress */}
-      <Box>
-        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary' }}>
-            M{elapsed}/{total}
-          </Typography>
-          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary' }}>
-            {pct}%
-          </Typography>
-        </Stack>
-        <Box
-          sx={{
-            height: 3,
-            borderRadius: 2,
-            bgcolor: 'rgba(255,255,255,0.06)',
-            overflow: 'hidden',
-          }}
-        >
-          <Box
-            sx={{
-              height: '100%',
-              width: `${pct}%`,
-              bgcolor: trackColor,
-            }}
-          />
-        </Box>
-      </Box>
+      {/* Maintainer */}
+      <Typography
+        sx={{
+          fontSize: '0.82rem',
+          color: fellowship.projectMaintainerName ? 'text.primary' : 'text.secondary',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          pr: 1,
+        }}
+      >
+        {fellowship.projectMaintainerName ?? '—'}
+      </Typography>
+
+      {/* End date */}
+      <Typography
+        sx={{
+          fontFamily: 'monospace',
+          fontSize: '0.78rem',
+          color: fellowship.endDate ? 'text.primary' : 'text.secondary',
+        }}
+      >
+        {formatEndDate(fellowship.endDate)}
+      </Typography>
 
       {/* Payout */}
       <Typography
@@ -494,167 +468,7 @@ const FellowshipRow = ({
         <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: dot.color }} />
         <Typography sx={{ fontSize: '0.82rem', color: 'text.primary' }}>{dot.label}</Typography>
       </Stack>
-
-      {/* Actions */}
-      <Box onClick={(e) => e.stopPropagation()}>
-        <IconButton
-          size="small"
-          onClick={(e) => setMenuAnchor(e.currentTarget)}
-          sx={{ color: 'text.secondary' }}
-        >
-          <MoreHorizontal size={16} />
-        </IconButton>
-        <Menu
-          anchorEl={menuAnchor}
-          open={!!menuAnchor}
-          onClose={() => setMenuAnchor(null)}
-          PaperProps={{
-            sx: { bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' },
-          }}
-        >
-          <MenuItem
-            onClick={() => {
-              setMenuAnchor(null);
-              onOpen();
-            }}
-          >
-            Open dashboard
-          </MenuItem>
-          {isPending && (
-            <MenuItem
-              onClick={() => {
-                setMenuAnchor(null);
-                onStartContract();
-              }}
-            >
-              Start contract
-            </MenuItem>
-          )}
-        </Menu>
-      </Box>
     </Box>
-  );
-};
-
-// ---- start contract dialog ----
-
-const StartContractDialog = ({
-  fellowship,
-  onClose,
-  onSuccess,
-  onError,
-}: {
-  fellowship: GetFellowshipResponseDto | null;
-  onClose: () => void;
-  onSuccess: (msg: string) => void;
-  onError: (msg: string) => void;
-}) => {
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [amountUsd, setAmountUsd] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const startMut = useStartFellowshipContract();
-
-  const validate = () => {
-    if (!startDate || !endDate || !amountUsd) return 'All fields required.';
-    if (new Date(endDate) <= new Date(startDate)) return 'End date must be after start date.';
-    const n = Number(amountUsd);
-    if (Number.isNaN(n) || n <= 0) return 'Amount must be positive.';
-    if (!/^\d+(\.\d{1,2})?$/.test(amountUsd)) return 'Amount supports up to 2 decimals.';
-    return null;
-  };
-
-  const reset = () => {
-    setStartDate('');
-    setEndDate('');
-    setAmountUsd('');
-    setError(null);
-  };
-
-  const handleSubmit = async () => {
-    if (!fellowship) return;
-    const err = validate();
-    if (err) {
-      setError(err);
-      return;
-    }
-    setError(null);
-    try {
-      await startMut.mutateAsync({
-        id: fellowship.id,
-        body: { startDate, endDate, amountUsd: Number(amountUsd) },
-      });
-      onSuccess('Contract started.');
-      reset();
-    } catch (e) {
-      onError(extractErrorMessage(e));
-    }
-  };
-
-  return (
-    <Dialog
-      open={!!fellowship}
-      onClose={() => {
-        reset();
-        onClose();
-      }}
-      fullWidth
-      maxWidth="sm"
-    >
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        Start contract — {fellowship?.userName ?? fellowship?.userEmail ?? 'Fellowship'}
-      </DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Start date"
-              type="date"
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <TextField
-              label="End date"
-              type="date"
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </Stack>
-          <TextField
-            label="Amount (USD, per month)"
-            size="small"
-            fullWidth
-            value={amountUsd}
-            onChange={(e) => setAmountUsd(e.target.value)}
-            placeholder="500.00"
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button
-          onClick={() => {
-            reset();
-            onClose();
-          }}
-        >
-          Cancel
-        </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={startMut.isPending}>
-          {startMut.isPending ? 'Starting…' : 'Start contract'}
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 };
 

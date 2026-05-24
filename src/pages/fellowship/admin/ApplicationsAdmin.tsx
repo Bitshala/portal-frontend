@@ -55,7 +55,7 @@ const FILTERS: { label: string; value: FilterValue }[] = [
   { label: 'All', value: 'ALL' },
 ];
 
-type SortKey = 'score' | 'recent' | 'name';
+type SortKey = 'recent' | 'name';
 
 // ---- helpers ----
 
@@ -85,18 +85,6 @@ const AVATAR_TINTS: { bg: string; color: string }[] = [
 ];
 
 const tintFor = (seed: string) => AVATAR_TINTS[hash(seed) % AVATAR_TINTS.length];
-
-const scoreFor = (id: string): number => 60 + (hash(id) % 36); // 60..95
-
-const rubricFor = (id: string, score: number) => {
-  const h = hash(id);
-  const offsets = [h % 9, (h >> 3) % 9, (h >> 6) % 9, (h >> 9) % 9].map((o) => o - 4);
-  const labels = ['Scope', 'Impact', 'Skill fit', 'Clarity'] as const;
-  return labels.map((label, i) => ({
-    label,
-    value: Math.max(50, Math.min(99, score + offsets[i])),
-  }));
-};
 
 const relativeDays = (iso: string | null): string => {
   if (!iso) return '—';
@@ -167,9 +155,7 @@ const ApplicationsAdmin = () => {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    if (sortKey === 'score') {
-      arr.sort((a, b) => scoreFor(b.id) - scoreFor(a.id));
-    } else if (sortKey === 'name') {
+    if (sortKey === 'name') {
       arr.sort((a, b) =>
         (a.userName ?? a.userEmail ?? '').localeCompare(b.userName ?? b.userEmail ?? ''),
       );
@@ -410,7 +396,7 @@ const Toolbar = ({
             fontSize: '0.82rem',
           }}
         >
-          {sortKey === 'recent' ? 'Recent' : sortKey === 'name' ? 'Name' : 'Score'}
+          {sortKey === 'recent' ? 'Recent' : 'Name'}
         </Button>
         {sortMenuOpen && (
           <Box
@@ -427,7 +413,7 @@ const Toolbar = ({
               minWidth: 140,
             }}
           >
-            {(['recent', 'score', 'name'] as SortKey[]).map((k) => (
+            {(['recent', 'name'] as SortKey[]).map((k) => (
               <Box
                 key={k}
                 onClick={() => {
@@ -508,7 +494,6 @@ const ApplicantList = ({
       {records.map((r) => {
         const isActive = r.id === selectedId;
         const tint = tintFor(r.userName ?? r.userEmail ?? r.id);
-        const score = scoreFor(r.id);
         return (
           <Box
             key={r.id}
@@ -588,17 +573,6 @@ const ApplicantList = ({
                   <StatusPill status={r.status} />
                 </Stack>
               </Box>
-              <Typography
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.95rem',
-                  fontWeight: 700,
-                  color: 'text.secondary',
-                  flexShrink: 0,
-                }}
-              >
-                {score}
-              </Typography>
             </Stack>
           </Box>
         );
@@ -697,8 +671,6 @@ const DetailPane = ({
   isReviewing: boolean;
 }) => {
   const fields = useMemo(() => parseProposal(proposal), [proposal]);
-  const score = scoreFor(app.id);
-  const rubric = useMemo(() => rubricFor(app.id, score), [app.id, score]);
   const handle = handleFromProposalGithub(fields.github);
   const isFinal =
     app.status === FellowshipApplicationStatus.ACCEPTED ||
@@ -745,7 +717,7 @@ const DetailPane = ({
           </Stack>
         </Stack>
 
-        <ScoreBlock score={score} rubric={rubric} />
+        <Box sx={{ mt: 2.5 }} />
 
         {isLoadingProposal && !proposal ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -771,7 +743,7 @@ const DetailPane = ({
               </Typography>
             </Section>
 
-            {(fields.github || fields.portfolio) && (
+            {(fields.github || fields.links.some((l) => l.trim())) && (
               <Section title="Links">
                 <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
                   {fields.github && (
@@ -785,13 +757,17 @@ const DetailPane = ({
                       label={fields.github.replace(/^https?:\/\//, '')}
                     />
                   )}
-                  {fields.portfolio && (
-                    <LinkChip
-                      href={fields.portfolio}
-                      icon={<ExternalLink size={13} />}
-                      label={fields.portfolio.replace(/^https?:\/\//, '')}
-                    />
-                  )}
+                  {fields.links
+                    .map((l) => l.trim())
+                    .filter(Boolean)
+                    .map((l) => (
+                      <LinkChip
+                        key={l}
+                        href={l.startsWith('http') ? l : `https://${l}`}
+                        icon={<ExternalLink size={13} />}
+                        label={l.replace(/^https?:\/\//, '')}
+                      />
+                    ))}
                 </Stack>
               </Section>
             )}
@@ -882,87 +858,6 @@ const PaginatorButton = ({
   >
     {dir === 'prev' ? <ArrowLeft size={14} /> : <ArrowRight size={14} />}
   </IconButton>
-);
-
-const ScoreBlock = ({
-  score,
-  rubric,
-}: {
-  score: number;
-  rubric: { label: string; value: number }[];
-}) => (
-  <Box
-    sx={{
-      mt: 2.5,
-      mb: 2.5,
-      p: 2,
-      borderRadius: 0.6,
-      border: '1px solid',
-      borderColor: 'divider',
-      bgcolor: 'rgba(255,255,255,0.02)',
-    }}
-  >
-    <Stack direction="row" alignItems="center" spacing={2.5}>
-      <Box sx={{ flexShrink: 0 }}>
-        <Typography
-          sx={{
-            fontFamily: 'monospace',
-            fontSize: '1.8rem',
-            fontWeight: 700,
-            color: 'primary.light',
-            lineHeight: 1,
-          }}
-        >
-          {score}
-          <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.95rem' }}>
-            /100
-          </Box>
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', letterSpacing: 1, fontSize: '0.66rem' }}
-        >
-          REVIEWER SCORE
-        </Typography>
-      </Box>
-      <Box sx={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.25 }}>
-        {rubric.map((r) => (
-          <Box key={r.label}>
-            <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-              <Typography
-                variant="caption"
-                sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}
-              >
-                {r.label}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: 'text.primary', fontFamily: 'monospace', fontSize: '0.7rem' }}
-              >
-                {r.value}
-              </Typography>
-            </Stack>
-            <Box
-              sx={{
-                height: 3,
-                borderRadius: 2,
-                bgcolor: 'rgba(255,255,255,0.06)',
-                overflow: 'hidden',
-              }}
-            >
-              <Box
-                sx={{
-                  height: '100%',
-                  width: `${r.value}%`,
-                  bgcolor: r.value >= 80 ? '#4ade80' : r.value >= 65 ? '#fb923c' : '#f87171',
-                }}
-              />
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    </Stack>
-  </Box>
 );
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (

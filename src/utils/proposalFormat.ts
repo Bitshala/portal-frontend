@@ -3,7 +3,7 @@ export type ProposalFields = {
   problemStatement: string;
   plan: string;
   github: string;
-  portfolio: string;
+  links: string[];
 };
 
 export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
@@ -11,7 +11,7 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
   problemStatement: '',
   plan: '',
   github: '',
-  portfolio: '',
+  links: [''],
 };
 
 const SECTION_HEADINGS = {
@@ -25,33 +25,85 @@ export const serializeProposal = (f: ProposalFields): string => {
   if (f.title.trim()) parts.push(`# ${f.title.trim()}`);
   parts.push(`${SECTION_HEADINGS.problem}\n\n${f.problemStatement.trim()}`);
   parts.push(`${SECTION_HEADINGS.plan}\n\n${f.plan.trim()}`);
-  const links: string[] = [];
-  if (f.github.trim()) links.push(`- GitHub: ${f.github.trim()}`);
-  if (f.portfolio.trim()) links.push(`- Portfolio: ${f.portfolio.trim()}`);
-  if (links.length) parts.push(`${SECTION_HEADINGS.links}\n\n${links.join('\n')}`);
+  const lines: string[] = [];
+  if (f.github.trim()) lines.push(`- GitHub: ${f.github.trim()}`);
+  for (const link of f.links) {
+    const v = link.trim();
+    if (v) lines.push(`- ${v}`);
+  }
+  if (lines.length) parts.push(`${SECTION_HEADINGS.links}\n\n${lines.join('\n')}`);
   return parts.join('\n\n');
 };
 
 export const parseProposal = (text: string): ProposalFields => {
-  if (!text.trim()) return EMPTY_PROPOSAL_FIELDS;
+  if (!text.trim()) return { ...EMPTY_PROPOSAL_FIELDS, links: [''] };
   const titleMatch = text.match(/^#\s+(.+?)\s*$/m);
   const sectionRegex = (heading: string) =>
-    new RegExp(`${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
+    new RegExp(
+      `${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`,
+    );
   const problemMatch = text.match(sectionRegex(SECTION_HEADINGS.problem));
   const planMatch = text.match(sectionRegex(SECTION_HEADINGS.plan));
   const githubMatch = text.match(/^-\s*GitHub:\s*(.+?)\s*$/m);
+  // Legacy single Portfolio bullet — fold into links array.
   const portfolioMatch = text.match(/^-\s*Portfolio:\s*(.+?)\s*$/m);
+  // Generic bullets that are URLs (not GitHub / Portfolio labelled).
+  const linksSection = text.match(sectionRegex(SECTION_HEADINGS.links));
+  const collectedLinks: string[] = [];
+  if (linksSection?.[1]) {
+    const lineRe = /^-\s*(.+?)\s*$/gm;
+    let m: RegExpExecArray | null;
+    while ((m = lineRe.exec(linksSection[1])) != null) {
+      const raw = m[1].trim();
+      if (/^GitHub:/i.test(raw)) continue;
+      if (/^Portfolio:/i.test(raw)) {
+        collectedLinks.push(raw.replace(/^Portfolio:\s*/i, ''));
+        continue;
+      }
+      collectedLinks.push(raw);
+    }
+  } else if (portfolioMatch) {
+    collectedLinks.push(portfolioMatch[1].trim());
+  }
 
   const recognized =
-    titleMatch || problemMatch || planMatch || githubMatch || portfolioMatch;
+    titleMatch ||
+    problemMatch ||
+    planMatch ||
+    githubMatch ||
+    portfolioMatch ||
+    collectedLinks.length > 0;
   if (!recognized) {
-    return { ...EMPTY_PROPOSAL_FIELDS, problemStatement: text };
+    return { ...EMPTY_PROPOSAL_FIELDS, problemStatement: text, links: [''] };
   }
   return {
     title: titleMatch?.[1]?.trim() ?? '',
     problemStatement: problemMatch?.[1]?.trim() ?? '',
     plan: planMatch?.[1]?.trim() ?? '',
     github: githubMatch?.[1]?.trim() ?? '',
-    portfolio: portfolioMatch?.[1]?.trim() ?? '',
+    links: collectedLinks.length > 0 ? collectedLinks : [''],
   };
+};
+
+// =========================
+// Validation
+// =========================
+
+const GITHUB_URL_RE = /^https?:\/\/(www\.)?github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]){0,38}\/?$/i;
+const GITHUB_HANDLE_RE = /^@?[A-Za-z0-9](?:[A-Za-z0-9-]){0,38}$/;
+const URL_RE = /^https?:\/\/[^\s.]+\.[^\s]+$/i;
+
+export const validateGithub = (value: string): string | null => {
+  const v = value.trim();
+  if (!v) return null;
+  if (GITHUB_URL_RE.test(v)) return null;
+  if (GITHUB_HANDLE_RE.test(v)) return null;
+  return 'Enter a GitHub handle (e.g. @aarav-m) or full URL (https://github.com/aarav-m).';
+};
+
+export const validateLink = (value: string): string | null => {
+  const v = value.trim();
+  if (!v) return null;
+  if (URL_RE.test(v)) return null;
+  return 'Enter a full URL starting with http:// or https://';
 };

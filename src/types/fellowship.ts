@@ -81,6 +81,7 @@ export interface FellowshipOnboardingDto {
   professionalExperience: string | null;
   projectName: string | null;
   projectGithubLink: string | null;
+  projectMaintainerName: string | null;
   mentorContact: string | null;
   domains: string[] | null;
   codingLanguages: string[] | null;

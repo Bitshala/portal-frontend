@@ -322,8 +322,6 @@ const ReportsAdmin = () => {
               report={r}
               track={fellowshipById.get(r.fellowshipId)?.type ?? null}
               onOpen={() => setSelected(r)}
-              onApprove={() => handleApprove(r)}
-              isReviewing={reviewMut.isPending}
             />
           ))
         )}
@@ -430,15 +428,18 @@ const FilterPill = ({
 
 // ---- table ----
 
-const COLS = '240px 120px 110px 90px 60px 130px 200px';
+const COLS =
+  'minmax(220px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(80px, 0.7fr) minmax(60px, 0.5fr) minmax(130px, 1fr)';
+const COL_GAP = 3;
 
 const HeaderRow = () => (
   <Box
     sx={{
       display: 'grid',
       gridTemplateColumns: COLS,
-      px: 2,
-      py: 1,
+      columnGap: COL_GAP,
+      px: 3,
+      py: 1.25,
       borderBottom: '1px solid',
       borderColor: 'divider',
       color: 'text.secondary',
@@ -454,7 +455,6 @@ const HeaderRow = () => (
     <Box>Words</Box>
     <Box>PRs</Box>
     <Box>Status</Box>
-    <Box sx={{ textAlign: 'right' }} />
   </Box>
 );
 
@@ -462,30 +462,28 @@ const ReportRow = ({
   report,
   track,
   onOpen,
-  onApprove,
-  isReviewing,
 }: {
   report: GetFellowshipReportResponseDto;
   track: FellowshipType | null;
   onOpen: () => void;
-  onApprove: () => void;
-  isReviewing: boolean;
 }) => {
   const tint = tintFor(report.userName ?? report.userId ?? report.id);
   const trackColor = track ? TRACK_COLORS[track] : '#a1a1aa';
   const pill = STATUS_PILL[report.status];
-  const canApprove = report.status === FellowshipReportStatus.SUBMITTED;
 
   return (
     <Box
+      onClick={onOpen}
       sx={{
         display: 'grid',
         gridTemplateColumns: COLS,
+        columnGap: COL_GAP,
         alignItems: 'center',
-        px: 2,
-        py: 1.5,
+        px: 3,
+        py: 1.75,
         borderBottom: '1px solid',
         borderColor: 'divider',
+        cursor: 'pointer',
         transition: 'background-color 0.12s',
         '&:hover': { bgcolor: 'rgba(255,255,255,0.025)' },
         '&:last-of-type': { borderBottom: 'none' },
@@ -572,29 +570,6 @@ const ReportRow = ({
           {pill.label}
         </Box>
       </Box>
-
-      <Stack direction="row" spacing={0.75} justifyContent="flex-end">
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={onOpen}
-          sx={{ color: 'text.primary', borderColor: 'divider', minWidth: 64 }}
-        >
-          Open
-        </Button>
-        {canApprove && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Check size={13} />}
-            onClick={onApprove}
-            disabled={isReviewing}
-            sx={{ minWidth: 90 }}
-          >
-            Approve
-          </Button>
-        )}
-      </Stack>
     </Box>
   );
 };
