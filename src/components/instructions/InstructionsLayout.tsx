@@ -69,7 +69,7 @@ const Attachment: React.FC<{ filename: string; url: string }> = ({ filename, url
 
 interface InstructionsLayoutProps {
   cohortName: string;
-  cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT';
+  cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT' | 'PROGRAMMING_BITCOIN';
   weeklyContent: WeekContent[];
   activeWeek: number | 'links' | 'exercises';
   setActiveWeek: (week: number | 'links' | 'exercises') => void;

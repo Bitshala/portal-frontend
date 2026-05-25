@@ -8,6 +8,7 @@ import { lnWeeks } from '../../data/lnWeeks';
 import { lbtclWeeks } from '../../data/lbtclWeeks';
 import { mbWeeks } from '../../data/mbWeeks';
 import { bpdWeeks } from '../../data/bpdWeeks';
+import { pbWeeks } from '../../data/pbWeeks';
 import type { GetCohortWeekResponseDto, CohortWeekQuestion } from '../../types/api';
 import type { RichQuestion } from '../../types/instructions';
 import apiService from '../../services/apiService';
@@ -17,6 +18,7 @@ const cohortTypeToContent = {
   LEARNING_BITCOIN_FROM_COMMAND_LINE: { name: 'LBTCL', weeks: lbtclWeeks },
   MASTERING_LIGHTNING_NETWORK: { name: 'LN', weeks: lnWeeks },
   BITCOIN_PROTOCOL_DEVELOPMENT: { name: 'BPD', weeks: bpdWeeks },
+  PROGRAMMING_BITCOIN: { name: 'PB', weeks: pbWeeks },
 } as const;
 
 const MyCohortInstructions: React.FC = () => {
@@ -125,7 +127,7 @@ const MyCohortInstructions: React.FC = () => {
   return (
     <InstructionsLayout
       cohortName={content.name}
-      cohortType={cohortData.type as 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT'}
+      cohortType={cohortData.type as 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT' | 'PROGRAMMING_BITCOIN'}
       weeklyContent={mergedWeeklyContent}
       activeWeek={activeWeek}
       setActiveWeek={setActiveWeek}

@@ -23,6 +23,7 @@ import MBInstructions from './pages/Students/MBInstructions.tsx';
 import LBTCLInstructions from './pages/Students/LBTCLInstructions.tsx';
 import LNInstructions from './pages/Students/LNInstructions.tsx';
 import BPDInstructions from './pages/Students/BPDInstructions.tsx';
+import PBInstructions from './pages/Students/PBInstructions.tsx';
 import GeneralInstructions from './pages/Students/GeneralInstructions.tsx';
 import StudentProfileData from './components/student/StudentProfileData.tsx';
 
@@ -78,6 +79,10 @@ const router = createBrowserRouter([
   {
     path: '/bpd-instructions',
     element: <Layout><BPDInstructions /></Layout>,
+  },
+  {
+    path: '/pb-instructions',
+    element: <Layout><PBInstructions /></Layout>,
   },
   {
     path: '/general-instructions',

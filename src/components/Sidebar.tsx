@@ -55,6 +55,7 @@ const instructionLinks = [
   { label: 'Learning Bitcoin CLI', path: '/lbtcl-instructions' },
   { label: 'Lightning Network', path: '/ln-instructions' },
   { label: 'Bitcoin Protocol Dev', path: '/bpd-instructions' },
+  { label: 'Programming Bitcoin', path: '/pb-instructions' },
 ];
 
 const EXPANDED_WIDTH = 260;

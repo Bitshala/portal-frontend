@@ -17,7 +17,7 @@ import type { GetCohortWeekResponseDto, CohortWeekQuestion } from '../../types/a
 import apiService from '../../services/apiService';
 
 interface CohortInstructionsProps {
-  cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT';
+  cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT' | 'PROGRAMMING_BITCOIN';
   cohortName: string;
   weeklyContent: WeekContent[];
 }
