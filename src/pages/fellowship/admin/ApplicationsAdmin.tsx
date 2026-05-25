@@ -43,6 +43,7 @@ const PAGE_SIZE = 50;
 type FilterValue =
   | 'SUBMITTED'
   | 'IN_REVIEW'
+  | 'CHANGES_REQUESTED'
   | 'ACCEPTED'
   | 'REJECTED'
   | 'ALL';
@@ -50,6 +51,7 @@ type FilterValue =
 const FILTERS: { label: string; value: FilterValue }[] = [
   { label: 'Submitted', value: 'SUBMITTED' },
   { label: 'In review', value: 'IN_REVIEW' },
+  { label: 'Changes requested', value: 'CHANGES_REQUESTED' },
   { label: 'Accepted', value: 'ACCEPTED' },
   { label: 'Rejected', value: 'REJECTED' },
   { label: 'All', value: 'ALL' },
@@ -123,9 +125,11 @@ const ApplicationsAdmin = () => {
       ? undefined
       : filter === 'SUBMITTED'
         ? FellowshipApplicationStatus.SUBMITTED
-        : filter === 'ACCEPTED'
-          ? FellowshipApplicationStatus.ACCEPTED
-          : FellowshipApplicationStatus.REJECTED;
+        : filter === 'CHANGES_REQUESTED'
+          ? FellowshipApplicationStatus.CHANGES_REQUESTED
+          : filter === 'ACCEPTED'
+            ? FellowshipApplicationStatus.ACCEPTED
+            : FellowshipApplicationStatus.REJECTED;
 
   const { data, isLoading } = useApplications({
     page: 0,
@@ -202,6 +206,23 @@ const ApplicationsAdmin = () => {
       });
       setToast({ kind: 'success', msg: 'Application rejected.' });
       setRejectOpen(false);
+      setRemarks('');
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    }
+  };
+
+  const handleRequestChanges = async () => {
+    if (!selected || !remarks.trim()) return;
+    try {
+      await reviewMut.mutateAsync({
+        id: selected.id,
+        body: {
+          status: FellowshipApplicationStatus.CHANGES_REQUESTED,
+          reviewerRemarks: remarks.trim(),
+        },
+      });
+      setToast({ kind: 'success', msg: 'Changes requested — applicant notified.' });
       setRequestChangesOpen(false);
       setRemarks('');
     } catch (e) {
@@ -269,8 +290,14 @@ const ApplicationsAdmin = () => {
             canPrev={selectedIdx > 0}
             canNext={selectedIdx >= 0 && selectedIdx < sorted.length - 1}
             onAccept={handleAccept}
-            onReject={() => setRejectOpen(true)}
-            onRequestChanges={() => setRequestChangesOpen(true)}
+            onReject={() => {
+              setRemarks('');
+              setRejectOpen(true);
+            }}
+            onRequestChanges={() => {
+              setRemarks('');
+              setRequestChangesOpen(true);
+            }}
             isReviewing={reviewMut.isPending}
           />
         ) : (
@@ -306,7 +333,7 @@ const ApplicationsAdmin = () => {
           setRequestChangesOpen(false);
           setRemarks('');
         }}
-        onConfirm={handleReject}
+        onConfirm={handleRequestChanges}
         busy={reviewMut.isPending}
       />
     </FellowshipPageLayout>
@@ -590,6 +617,11 @@ const StatusPill = ({ status }: { status: FellowshipApplicationStatus }) => {
     },
     [FellowshipApplicationStatus.SUBMITTED]: {
       label: 'Submitted',
+      color: '#fbbf24',
+      bg: 'rgba(251,191,36,0.12)',
+    },
+    [FellowshipApplicationStatus.CHANGES_REQUESTED]: {
+      label: 'Changes requested',
       color: '#fb923c',
       bg: 'rgba(251,146,60,0.12)',
     },
@@ -675,6 +707,8 @@ const DetailPane = ({
   const isFinal =
     app.status === FellowshipApplicationStatus.ACCEPTED ||
     app.status === FellowshipApplicationStatus.REJECTED;
+  const awaitingApplicant = app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+  const actionsDisabled = isFinal || awaitingApplicant;
 
   return (
     <Box
@@ -775,7 +809,11 @@ const DetailPane = ({
         )}
 
         {app.status !== FellowshipApplicationStatus.SUBMITTED && app.reviewerRemarks && (
-          <Alert severity={isFinal ? 'info' : 'warning'} sx={{ mt: 2 }} icon={<MessageSquare size={16} />}>
+          <Alert
+            severity={awaitingApplicant ? 'warning' : 'info'}
+            sx={{ mt: 2 }}
+            icon={<MessageSquare size={16} />}
+          >
             <strong>{app.reviewerName ?? 'Reviewer'}:</strong> {app.reviewerRemarks}
           </Alert>
         )}
@@ -794,7 +832,9 @@ const DetailPane = ({
         }}
       >
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {app.reviewerName ? (
+          {awaitingApplicant ? (
+            <>Awaiting applicant revision</>
+          ) : app.reviewerName ? (
             <>Reviewed by <strong>{app.reviewerName}</strong></>
           ) : (
             <>Awaiting review</>
@@ -804,7 +844,7 @@ const DetailPane = ({
           <Button
             variant="outlined"
             onClick={onRequestChanges}
-            disabled={isReviewing || isFinal}
+            disabled={isReviewing || actionsDisabled}
             sx={{ color: 'text.primary', borderColor: 'divider' }}
           >
             Request changes
@@ -813,7 +853,7 @@ const DetailPane = ({
             variant="outlined"
             color="error"
             onClick={onReject}
-            disabled={isReviewing || isFinal}
+            disabled={isReviewing || actionsDisabled}
             startIcon={<X size={14} />}
           >
             Reject
@@ -821,7 +861,7 @@ const DetailPane = ({
           <Button
             variant="contained"
             onClick={onAccept}
-            disabled={isReviewing || isFinal}
+            disabled={isReviewing || actionsDisabled}
             startIcon={<Check size={14} />}
           >
             Accept
