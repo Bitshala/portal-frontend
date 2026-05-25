@@ -137,7 +137,11 @@ const Apply = () => {
   }, []);
 
   const currentApp = activeId ? loadedApp.data : null;
-  const isEditable = !activeId || currentApp?.status === FellowshipApplicationStatus.DRAFT;
+  const isEditable =
+    !activeId ||
+    currentApp?.status === FellowshipApplicationStatus.DRAFT ||
+    currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+  const isResubmit = currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
 
   const proposalReady = useMemo(() => {
     if (fields.problemStatement.trim().length === 0) return false;
@@ -235,7 +239,12 @@ const Apply = () => {
         body: { proposal: serializeProposal(fields) },
       });
       await submitMut.mutateAsync({ id: activeId });
-      setToast({ kind: 'success', msg: 'Application submitted — check your email.' });
+      setToast({
+        kind: 'success',
+        msg: isResubmit
+          ? 'Application resubmitted — check your email.'
+          : 'Application submitted — check your email.',
+      });
       resetEditor();
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -313,10 +322,12 @@ const Apply = () => {
         <ReviewStep
           track={TRACK_BY_VALUE[selectedType]}
           fields={fields}
+          reviewerRemarks={isResubmit ? currentApp?.reviewerRemarks ?? null : null}
           onBack={() => setStep(1)}
           onSubmit={handleSubmit}
           isSubmitting={submitMut.isPending || updateMut.isPending}
           canSubmit={!!activeId && isEditable && proposalReady && !submitMut.isPending}
+          submitLabel={isResubmit ? 'Resubmit application' : 'Submit application'}
         />
       )}
     </FellowshipPageLayout>
@@ -855,17 +866,21 @@ const FieldLabel = ({ children }: { children: React.ReactNode }) => (
 const ReviewStep = ({
   track,
   fields,
+  reviewerRemarks,
   onBack,
   onSubmit,
   isSubmitting,
   canSubmit,
+  submitLabel,
 }: {
   track: TrackOption;
   fields: ProposalFields;
+  reviewerRemarks: string | null;
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
   canSubmit: boolean;
+  submitLabel: string;
 }) => {
   const Icon = track.icon;
   return (
@@ -887,6 +902,12 @@ const ReviewStep = ({
       <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, mb: 3 }}>
         Review & submit
       </Typography>
+
+      {reviewerRemarks && (
+        <Alert severity="warning" sx={{ mb: 2.5 }}>
+          <strong>Reviewer feedback:</strong> {reviewerRemarks}
+        </Alert>
+      )}
 
       <Stack spacing={2.5}>
         <Box>
@@ -985,7 +1006,7 @@ const ReviewStep = ({
           Back
         </Button>
         <Button variant="contained" onClick={onSubmit} disabled={!canSubmit}>
-          {isSubmitting ? 'Submitting…' : 'Submit application'}
+          {isSubmitting ? 'Submitting…' : submitLabel}
         </Button>
       </Stack>
     </Box>

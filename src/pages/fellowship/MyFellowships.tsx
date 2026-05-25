@@ -9,7 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { Check, Eye, FileText } from 'lucide-react';
+import { Check, Eye, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
 import MarkdownView from '../../components/fellowship/MarkdownView';
@@ -19,14 +19,17 @@ import {
   useMyApplications,
   useMyFellowships,
   useMyReports,
+  useSubmitApplication,
 } from '../../hooks/fellowshipHooks';
 import {
   FellowshipApplicationStatus,
   FellowshipReportStatus,
   FellowshipStatus,
+  type GetFellowshipApplicationResponseDto,
   type GetFellowshipReportResponseDto,
   type GetFellowshipResponseDto,
 } from '../../types/fellowship';
+import { extractErrorMessage } from '../../utils/errorUtils';
 
 type MonthSlot = { month: number; year: number; index: number };
 
@@ -72,9 +75,32 @@ const MyFellowships = () => {
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 20 });
   const applicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
   const reportsQuery = useMyReports({ page: 0, pageSize: 100 });
+  const submitMut = useSubmitApplication();
 
-  const applications = applicationsQuery.data?.records ?? [];
+  const applications = useMemo(
+    () => applicationsQuery.data?.records ?? [],
+    [applicationsQuery.data?.records],
+  );
   const reports = reportsQuery.data?.records ?? [];
+
+  const changesRequestedApp = useMemo<GetFellowshipApplicationResponseDto | null>(
+    () =>
+      applications.find(
+        (a) => a.status === FellowshipApplicationStatus.CHANGES_REQUESTED,
+      ) ?? null,
+    [applications],
+  );
+
+  const [resubmitError, setResubmitError] = useState<string | null>(null);
+
+  const handleResubmit = async (id: string) => {
+    setResubmitError(null);
+    try {
+      await submitMut.mutateAsync({ id });
+    } catch (e) {
+      setResubmitError(extractErrorMessage(e));
+    }
+  };
 
   const activeFellowship = useMemo<GetFellowshipResponseDto | null>(() => {
     const fellowships = fellowshipsQuery.data?.records ?? [];
@@ -105,6 +131,23 @@ const MyFellowships = () => {
       hideIcon
     >
       {isLoading && <CircularProgress size={22} />}
+
+      {resubmitError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setResubmitError(null)}>
+          {resubmitError}
+        </Alert>
+      )}
+
+      {!isLoading && changesRequestedApp && (
+        <ChangesRequestedBanner
+          app={changesRequestedApp}
+          onEdit={() =>
+            navigate(`/fellowship/apply?appId=${changesRequestedApp.id}`)
+          }
+          onResubmit={() => handleResubmit(changesRequestedApp.id)}
+          isResubmitting={submitMut.isPending}
+        />
+      )}
 
       {!isLoading && !activeFellowship && (
         <EmptyState onApply={() => navigate('/fellowship/apply')} />
@@ -152,6 +195,70 @@ const MyFellowships = () => {
     </FellowshipPageLayout>
   );
 };
+
+// ---- Changes requested banner ----
+
+const ChangesRequestedBanner = ({
+  app,
+  onEdit,
+  onResubmit,
+  isResubmitting,
+}: {
+  app: GetFellowshipApplicationResponseDto;
+  onEdit: () => void;
+  onResubmit: () => void;
+  isResubmitting: boolean;
+}) => (
+  <Box
+    sx={{
+      border: '1px solid rgba(251,146,60,0.4)',
+      borderRadius: 0.75,
+      bgcolor: 'rgba(251,146,60,0.06)',
+      p: { xs: 2, md: 2.5 },
+      mb: 2.5,
+      display: 'flex',
+      flexDirection: { xs: 'column', md: 'row' },
+      alignItems: { xs: 'stretch', md: 'flex-start' },
+      gap: 2,
+    }}
+  >
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, flex: 1, minWidth: 0 }}>
+      <Box sx={{ color: '#fb923c', mt: '2px' }}>
+        <MessageSquare size={18} />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, color: '#fb923c', mb: 0.5 }}>
+          Changes requested on your {app.type.toLowerCase()} application
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}
+        >
+          {app.reviewerRemarks ?? 'The reviewer has asked for revisions before this can be accepted.'}
+        </Typography>
+        {app.reviewerName && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.75 }}>
+            — {app.reviewerName}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+    <Stack direction={{ xs: 'row', md: 'column' }} spacing={1} sx={{ flexShrink: 0 }}>
+      <Button variant="contained" onClick={onEdit} sx={{ whiteSpace: 'nowrap' }}>
+        Edit proposal
+      </Button>
+      <Button
+        variant="outlined"
+        onClick={onResubmit}
+        disabled={isResubmitting}
+        startIcon={<RefreshCw size={14} />}
+        sx={{ whiteSpace: 'nowrap', color: 'text.primary', borderColor: 'divider' }}
+      >
+        {isResubmitting ? 'Resubmitting…' : 'Resubmit as-is'}
+      </Button>
+    </Stack>
+  </Box>
+);
 
 // ---- Empty state ----
 
@@ -788,7 +895,18 @@ const ApplicationDetailView = ({
   const navigate = useNavigate();
   const appQuery = useApplication(id);
   const proposalQuery = useApplicationProposal(id);
+  const submitMut = useSubmitApplication();
+  const [resubmitError, setResubmitError] = useState<string | null>(null);
   const app = appQuery.data;
+
+  const handleResubmit = async () => {
+    setResubmitError(null);
+    try {
+      await submitMut.mutateAsync({ id });
+    } catch (e) {
+      setResubmitError(extractErrorMessage(e));
+    }
+  };
 
   return (
     <Box>
@@ -834,6 +952,24 @@ const ApplicationDetailView = ({
             </Alert>
           )}
 
+          {app.status === FellowshipApplicationStatus.CHANGES_REQUESTED && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              <strong>Changes requested by {app.reviewerName ?? 'the reviewer'}:</strong>{' '}
+              {app.reviewerRemarks ??
+                'Please revise your proposal before resubmitting.'}
+            </Alert>
+          )}
+
+          {resubmitError && (
+            <Alert
+              severity="error"
+              sx={{ mb: 3 }}
+              onClose={() => setResubmitError(null)}
+            >
+              {resubmitError}
+            </Alert>
+          )}
+
           {app.status === FellowshipApplicationStatus.ACCEPTED && (
             <Alert severity="success" sx={{ mb: 3 }}>
               Application accepted. A fellowship entry has been created for you.
@@ -853,6 +989,26 @@ const ApplicationDetailView = ({
                 onClick={() => navigate(`/fellowship/apply?appId=${app.id}`)}
               >
                 Edit draft
+              </Button>
+            </Stack>
+          )}
+
+          {app.status === FellowshipApplicationStatus.CHANGES_REQUESTED && (
+            <Stack direction="row" spacing={1.5} sx={{ mt: 3 }}>
+              <Button
+                variant="contained"
+                onClick={() => navigate(`/fellowship/apply?appId=${app.id}`)}
+              >
+                Edit proposal
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={handleResubmit}
+                disabled={submitMut.isPending}
+                startIcon={<RefreshCw size={14} />}
+                sx={{ color: 'text.primary', borderColor: 'divider' }}
+              >
+                {submitMut.isPending ? 'Resubmitting…' : 'Resubmit as-is'}
               </Button>
             </Stack>
           )}
