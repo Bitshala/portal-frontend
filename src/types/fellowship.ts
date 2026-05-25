@@ -11,6 +11,7 @@ export enum FellowshipApplicationStatus {
   SUBMITTED = 'SUBMITTED',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
+  CHANGES_REQUESTED = 'CHANGES_REQUESTED',
 }
 
 export enum FellowshipStatus {
@@ -60,7 +61,10 @@ export interface UpdateFellowshipApplicationRequestDto {
 }
 
 export interface ReviewFellowshipApplicationRequestDto {
-  status: FellowshipApplicationStatus.ACCEPTED | FellowshipApplicationStatus.REJECTED;
+  status:
+    | FellowshipApplicationStatus.ACCEPTED
+    | FellowshipApplicationStatus.REJECTED
+    | FellowshipApplicationStatus.CHANGES_REQUESTED;
   reviewerRemarks?: string;
 }
 
