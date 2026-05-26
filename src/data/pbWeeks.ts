@@ -7,8 +7,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 1: Finite Fields
-2. Chapter 2: Elliptic Curves
+1. [Chapter 1: Finite Fields](https://github.com/jimmysong/programmingbitcoin/blob/master/ch01.asciidoc)
+2. [Chapter 2: Elliptic Curves](https://github.com/jimmysong/programmingbitcoin/blob/master/ch02.asciidoc)
     `,
     gdQuestions: [
       "What is a modulo operation? What are the mathematical properties of finite fields? Why are these properties important to have?",
@@ -31,7 +31,7 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 3: Elliptic Curve Cryptography
+1. [Chapter 3: Elliptic Curve Cryptography](https://github.com/jimmysong/programmingbitcoin/blob/master/ch03.asciidoc)
     `,
     gdQuestions: [
       "What are elliptic curves over finite fields, and how do they differ from normal elliptic curves? Are there any changes in properties between an Elliptic Curve over Finite Fields and Real Numbers?",
@@ -55,8 +55,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 4: Serialization
-2. Chapter 5: Transactions
+1. [Chapter 4: Serialization](https://github.com/jimmysong/programmingbitcoin/blob/master/ch04.asciidoc)
+2. [Chapter 5: Transactions](https://github.com/jimmysong/programmingbitcoin/blob/master/ch05.asciidoc)
     `,
     gdQuestions: [
       "What is the Wallet Import Format (WIF) used for, and how is it generated from a private key?",
@@ -82,8 +82,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 6: Script
-2. Chapter 7: Transaction creation
+1. [Chapter 6: Script](https://github.com/jimmysong/programmingbitcoin/blob/master/ch06.asciidoc)
+2. [Chapter 7: Transaction creation](https://github.com/jimmysong/programmingbitcoin/blob/master/ch07.asciidoc)
     `,
     gdQuestions: [
       "What are non-standard output scripts? Give an example. Is there a way to use non-standard script on bitcoin network?",
@@ -106,8 +106,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 8: P2SH
-2. Chapter 13: Segwit
+1. [Chapter 8: P2SH](https://github.com/jimmysong/programmingbitcoin/blob/master/ch08.asciidoc)
+2. [Chapter 13: Segwit](https://github.com/jimmysong/programmingbitcoin/blob/master/ch13.asciidoc)
     `,
     gdQuestions: [
       "Why was P2SH proposed, and what were its benefits over bare complex scripts?",
@@ -134,8 +134,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 9: Blocks
-2. Chapter 10: Networking
+1. [Chapter 9: Blocks](https://github.com/jimmysong/programmingbitcoin/blob/master/ch09.asciidoc)
+2. [Chapter 10: Networking](https://github.com/jimmysong/programmingbitcoin/blob/master/ch10.asciidoc)
     `,
     gdQuestions: [
       "What is a coinbase transaction, and why is it necessary? What are the limitations of data insertion in the coinbase scriptsig? What would happen if a block does not have a coinbase transaction?",
@@ -163,8 +163,8 @@ export const pbWeeks: WeekContent[] = [
     content: `
 ## Reading Material
 
-1. Chapter 11: SPV
-2. Chapter 12: Bloom Filters
+1. [Chapter 11: SPV](https://github.com/jimmysong/programmingbitcoin/blob/master/ch11.asciidoc)
+2. [Chapter 12: Bloom Filters](https://github.com/jimmysong/programmingbitcoin/blob/master/ch12.asciidoc)
     `,
     gdQuestions: [
       "What is an SPV? Why is it useful? Do you know any real-life mobile app that uses SPV inside?",
