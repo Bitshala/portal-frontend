@@ -97,6 +97,7 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({ cohortType }) =
       weeks={apiCohort ? toRenderWeeks(apiCohort) : []}
       activeWeek={activeWeek}
       setActiveWeek={setActiveWeek}
+      cohortId={apiCohort?.id}
       canPresent={isAdminOrTA}
     />
   );

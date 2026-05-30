@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -7,9 +7,6 @@ import {
   Paper,
   Link,
   Button,
-  Dialog,
-  DialogContent,
-  DialogActions,
   IconButton,
 } from '@mui/material';
 import {
@@ -18,53 +15,9 @@ import {
   ClipboardList,
   ExternalLink,
   Presentation,
-  X,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
-import type { RenderWeek, ResolvedAttachment } from '../../types/instructions';
-import { getAuthTokenFromStorage } from '../../services/authService';
-
-const isImageFile = (filename: string) => /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
-
-const Attachment: React.FC<{ filename: string; url: string }> = ({ filename, url }) => {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [imgFailed, setImgFailed] = useState(false);
-
-  useEffect(() => {
-    if (!isImageFile(filename)) return;
-    let objectUrl: string;
-    const token = getAuthTokenFromStorage();
-    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then((res) => {
-        if (!res.ok) throw new Error(`${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        setBlobUrl(objectUrl);
-      })
-      .catch(() => setImgFailed(true));
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [url, filename]);
-
-  if (isImageFile(filename) && !imgFailed) {
-    return blobUrl ? (
-      <Box
-        component="img"
-        src={blobUrl}
-        alt={filename}
-        sx={{ maxWidth: '100%', borderRadius: 2, border: '1px solid #3f3f46', display: 'block' }}
-      />
-    ) : null;
-  }
-
-  return (
-    <Link href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#60a5fa', fontSize: '0.9rem' }}>
-      {filename}
-    </Link>
-  );
-};
+import type { RenderWeek } from '../../types/instructions';
+import Attachment from './Attachment';
 
 interface InstructionsLayoutProps {
   displayName: string;
@@ -72,7 +25,9 @@ interface InstructionsLayoutProps {
   weeks: RenderWeek[];
   activeWeek: number | 'links' | 'exercises';
   setActiveWeek: (week: number | 'links' | 'exercises') => void;
-  // Whether to show staff-only affordances (the GD presentation slideshow).
+  // Cohort id, used to build the GD presentation route (/:cohortId/present/:week).
+  cohortId?: string;
+  // Whether to show staff-only affordances (the GD presentation).
   canPresent: boolean;
 }
 
@@ -82,32 +37,26 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
   weeks,
   activeWeek,
   setActiveWeek,
+  cohortId,
   canPresent,
 }) => {
   const navigate = useNavigate();
-  const [showGDModal, setShowGDModal] = useState(false);
-  const [gdSlideIndex, setGdSlideIndex] = useState(0);
 
   const currentWeekData = weeks.find(w => w.week === activeWeek);
   const exerciseWeeks = useMemo(() => weeks.filter(w => w.exercise), [weeks]);
   const hasExercisesTab = exerciseWeeks.length > 0;
 
-  const allSlides = useMemo(() => {
-    if (!currentWeekData) return [];
-    const slides: { text: string; isBonus: boolean; attachments: ResolvedAttachment[] }[] = [];
-    currentWeekData.questions.forEach(q => slides.push({ text: q.text, isBonus: false, attachments: q.attachments }));
-    currentWeekData.bonusQuestions.forEach(q => slides.push({ text: q.text, isBonus: true, attachments: q.attachments }));
-    return slides;
-  }, [currentWeekData]);
-
-  const handleOpenGDModal = useCallback(() => {
-    setGdSlideIndex(0);
-    setShowGDModal(true);
-  }, []);
-
-  const handleCloseGDModal = useCallback(() => {
-    setShowGDModal(false);
-  }, []);
+  const handlePresent = (weekId: string, newTab = false) => {
+    const url = `/${cohortId}/present/${weekId}`;
+    if (newTab) {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    // Request fullscreen on this user gesture; client-side navigation keeps the
+    // same document, so the presentation page opens already in fullscreen.
+    document.documentElement.requestFullscreen?.().catch(() => { /* gesture/policy denied */ });
+    navigate(url);
+  };
 
   const activeChipSx = {
     bgcolor: '#ea580c',
@@ -262,25 +211,35 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#fb923c', fontSize: { xs: '1.5rem', md: '2rem' } }}>
                       {currentWeek.title ?? `Week ${currentWeek.week}`}
                     </Typography>
-                    {canPresent && currentWeek.questions.length > 0 && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<Presentation size={16} />}
-                        onClick={handleOpenGDModal}
-                        sx={{
-                          bgcolor: '#fb923c',
-                          '&:hover': { bgcolor: '#f97316' },
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          fontSize: '0.85rem',
-                          boxShadow: 'none',
-                          borderRadius: 2,
-                          px: 2,
-                        }}
-                      >
-                        Present GD Questions
-                      </Button>
+                    {canPresent && cohortId && currentWeek.questions.length > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<Presentation size={16} />}
+                          onClick={() => handlePresent(currentWeek.id)}
+                          sx={{
+                            bgcolor: '#fb923c',
+                            '&:hover': { bgcolor: '#f97316' },
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            boxShadow: 'none',
+                            borderRadius: 2,
+                            px: 2,
+                          }}
+                        >
+                          Present GD Questions
+                        </Button>
+                        <IconButton
+                          size="small"
+                          title="Open presentation in new tab"
+                          onClick={() => handlePresent(currentWeek.id, true)}
+                          sx={{ color: '#a1a1aa', border: '1px solid #3f3f46', borderRadius: 2, '&:hover': { color: '#fafafa', bgcolor: 'rgba(255,255,255,0.06)' } }}
+                        >
+                          <ExternalLink size={16} />
+                        </IconButton>
+                      </Box>
                     )}
                   </Box>
 
@@ -436,163 +395,6 @@ const InstructionsLayout: React.FC<InstructionsLayoutProps> = ({
         )}
       </Box>
 
-      {/* GD Questions PPT Modal — staff only */}
-      {canPresent && (
-        <Dialog
-          open={showGDModal}
-          onClose={handleCloseGDModal}
-          maxWidth="lg"
-          fullWidth
-          slotProps={{
-            backdrop: { sx: { backdropFilter: 'blur(8px)', bgcolor: 'rgba(0,0,0,0.75)' } },
-          }}
-          PaperProps={{
-            sx: {
-              bgcolor: '#111113',
-              backgroundImage: 'none',
-              borderRadius: 4,
-              border: '1px solid rgba(255,255,255,0.08)',
-              boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
-              minHeight: 520,
-              display: 'flex',
-              flexDirection: 'column',
-            },
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-              e.preventDefault();
-              setGdSlideIndex(prev => Math.min(prev + 1, allSlides.length - 1));
-            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              setGdSlideIndex(prev => Math.max(prev - 1, 0));
-            }
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ px: 3.5, pt: 3, pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box>
-              <Typography sx={{ fontWeight: 700, color: '#fafafa', fontSize: '1.6rem', letterSpacing: '-0.01em' }}>
-                GD Questions &mdash; Week {activeWeek}
-              </Typography>
-              <Typography sx={{ color: '#71717a', fontSize: '0.95rem', mt: 0.5 }}>
-                {allSlides.length > 0
-                  ? `${currentWeekData?.questions.length ?? 0} questions${(currentWeekData?.bonusQuestions.length ?? 0) > 0 ? ` + ${currentWeekData!.bonusQuestions.length} bonus` : ''}`
-                  : 'No questions available for this week'}
-              </Typography>
-            </Box>
-            <IconButton onClick={handleCloseGDModal} size="small" sx={{ color: '#52525b', '&:hover': { color: '#fafafa', bgcolor: 'rgba(255,255,255,0.06)' } }}>
-              <X size={18} />
-            </IconButton>
-          </Box>
-
-          {/* Slide Body */}
-          <DialogContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', px: { xs: 3, sm: 5 }, py: 4 }}>
-            {allSlides.length > 0 ? (
-              <Box sx={{ width: '100%', textAlign: 'center' }}>
-                {/* Bonus badge */}
-                {allSlides[gdSlideIndex]?.isBonus && (
-                  <Box sx={{
-                    display: 'inline-block',
-                    bgcolor: 'rgba(59,130,246,0.15)',
-                    color: '#60a5fa',
-                    px: 2, py: 0.5,
-                    borderRadius: 2,
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    mb: 2,
-                  }}>
-                    Bonus Question
-                  </Box>
-                )}
-
-                {/* Question number */}
-                <Typography sx={{
-                  color: allSlides[gdSlideIndex]?.isBonus ? '#60a5fa' : '#f97316',
-                  fontWeight: 700,
-                  fontSize: '1.25rem',
-                  mb: 2,
-                }}>
-                  {allSlides[gdSlideIndex]?.isBonus
-                    ? `Bonus Q${gdSlideIndex - (currentWeekData?.questions.length ?? 0) + 1}.`
-                    : `Q${gdSlideIndex + 1}.`}
-                </Typography>
-
-                {/* Question text */}
-                <Typography sx={{
-                  color: '#fafafa',
-                  fontSize: { xs: '1.3rem', sm: '1.65rem' },
-                  fontWeight: 400,
-                  lineHeight: 1.7,
-                  maxWidth: 800,
-                  mx: 'auto',
-                  whiteSpace: 'pre-line',
-                }}>
-                  {allSlides[gdSlideIndex]?.text}
-                </Typography>
-
-                {/* Attachments if present */}
-                {(allSlides[gdSlideIndex]?.attachments?.length ?? 0) > 0 && (
-                  <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                    {allSlides[gdSlideIndex].attachments.map((a) => <Attachment key={a.filename} {...a} />)}
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              <Typography sx={{ color: '#52525b', fontSize: '1.1rem' }}>
-                No questions available for this week.
-              </Typography>
-            )}
-          </DialogContent>
-
-          {/* Footer Navigation */}
-          {allSlides.length > 0 && (
-            <DialogActions sx={{
-              px: 3.5, pb: 3, pt: 1.5,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <Button
-                onClick={() => setGdSlideIndex(prev => Math.max(prev - 1, 0))}
-                disabled={gdSlideIndex === 0}
-                startIcon={<ChevronLeft size={16} />}
-                sx={{
-                  color: '#a1a1aa',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.85rem',
-                  '&:hover': { color: '#fafafa', bgcolor: 'rgba(255,255,255,0.04)' },
-                  '&.Mui-disabled': { color: '#3f3f46' },
-                }}
-              >
-                Prev
-              </Button>
-
-              <Typography sx={{ color: '#71717a', fontSize: '1rem', fontWeight: 500 }}>
-                {gdSlideIndex + 1} / {allSlides.length}
-              </Typography>
-
-              <Button
-                onClick={() => setGdSlideIndex(prev => Math.min(prev + 1, allSlides.length - 1))}
-                disabled={gdSlideIndex === allSlides.length - 1}
-                endIcon={<ChevronRight size={16} />}
-                sx={{
-                  color: '#a1a1aa',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.85rem',
-                  '&:hover': { color: '#fafafa', bgcolor: 'rgba(255,255,255,0.04)' },
-                  '&.Mui-disabled': { color: '#3f3f46' },
-                }}
-              >
-                Next
-              </Button>
-            </DialogActions>
-          )}
-        </Dialog>
-      )}
     </Box>
   );
 };

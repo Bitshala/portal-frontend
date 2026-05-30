@@ -56,6 +56,7 @@ const MyCohortInstructions: React.FC = () => {
       weeks={weeks}
       activeWeek={activeWeek}
       setActiveWeek={setActiveWeek}
+      cohortId={cohortId}
       canPresent={isAdminOrTA}
     />
   );
