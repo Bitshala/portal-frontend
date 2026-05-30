@@ -1,4 +1,7 @@
 import { CohortType } from '../types/enums.ts';
+import apiService from '../services/apiService.ts';
+import type { CohortWeekQuestion, GetCohortResponseDto } from '../types/api.ts';
+import type { RenderQuestion, RenderWeek } from '../types/instructions.ts';
 
 export const cohortTypeToName = (type: CohortType) : string => {
   switch (type) {
@@ -42,3 +45,34 @@ export const formatCohortDate = (isoDate: string) : string => {
     day: 'numeric',
   });
 }
+
+const toRenderQuestion = (
+  cohortId: string,
+  question: CohortWeekQuestion,
+): RenderQuestion => ({
+  text: question.text,
+  attachments: question.attachments.map((filename) => ({
+    filename,
+    url: apiService.getAttachmentUrl(cohortId, filename),
+  })),
+});
+
+// Maps an API cohort into the render model the instruction sheet consumes.
+// Only GROUP_DISCUSSION weeks are surfaced (orientation/graduation are excluded),
+// and question attachment filenames are resolved to authenticated stream URLs.
+export const toRenderWeeks = (cohort: GetCohortResponseDto): RenderWeek[] =>
+  cohort.weeks
+    .filter((week) => week.type === 'GROUP_DISCUSSION')
+    .slice()
+    .sort((a, b) => a.week - b.week)
+    .map((week) => ({
+      week: week.week,
+      title: week.title,
+      readingMaterial: week.readingMaterial,
+      activity: week.activity,
+      questions: week.questions.map((q) => toRenderQuestion(cohort.id, q)),
+      bonusQuestions: week.bonusQuestions.map((q) => toRenderQuestion(cohort.id, q)),
+      exercise: week.exercise,
+      classroomAssignmentUrl: week.classroomAssignmentUrl,
+      classroomInviteLink: week.classroomInviteLink,
+    }));
