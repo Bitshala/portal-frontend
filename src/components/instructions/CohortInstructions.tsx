@@ -84,7 +84,7 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
     [cohortId],
   );
 
-  // Merge API week data (questions, bonusQuestion, classroomUrl, classroomInviteLink) into static content
+  // Merge API week data (questions, bonusQuestion, classroomAssignmentUrl, classroomInviteLink) into static content
   const mergedWeeklyContent = React.useMemo(() => {
     const apiWeeks = apiCohort?.weeks;
     if (!apiWeeks || apiWeeks.length === 0) return weeklyContent;
@@ -97,7 +97,7 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
         ...staticWeek,
         gdQuestions: apiWeek.questions.length > 0 ? toRichQuestions(apiWeek.questions) : staticWeek.gdQuestions,
         bonusQuestions: apiWeek.bonusQuestion.length > 0 ? toRichQuestions(apiWeek.bonusQuestion) : staticWeek.bonusQuestions,
-        classroomUrl: apiWeek.classroomUrl,
+        classroomUrl: apiWeek.classroomAssignmentUrl,
         classroomInviteLink: apiWeek.classroomInviteLink,
       };
     });

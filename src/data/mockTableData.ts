@@ -66,12 +66,12 @@ export function generateMockTableData(weekNumber: number, count = 16): TableRowD
 }
 
 export const mockWeeks = [
-  { id: 'mock-week-1', week: 1, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What is Bitcoin?'], bonusQuestion: ['Explain PoW'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-2', week: 2, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What are UTXOs?'], bonusQuestion: ['Explain Merkle trees'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-3', week: 3, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Explain Script'], bonusQuestion: ['SegWit benefits'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-4', week: 4, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What is a soft fork?'], bonusQuestion: ['Taproot overview'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-5', week: 5, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Lightning basics'], bonusQuestion: ['HTLC routing'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-6', week: 6, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['P2P networking'], bonusQuestion: ['Eclipse attacks'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-7', week: 7, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Mining pools'], bonusQuestion: ['Stratum V2'], classroomUrl: null, classroomInviteLink: null },
-  { id: 'mock-week-8', week: 8, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['Bitcoin privacy'], bonusQuestion: ['CoinJoin analysis'], classroomUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-1', week: 1, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What is Bitcoin?'], bonusQuestion: ['Explain PoW'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-2', week: 2, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What are UTXOs?'], bonusQuestion: ['Explain Merkle trees'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-3', week: 3, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Explain Script'], bonusQuestion: ['SegWit benefits'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-4', week: 4, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['What is a soft fork?'], bonusQuestion: ['Taproot overview'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-5', week: 5, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Lightning basics'], bonusQuestion: ['HTLC routing'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-6', week: 6, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['P2P networking'], bonusQuestion: ['Eclipse attacks'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-7', week: 7, type: 'GROUP_DISCUSSION', hasExercise: false, questions: ['Mining pools'], bonusQuestion: ['Stratum V2'], classroomAssignmentUrl: null, classroomInviteLink: null },
+  { id: 'mock-week-8', week: 8, type: 'GROUP_DISCUSSION', hasExercise: true, questions: ['Bitcoin privacy'], bonusQuestion: ['CoinJoin analysis'], classroomAssignmentUrl: null, classroomInviteLink: null },
 ];

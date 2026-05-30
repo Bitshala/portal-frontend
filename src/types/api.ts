@@ -29,7 +29,7 @@ export interface CohortWeekQuestion {
 export interface UpdateCohortWeekRequestDto {
   questions?: { text: string; attachments?: string[] }[] | undefined;
   bonusQuestion?: { text: string; attachments?: string[] }[] | undefined;
-  classroomUrl?: string | undefined;
+  classroomAssignmentUrl?: string | undefined;
   classroomInviteLink?: string | undefined;
   scheduledDate?: string | undefined;
 }
@@ -45,7 +45,7 @@ export interface GetCohortWeekResponseDto {
   hasExercise: boolean;
   questions: CohortWeekQuestion[];
   bonusQuestion: CohortWeekQuestion[];
-  classroomUrl: string | null;
+  classroomAssignmentUrl: string | null;
   classroomInviteLink: string | null;
   scheduledDate: string | null;
 }

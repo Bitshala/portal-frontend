@@ -36,7 +36,7 @@ interface Week {
   hasExercise: boolean;
   questions: { text: string; attachments: string[] }[];
   bonusQuestion: { text: string; attachments: string[] }[];
-  classroomUrl: string;
+  classroomAssignmentUrl: string;
   classroomInviteLink: string;
 }
 

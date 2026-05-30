@@ -71,7 +71,7 @@ const MyCohortInstructions: React.FC = () => {
         ...staticWeek,
         gdQuestions: apiWeek.questions.length > 0 ? toRichQuestions(cohortData.id, apiWeek.questions) : staticWeek.gdQuestions,
         bonusQuestions: apiWeek.bonusQuestion.length > 0 ? toRichQuestions(cohortData.id, apiWeek.bonusQuestion) : staticWeek.bonusQuestions,
-        classroomUrl: apiWeek.classroomUrl,
+        classroomUrl: apiWeek.classroomAssignmentUrl,
         classroomInviteLink: apiWeek.classroomInviteLink,
       };
     });
