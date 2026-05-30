@@ -104,7 +104,7 @@ const GeneralInstructions: React.FC = () => {
     );
   }
 
-  return <GeneralInstructionsContent cohortName="Bitshala" />;
+  return <GeneralInstructionsContent />;
 };
 
 export default GeneralInstructions;

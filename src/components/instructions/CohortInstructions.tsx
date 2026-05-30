@@ -9,24 +9,16 @@ import {
 import { AlertTriangle } from 'lucide-react';
 import { useUser } from '../../hooks/userHooks';
 import { useMyScores } from '../../hooks/scoreHooks';
-import { useMyCohorts, useCohorts, useSyncCohortQuestions } from '../../hooks/cohortHooks';
-import { UserRole } from '../../types/enums';
+import { useMyCohorts, useCohorts } from '../../hooks/cohortHooks';
+import { UserRole, CohortType } from '../../types/enums';
+import { cohortTypeToName, toRenderWeeks } from '../../helpers/cohortHelpers';
 import InstructionsLayout from './InstructionsLayout';
-import type { WeekContent, RichQuestion } from '../../types/instructions';
-import type { GetCohortWeekResponseDto, CohortWeekQuestion } from '../../types/api';
-import apiService from '../../services/apiService';
 
 interface CohortInstructionsProps {
   cohortType: 'MASTERING_BITCOIN' | 'LEARNING_BITCOIN_FROM_COMMAND_LINE' | 'MASTERING_LIGHTNING_NETWORK' | 'BITCOIN_PROTOCOL_DEVELOPMENT' | 'PROGRAMMING_BITCOIN';
-  cohortName: string;
-  weeklyContent: WeekContent[];
 }
 
-const CohortInstructions: React.FC<CohortInstructionsProps> = ({
-  cohortType,
-  cohortName,
-  weeklyContent,
-}) => {
+const CohortInstructions: React.FC<CohortInstructionsProps> = ({ cohortType }) => {
   const navigate = useNavigate();
   const [activeWeek, setActiveWeek] = useState<number | 'links' | 'exercises'>(1);
   const [error, setError] = useState<string | null>(null);
@@ -42,66 +34,11 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
     (record) => record.cohortType === cohortType
   ) ?? false);
 
-  const canViewBonusQuestions = isAdminOrTA;
-
-  const myCohort = myCohortsData?.records
+  // For Admin/TA: use /cohorts, for Students: use /cohorts/me
+  const source = isAdminOrTA ? allCohortsData : myCohortsData;
+  const apiCohort = source?.records
     .filter((c) => c.type === cohortType)
     .sort((a, b) => b.season - a.season)[0];
-
-  // For Admin/TA: use /cohorts, for Students: use /cohorts/me
-  const apiCohort = isAdminOrTA
-    ? allCohortsData?.records
-        .filter((c) => c.type === cohortType)
-        .sort((a, b) => b.season - a.season)[0]
-    : myCohort;
-
-  const seasonNumber = apiCohort?.season ?? myCohort?.season;
-
-  const cohortId = apiCohort?.id;
-
-  const { mutate: syncQuestions } = useSyncCohortQuestions();
-
-  // Auto-sync questions from config on page load for admins/TAs
-  useEffect(() => {
-    if (isAdminOrTA && cohortId) {
-      syncQuestions({ cohortId });
-    }
-  }, [cohortId, isAdminOrTA]);
-
-  const toRichQuestions = React.useCallback(
-    (questions: CohortWeekQuestion[]): (string | RichQuestion)[] =>
-      questions.map((q) =>
-        q.attachments.length > 0 && cohortId
-          ? {
-              text: q.text,
-              attachments: q.attachments.map((filename) => ({
-                filename,
-                url: apiService.getAttachmentUrl(cohortId, filename),
-              })),
-            }
-          : q.text,
-      ),
-    [cohortId],
-  );
-
-  // Merge API week data (questions, bonusQuestion, classroomAssignmentUrl, classroomInviteLink) into static content
-  const mergedWeeklyContent = React.useMemo(() => {
-    const apiWeeks = apiCohort?.weeks;
-    if (!apiWeeks || apiWeeks.length === 0) return weeklyContent;
-
-    return weeklyContent.map((staticWeek) => {
-      const apiWeek = apiWeeks.find((w: GetCohortWeekResponseDto) => w.week === staticWeek.week);
-      if (!apiWeek) return staticWeek;
-
-      return {
-        ...staticWeek,
-        gdQuestions: apiWeek.questions.length > 0 ? toRichQuestions(apiWeek.questions) : staticWeek.gdQuestions,
-        bonusQuestions: apiWeek.bonusQuestion.length > 0 ? toRichQuestions(apiWeek.bonusQuestion) : staticWeek.bonusQuestions,
-        classroomUrl: apiWeek.classroomAssignmentUrl,
-        classroomInviteLink: apiWeek.classroomInviteLink,
-      };
-    });
-  }, [weeklyContent, apiCohort, toRichQuestions]);
 
   const isLoading = isLoadingUser || isLoadingScores || isLoadingCohorts || isLoadingAllCohorts;
 
@@ -155,13 +92,12 @@ const CohortInstructions: React.FC<CohortInstructionsProps> = ({
 
   return (
     <InstructionsLayout
-      cohortName={cohortName}
-      cohortType={cohortType}
-      weeklyContent={mergedWeeklyContent}
+      displayName={apiCohort?.displayName ?? cohortTypeToName(cohortType as CohortType)}
+      links={apiCohort?.links ?? []}
+      weeks={apiCohort ? toRenderWeeks(apiCohort) : []}
       activeWeek={activeWeek}
       setActiveWeek={setActiveWeek}
-      canViewBonusQuestions={canViewBonusQuestions}
-      seasonNumber={seasonNumber}
+      canPresent={isAdminOrTA}
     />
   );
 };
