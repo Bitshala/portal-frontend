@@ -1,43 +1,41 @@
-import { StrictMode } from 'react';
+import { StrictMode, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { queryClient } from './http/queryClient.ts';
-import Login from './pages/Login.tsx';
-import Home from './pages/Home.tsx';
-import TableView from './pages/TableView.tsx';
-import { CohortSelection } from './pages/CohortSelection.tsx';
-import { ResultPage } from './pages/ResultPage.tsx';
-// import StudentDetailPage from './StudentsPage.tsx';
-import StudentDetailPage from './pages/StudentDetailPage.tsx';
+import { ProtectedRoute } from './components/ProtectedRoute.tsx';
+import { UserRole } from './types/enums.ts';
+import Layout from './components/Layout.tsx';
 
 import '@fontsource/sora';
 import 'virtual:uno.css';
 
-
-import WeekSelector from './pages/Students/weekSelector.tsx';
-import StudentCohortSelector from './pages/Students/studentCohortSelector.tsx';
-
-import MBInstructions from './pages/Students/MBInstructions.tsx';
-import LBTCLInstructions from './pages/Students/LBTCLInstructions.tsx';
-import LNInstructions from './pages/Students/LNInstructions.tsx';
-import BPDInstructions from './pages/Students/BPDInstructions.tsx';
-import PBInstructions from './pages/Students/PBInstructions.tsx';
-import GeneralInstructions from './pages/Students/GeneralInstructions.tsx';
-import StudentProfileData from './components/student/StudentProfileData.tsx';
-
-import MyError from './pages/404error.tsx';
-import MyStudentDashboard from './pages/myProfile/myStudentDashboard.tsx';
-import ProfilePage from './pages/myProfile/profilePage.tsx';
-import MyCohortInstructions from './pages/myProfile/myCohortInstructions.tsx';
-import CohortFeedback from './pages/CohortFeedback.tsx';
-import AdminPage from './pages/admin/page.tsx';
-import FeedbackAdmin from './pages/admin/FeedbackAdmin.tsx';
-import CohortMetrics from './pages/CohortMetrics.tsx';
-import { ProtectedRoute } from './components/ProtectedRoute.tsx';
-import { UserRole } from './types/enums.ts';
-import Layout from './components/Layout.tsx';
+// Route components are lazy-loaded so each page ships as its own chunk and is
+// fetched on demand, keeping the initial bundle small. Suspense fallback lives in Layout.
+const Login = lazy(() => import('./pages/Login.tsx'));
+const Home = lazy(() => import('./pages/Home.tsx'));
+const TableView = lazy(() => import('./pages/TableView.tsx'));
+const CohortSelection = lazy(() => import('./pages/CohortSelection.tsx').then((m) => ({ default: m.CohortSelection })));
+const ResultPage = lazy(() => import('./pages/ResultPage.tsx').then((m) => ({ default: m.ResultPage })));
+const StudentDetailPage = lazy(() => import('./pages/StudentDetailPage.tsx'));
+const WeekSelector = lazy(() => import('./pages/Students/weekSelector.tsx'));
+const StudentCohortSelector = lazy(() => import('./pages/Students/studentCohortSelector.tsx'));
+const MBInstructions = lazy(() => import('./pages/Students/MBInstructions.tsx'));
+const LBTCLInstructions = lazy(() => import('./pages/Students/LBTCLInstructions.tsx'));
+const LNInstructions = lazy(() => import('./pages/Students/LNInstructions.tsx'));
+const BPDInstructions = lazy(() => import('./pages/Students/BPDInstructions.tsx'));
+const PBInstructions = lazy(() => import('./pages/Students/PBInstructions.tsx'));
+const GeneralInstructions = lazy(() => import('./pages/Students/GeneralInstructions.tsx'));
+const StudentProfileData = lazy(() => import('./components/student/StudentProfileData.tsx'));
+const MyError = lazy(() => import('./pages/404error.tsx'));
+const MyStudentDashboard = lazy(() => import('./pages/myProfile/myStudentDashboard.tsx'));
+const ProfilePage = lazy(() => import('./pages/myProfile/profilePage.tsx'));
+const MyCohortInstructions = lazy(() => import('./pages/myProfile/myCohortInstructions.tsx'));
+const CohortFeedback = lazy(() => import('./pages/CohortFeedback.tsx'));
+const AdminPage = lazy(() => import('./pages/admin/page.tsx'));
+const FeedbackAdmin = lazy(() => import('./pages/admin/FeedbackAdmin.tsx'));
+const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
 
 const router = createBrowserRouter([
   {
