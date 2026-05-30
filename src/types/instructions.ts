@@ -16,6 +16,8 @@ export interface RenderQuestion {
 }
 
 export interface RenderWeek {
+  // Cohort week id (GetCohortWeekResponseDto.id) — used to address the week in URLs.
+  id: string;
   week: number;
   title: string | null;
   readingMaterial: ReadingMaterialLink[];

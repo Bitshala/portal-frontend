@@ -66,6 +66,7 @@ export const toRenderWeeks = (cohort: GetCohortResponseDto): RenderWeek[] =>
     .slice()
     .sort((a, b) => a.week - b.week)
     .map((week) => ({
+      id: week.id,
       week: week.week,
       title: week.title,
       readingMaterial: week.readingMaterial,
