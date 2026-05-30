@@ -1,6 +1,8 @@
+import zlib from 'node:zlib'
 import UnoCSS from 'unocss/vite'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { compression, defineAlgorithm } from 'vite-plugin-compression2'
 
 
 // https://vite.dev/config/
@@ -8,6 +10,19 @@ export default defineConfig({
   plugins: [
     UnoCSS(),
     react(),
+    // Emit .br (brotli q11) and .gz (level 9) alongside assets at build time, so
+    // nginx serves them via brotli_static/gzip_static with zero per-request CPU.
+    // Originals are kept for clients that support neither.
+    compression({
+      threshold: 1024,
+      skipIfLargerOrEqual: true,
+      algorithms: [
+        defineAlgorithm('brotliCompress', {
+          params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 },
+        }),
+        defineAlgorithm('gzip', { level: 9 }),
+      ],
+    }),
   ],
   build: {
     rollupOptions: {
