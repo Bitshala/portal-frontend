@@ -94,20 +94,6 @@ export interface GetCohortResponseDto {
   weeks: GetCohortWeekResponseDto[];
 }
 
-// --- General Instructions (GET /cohorts/instructions/general) ---
-
-export interface GeneralInstructionsSection {
-  key: string;
-  heading: string;
-  body: string;
-}
-
-export interface GeneralInstructionsResponseDto {
-  title: string;
-  intro: string;
-  sections: GeneralInstructionsSection[];
-}
-
 export interface UserCohortWaitlistResponseDto {
   cohortWaitlist: CohortType[];
 }
