@@ -14,6 +14,7 @@ import type {
   UpdateCohortWeekRequestDto,
   JoinWaitlistRequestDto,
   UserCohortWaitlistResponseDto,
+  GeneralInstructionsResponseDto,
   // Scores
   GetUsersScoresResponseDto,
   ListScoresForCohortAndWeekResponseDto,
@@ -176,12 +177,23 @@ class ApiService {
     });
   };
 
-  public syncCohortQuestions = async (cohortId: string): Promise<void> => {
+  // Destructively re-applies the cohort's config file (questions, bonus questions,
+  // titles, reading material, activity, exercises, links). TA/Admin only.
+  public syncCohortFromConfig = async (cohortId: string): Promise<void> => {
     await this.request<void>({
       headers: this.getRequestHeaders(),
       method: 'POST',
-      url: `/cohorts/${cohortId}/sync-questions`,
+      url: `/cohorts/${cohortId}/sync-from-config`,
     });
+  };
+
+  public getGeneralInstructions = async (): Promise<GeneralInstructionsResponseDto> => {
+    const { data } = await this.request<GeneralInstructionsResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/cohorts/instructions/general',
+    });
+    return data;
   };
 
   public getAttachmentUrl = (cohortId: string, filename: string): string => {

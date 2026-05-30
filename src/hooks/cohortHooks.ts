@@ -9,6 +9,7 @@ import type {
   UpdateCohortWeekRequestDto,
   JoinWaitlistRequestDto,
   UserCohortWaitlistResponseDto,
+  GeneralInstructionsResponseDto,
 } from '../types/api.ts';
 
 // ===============
@@ -34,6 +35,14 @@ export const useMyCohorts = createUseQuery<
 export const useCohort = createUseQuery<GetCohortResponseDto, string>(
   (cohortId) => ['cohort', cohortId],
   (cohortId) => () => apiService.getCohort(cohortId),
+);
+
+export const useGeneralInstructions = createUseQuery<
+  GeneralInstructionsResponseDto,
+  void
+>(
+  () => ['cohorts', 'instructions', 'general'],
+  () => apiService.getGeneralInstructions,
 );
 
 export const useMyWaitlistStatus = createUseQuery<
@@ -82,8 +91,8 @@ export const useUpdateCohortWeek = createUseMutation<
   },
 );
 
-export const useSyncCohortQuestions = createUseMutation<void, { cohortId: string }>(
-  ({ cohortId }) => apiService.syncCohortQuestions(cohortId),
+export const useSyncCohortFromConfig = createUseMutation<void, { cohortId: string }>(
+  ({ cohortId }) => apiService.syncCohortFromConfig(cohortId),
   {
     queryInvalidation: async ({ variables: { cohortId }, queryClient }) => {
       await useCohort.invalidate(cohortId);

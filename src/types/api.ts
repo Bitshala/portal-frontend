@@ -26,25 +26,53 @@ export interface CohortWeekQuestion {
   attachments: string[];
 }
 
+// Instruction-sheet content is no longer edited via the API — it comes from the
+// course config files and is applied with POST /cohorts/:id/sync-from-config.
+// PATCH /cohorts/weeks/:id now only carries operational (non-config) fields.
 export interface UpdateCohortWeekRequestDto {
-  questions?: { text: string; attachments?: string[] }[] | undefined;
-  bonusQuestion?: { text: string; attachments?: string[] }[] | undefined;
-  classroomAssignmentUrl?: string | undefined;
-  classroomInviteLink?: string | undefined;
-  scheduledDate?: string | undefined;
+  scheduledDate?: string;
+  classroomAssignmentId?: string;
 }
 
 export interface JoinWaitlistRequestDto {
   type: CohortType;
 }
 
+// --- Instruction-sheet content shapes (served by GET /cohorts/:id) ---
+
+export interface ReadingMaterialLink {
+  label: string;
+  url: string;
+}
+
+// Links are pre-filtered by role server-side; the UI renders exactly what it receives.
+export interface CohortQuickLink {
+  label: string;
+  url: string;
+}
+
+// Node-setup exercise for a single week (drives the "Exercises" tab), or null.
+export interface CohortWeekExercise {
+  title: string;
+  concepts: string;
+  problem: string;
+  expectedOutput: string[];
+}
+
+export type CohortWeekType = 'ORIENTATION' | 'GROUP_DISCUSSION' | 'GRADUATION';
+
 export interface GetCohortWeekResponseDto {
   id: string;
   week: number;
-  type: string;
+  type: CohortWeekType;
   hasExercise: boolean;
+  title: string | null;
   questions: CohortWeekQuestion[];
-  bonusQuestion: CohortWeekQuestion[];
+  // Empty ([]) for STUDENTs — bonus content is role-filtered server-side.
+  bonusQuestions: CohortWeekQuestion[];
+  readingMaterial: ReadingMaterialLink[];
+  activity: string | null;
+  exercise: CohortWeekExercise | null;
   classroomAssignmentUrl: string | null;
   classroomInviteLink: string | null;
   scheduledDate: string | null;
@@ -53,11 +81,31 @@ export interface GetCohortWeekResponseDto {
 export interface GetCohortResponseDto {
   id: string;
   type: CohortType;
+  displayName: string;
   season: number;
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  // Graded GitHub-Classroom flag — NOT the Exercises tab (that is driven per-week).
+  hasExercises: boolean;
+  classroomId: string | null;
+  // Already role-filtered server-side.
+  links: CohortQuickLink[];
   weeks: GetCohortWeekResponseDto[];
+}
+
+// --- General Instructions (GET /cohorts/instructions/general) ---
+
+export interface GeneralInstructionsSection {
+  key: string;
+  heading: string;
+  body: string;
+}
+
+export interface GeneralInstructionsResponseDto {
+  title: string;
+  intro: string;
+  sections: GeneralInstructionsSection[];
 }
 
 export interface UserCohortWaitlistResponseDto {
