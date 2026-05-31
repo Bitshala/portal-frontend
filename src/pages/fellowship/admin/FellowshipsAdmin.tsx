@@ -67,7 +67,7 @@ const AVATAR_TINTS = [
 ];
 const tintFor = (seed: string) => AVATAR_TINTS[hash(seed) % AVATAR_TINTS.length];
 
-const handleFor = (f: GetFellowshipResponseDto): string => {
+const handleFor = (f: GetFellowshipResponseDto): string | null => {
   const gh = f.githubProfile;
   if (gh) {
     const m = gh.match(/github\.com\/([^/\s]+)/i);
@@ -75,7 +75,7 @@ const handleFor = (f: GetFellowshipResponseDto): string => {
     if (gh.startsWith('@')) return gh;
   }
   if (f.userEmail) return `@${f.userEmail.split('@')[0]}`;
-  return '—';
+  return null;
 };
 
 const monthShort = (m: number) =>
@@ -378,12 +378,14 @@ const FellowshipRow = ({
           >
             {fellowship.userName ?? '—'}
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.7rem' }}
-          >
-            {handleFor(fellowship)}
-          </Typography>
+          {handleFor(fellowship) && (
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.7rem' }}
+            >
+              {handleFor(fellowship)}
+            </Typography>
+          )}
         </Box>
       </Stack>
 
@@ -411,7 +413,7 @@ const FellowshipRow = ({
       >
         {fellowship.projectName || (
           <Box component="span" sx={{ color: 'text.secondary' }}>
-            Awaiting onboarding
+            Project name not provided
           </Box>
         )}
       </Typography>

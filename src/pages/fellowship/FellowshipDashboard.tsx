@@ -62,6 +62,9 @@ const monthRange = (startDate: string, endDate: string): { month: number; year: 
   const end = new Date(endDate);
   const out: { month: number; year: number }[] = [];
   const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  // If the fellowship starts in the second half of the month, that month is too
+  // short to report on — the first report period is the next full month.
+  if (start.getDate() > 20) cursor.setMonth(cursor.getMonth() + 1);
   const stop = new Date(end.getFullYear(), end.getMonth(), 1);
   while (cursor <= stop) {
     out.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });

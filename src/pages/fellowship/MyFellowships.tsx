@@ -38,6 +38,9 @@ const monthRange = (startDate: string, endDate: string): MonthSlot[] => {
   const end = new Date(endDate);
   const out: MonthSlot[] = [];
   const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  // If the fellowship starts in the second half of the month, that month is too
+  // short to report on — the first report period is the next full month.
+  if (start.getDate() > 15) cursor.setMonth(cursor.getMonth() + 1);
   const stop = new Date(end.getFullYear(), end.getMonth(), 1);
   let i = 0;
   while (cursor <= stop) {
@@ -130,6 +133,18 @@ const MyFellowships = () => {
   const isLoading =
     fellowshipsQuery.isLoading || applicationsQuery.isLoading || reportsQuery.isLoading;
 
+  // Before a fellowship is awarded the page is really just the user's applications,
+  // so the header doubles as the section title (no redundant inner heading).
+  const applicationsOnly = !activeFellowship && inProgressApps.length > 0;
+  const pageTitle = applicationsOnly
+    ? inProgressApps.length > 1
+      ? 'Your fellowship applications'
+      : 'Your fellowship application'
+    : 'My fellowship';
+  const pageSubtitle = applicationsOnly
+    ? 'Continue a draft or check the status of a submitted application.'
+    : 'Track progress, submit reports, request payouts.';
+
   if (selectedAppId) {
     return (
       <FellowshipPageLayout hideIcon>
@@ -139,11 +154,7 @@ const MyFellowships = () => {
   }
 
   return (
-    <FellowshipPageLayout
-      title="My fellowship"
-      subtitle="Track progress, submit reports, request payouts."
-      hideIcon
-    >
+    <FellowshipPageLayout title={pageTitle} subtitle={pageSubtitle} hideIcon>
       {isLoading && <CircularProgress size={22} />}
 
       {resubmitError && (
@@ -417,7 +428,8 @@ const ActiveFellowshipCard = ({
               </Typography>
             </Stack>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-              {fellowship.projectName || 'Awaiting onboarding'}
+              {fellowship.projectName ||
+                `${fellowship.type.charAt(0)}${fellowship.type.slice(1).toLowerCase()} fellowship`}
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               {fellowship.startDate && (
@@ -628,17 +640,20 @@ const reportStatusFor = (
   slot: MonthSlot,
   report: GetFellowshipReportResponseDto | undefined,
   now: Date,
-): FellowshipReportStatus | 'DUE' | 'UPCOMING' => {
+): FellowshipReportStatus | 'DUE' | 'UPCOMING' | 'OVERDUE' => {
   if (report) return report.status;
   const due = dueDateFor(slot.month, slot.year);
   const slotStart = new Date(slot.year, slot.month - 1, 1);
   if (now < slotStart) return 'UPCOMING';
-  return now > due ? FellowshipReportStatus.REJECTED : 'DUE';
+  // Unfiled past its due date is overdue — not "rejected" (that's a reviewer action).
+  return now > due ? 'OVERDUE' : 'DUE';
 };
 
-const reportStatusChip = (status: FellowshipReportStatus | 'DUE' | 'UPCOMING') => {
+const reportStatusChip = (status: FellowshipReportStatus | 'DUE' | 'UPCOMING' | 'OVERDUE') => {
   if (status === 'DUE')
     return { label: 'Due', color: '#fb923c', bg: 'rgba(251,146,60,0.12)' };
+  if (status === 'OVERDUE')
+    return { label: 'Overdue', color: '#f87171', bg: 'rgba(248,113,113,0.12)' };
   if (status === 'UPCOMING')
     return { label: 'Upcoming', color: '#a1a1aa', bg: 'rgba(161,161,170,0.10)' };
   const map: Record<string, { color: string; bg: string }> = {
@@ -748,13 +763,14 @@ const MonthlyReportsPanel = ({
           const subDate = report
             ? formatDateShort(new Date(report.updatedAt))
             : formatDateShort(dueDateFor(slot.month, slot.year));
-          const clickable = !!report || (isActive && status === 'DUE');
+          const writable = isActive && (status === 'DUE' || status === 'OVERDUE');
+          const clickable = !!report || writable;
           return (
             <Box
               key={`${slot.year}-${slot.month}`}
               onClick={() => {
                 if (report) onOpenReport(report.id);
-                else if (isActive && status === 'DUE') onNewReport(slot.month, slot.year);
+                else if (writable) onNewReport(slot.month, slot.year);
               }}
               sx={{
                 display: 'flex',
@@ -831,81 +847,68 @@ const InProgressApplicationsPanel = ({
 }) => (
   <Box
     sx={{
-      border: '1px solid',
+      borderTop: '1px solid',
       borderColor: 'divider',
-      borderRadius: 0.75,
-      bgcolor: 'background.paper',
-      p: { xs: 2.5, md: 3 },
       mb: 2.5,
     }}
   >
-    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-      Your applications
-    </Typography>
-    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-      Continue a draft or check the status of a submitted application.
-    </Typography>
-
-    <Stack spacing={1.25}>
-      {applications.map((app) => {
-        const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
-        return (
-          <Box
-            key={app.id}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 1.5,
-              px: 1.75,
-              py: 1.5,
-              borderRadius: 0.6,
-              border: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'rgba(255,255,255,0.025)',
-            }}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                {app.type.charAt(0) + app.type.slice(1).toLowerCase()} fellowship
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem' }}
-              >
-                {isDraft
-                  ? `Draft · updated ${formatDateShort(new Date(app.updatedAt))}`
-                  : `Submitted ${formatDateShort(new Date(app.updatedAt))} · under review`}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-              <StatusChip status={app.status} />
-              {isDraft ? (
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={<FileText size={14} />}
-                  onClick={() => onContinue(app.id)}
-                  sx={{ whiteSpace: 'nowrap' }}
-                >
-                  Continue draft
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<Eye size={14} />}
-                  onClick={() => onView(app.id)}
-                  sx={{ whiteSpace: 'nowrap', color: 'text.primary', borderColor: 'divider' }}
-                >
-                  View
-                </Button>
-              )}
-            </Stack>
+    {applications.map((app) => {
+      const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
+      return (
+        <Box
+          key={app.id}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            py: 1.75,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            transition: 'background-color 0.12s',
+            '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' },
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+              {app.type.charAt(0) + app.type.slice(1).toLowerCase()} fellowship
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem' }}
+            >
+              {isDraft
+                ? `Draft · updated ${formatDateShort(new Date(app.updatedAt))}`
+                : `Submitted ${formatDateShort(new Date(app.updatedAt))} · under review`}
+            </Typography>
           </Box>
-        );
-      })}
-    </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexShrink: 0 }}>
+            <StatusChip status={app.status} />
+            {isDraft ? (
+              <Button
+                size="small"
+                variant="text"
+                startIcon={<FileText size={14} />}
+                onClick={() => onContinue(app.id)}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Continue draft
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="text"
+                startIcon={<Eye size={14} />}
+                onClick={() => onView(app.id)}
+                sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}
+              >
+                View
+              </Button>
+            )}
+          </Stack>
+        </Box>
+      );
+    })}
   </Box>
 );
 
