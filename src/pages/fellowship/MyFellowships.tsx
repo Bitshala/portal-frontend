@@ -91,6 +91,20 @@ const MyFellowships = () => {
     [applications],
   );
 
+  // Drafts (not yet submitted) and submitted-but-pending applications. These have
+  // no fellowship yet, so without this they'd be invisible — leaving the user stuck
+  // on "you already have a draft" with nowhere to resume it. CHANGES_REQUESTED has
+  // its own banner above, so it's excluded here.
+  const inProgressApps = useMemo(
+    () =>
+      applications.filter(
+        (a) =>
+          a.status === FellowshipApplicationStatus.DRAFT ||
+          a.status === FellowshipApplicationStatus.SUBMITTED,
+      ),
+    [applications],
+  );
+
   const [resubmitError, setResubmitError] = useState<string | null>(null);
 
   const handleResubmit = async (id: string) => {
@@ -149,9 +163,20 @@ const MyFellowships = () => {
         />
       )}
 
-      {!isLoading && !activeFellowship && (
-        <EmptyState onApply={() => navigate('/fellowship/apply')} />
+      {!isLoading && !activeFellowship && inProgressApps.length > 0 && (
+        <InProgressApplicationsPanel
+          applications={inProgressApps}
+          onContinue={(id) => navigate(`/fellowship/apply?appId=${id}`)}
+          onView={setSelectedAppId}
+        />
       )}
+
+      {!isLoading &&
+        !activeFellowship &&
+        !changesRequestedApp &&
+        inProgressApps.length === 0 && (
+          <EmptyState onApply={() => navigate('/fellowship/apply')} />
+        )}
 
       {!isLoading && activeFellowship && (
         <Stack spacing={2.5}>
@@ -792,6 +817,99 @@ const MonthlyReportsPanel = ({
 };
 
 // ---- Past applications panel ----
+
+// ---- In-progress applications (draft / pending) ----
+
+const InProgressApplicationsPanel = ({
+  applications,
+  onContinue,
+  onView,
+}: {
+  applications: GetFellowshipApplicationResponseDto[];
+  onContinue: (id: string) => void;
+  onView: (id: string) => void;
+}) => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.75,
+      bgcolor: 'background.paper',
+      p: { xs: 2.5, md: 3 },
+      mb: 2.5,
+    }}
+  >
+    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+      Your applications
+    </Typography>
+    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+      Continue a draft or check the status of a submitted application.
+    </Typography>
+
+    <Stack spacing={1.25}>
+      {applications.map((app) => {
+        const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
+        return (
+          <Box
+            key={app.id}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1.5,
+              px: 1.75,
+              py: 1.5,
+              borderRadius: 0.6,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'rgba(255,255,255,0.025)',
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                {app.type.charAt(0) + app.type.slice(1).toLowerCase()} fellowship
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem' }}
+              >
+                {isDraft
+                  ? `Draft · updated ${formatDateShort(new Date(app.updatedAt))}`
+                  : app.submittedAt
+                    ? `Submitted ${formatDateShort(new Date(app.submittedAt))} · under review`
+                    : 'Under review'}
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+              <StatusChip status={app.status} />
+              {isDraft ? (
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<FileText size={14} />}
+                  onClick={() => onContinue(app.id)}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  Continue draft
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Eye size={14} />}
+                  onClick={() => onView(app.id)}
+                  sx={{ whiteSpace: 'nowrap', color: 'text.primary', borderColor: 'divider' }}
+                >
+                  View
+                </Button>
+              )}
+            </Stack>
+          </Box>
+        );
+      })}
+    </Stack>
+  </Box>
+);
 
 const PastApplicationsPanel = ({
   applications,

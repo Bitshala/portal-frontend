@@ -14,7 +14,6 @@ import {
   BookOpen,
   Check,
   CheckCircle2,
-  CircleDashed,
   Code2,
   Lightbulb,
   PenTool,
@@ -79,20 +78,6 @@ const TRACK_BY_VALUE: Record<FellowshipType, TrackOption> = TRACK_OPTIONS.reduce
   {} as Record<FellowshipType, TrackOption>,
 );
 
-const formatRelativeTime = (date: Date | null, now: number): string => {
-  if (!date) return '';
-  const diffSec = Math.floor((now - date.getTime()) / 1000);
-  if (diffSec < 5) return 'just now';
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const min = Math.floor(diffSec / 60);
-  if (min === 1) return 'one min ago';
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.floor(min / 60);
-  if (hr === 1) return '1 hr ago';
-  if (hr < 24) return `${hr} hr ago`;
-  return date.toLocaleDateString();
-};
-
 type StepIndex = 0 | 1 | 2;
 
 const STEP_LABELS = ['Track', 'Proposal', 'Review & submit'] as const;
@@ -106,8 +91,6 @@ const Apply = () => {
   const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
   const [step, setStep] = useState<StepIndex>(0);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const [now, setNow] = useState(() => Date.now());
 
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
@@ -121,20 +104,24 @@ const Apply = () => {
     if (appIdFromUrl && appIdFromUrl !== activeId) setActiveId(appIdFromUrl);
   }, [appIdFromUrl, activeId]);
 
+  // Hydrate the editor from a saved draft exactly once per application. Re-parsing
+  // on every refetch (e.g. after a save) would clobber the user's in-progress edits.
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (activeId && loadedProposal.data?.proposal !== undefined) {
+    if (!activeId) {
+      hydratedFor.current = null;
+      return;
+    }
+    if (hydratedFor.current === activeId) return;
+    if (loadedProposal.data?.proposal !== undefined) {
       setFields(parseProposal(loadedProposal.data.proposal));
+      hydratedFor.current = activeId;
     }
   }, [activeId, loadedProposal.data?.proposal]);
 
   useEffect(() => {
     if (activeId && loadedApp.data?.type) setSelectedType(loadedApp.data.type);
   }, [activeId, loadedApp.data?.type]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(t);
-  }, []);
 
   const currentApp = activeId ? loadedApp.data : null;
   const isEditable =
@@ -151,33 +138,11 @@ const Apply = () => {
     return true;
   }, [fields.problemStatement, fields.plan, fields.github, fields.links]);
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!activeId || !isEditable) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(async () => {
-      try {
-        await updateMut.mutateAsync({
-          id: activeId,
-          body: { proposal: serializeProposal(fields) },
-        });
-        setLastSavedAt(new Date());
-      } catch {
-        // silent — user can use the Save draft button to surface the error
-      }
-    }, 1500);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, activeId, isEditable]);
-
   const resetEditor = () => {
     setActiveId(null);
     setFields(EMPTY_FIELDS);
     setSelectedType(null);
     setStep(0);
-    setLastSavedAt(null);
     if (searchParams.has('appId')) {
       searchParams.delete('appId');
       setSearchParams(searchParams, { replace: true });
@@ -193,7 +158,6 @@ const Apply = () => {
         proposal: serializeProposal(fields),
       });
       setActiveId(created.id);
-      setLastSavedAt(new Date());
       return created.id;
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -209,7 +173,6 @@ const Apply = () => {
           id: activeId,
           body: { proposal: serializeProposal(fields) },
         });
-        setLastSavedAt(new Date());
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
         const id = await ensureDraftExists();
@@ -220,9 +183,10 @@ const Apply = () => {
     }
   };
 
-  const handleContinueFromTrack = async () => {
+  const handleContinueFromTrack = () => {
     if (!selectedType) return;
-    await ensureDraftExists();
+    // No draft is created here — a draft only exists once the user explicitly
+    // clicks "Save draft" (or submits). This keeps phantom drafts from appearing.
     setStep(1);
   };
 
@@ -232,13 +196,21 @@ const Apply = () => {
   };
 
   const handleSubmit = async () => {
-    if (!activeId) return;
+    if (!selectedType) return;
     try {
-      await updateMut.mutateAsync({
-        id: activeId,
-        body: { proposal: serializeProposal(fields) },
-      });
-      await submitMut.mutateAsync({ id: activeId });
+      // Create the application on submit if the user never saved a draft;
+      // otherwise persist the latest edits before submitting.
+      let id = activeId;
+      if (id) {
+        await updateMut.mutateAsync({
+          id,
+          body: { proposal: serializeProposal(fields) },
+        });
+      } else {
+        id = await ensureDraftExists();
+        if (!id) return;
+      }
+      await submitMut.mutateAsync({ id });
       setToast({
         kind: 'success',
         msg: isResubmit
@@ -293,11 +265,7 @@ const Apply = () => {
           selectedType={selectedType}
           disabled={!isEditable}
           onSelect={setSelectedType}
-          onSaveDraft={handleSaveDraft}
           onContinue={handleContinueFromTrack}
-          canSaveDraft={!!selectedType && !createMut.isPending && !updateMut.isPending}
-          isSaving={createMut.isPending}
-          isContinuing={createMut.isPending}
         />
       )}
 
@@ -305,7 +273,6 @@ const Apply = () => {
         <ProposalStep
           fields={fields}
           disabled={!isEditable}
-          autosavedLabel={formatRelativeTime(lastSavedAt, now)}
           onChange={setField}
           onBack={() => setStep(0)}
           onSaveDraft={handleSaveDraft}
@@ -326,7 +293,7 @@ const Apply = () => {
           onBack={() => setStep(1)}
           onSubmit={handleSubmit}
           isSubmitting={submitMut.isPending || updateMut.isPending}
-          canSubmit={!!activeId && isEditable && proposalReady && !submitMut.isPending}
+          canSubmit={isEditable && proposalReady && !submitMut.isPending}
           submitLabel={isResubmit ? 'Resubmit application' : 'Submit application'}
         />
       )}
@@ -441,20 +408,12 @@ const TrackStep = ({
   selectedType,
   disabled,
   onSelect,
-  onSaveDraft,
   onContinue,
-  canSaveDraft,
-  isSaving,
-  isContinuing,
 }: {
   selectedType: FellowshipType | null;
   disabled: boolean;
   onSelect: (t: FellowshipType) => void;
-  onSaveDraft: () => void;
   onContinue: () => void;
-  canSaveDraft: boolean;
-  isSaving: boolean;
-  isContinuing: boolean;
 }) => {
   return (
     <Box
@@ -547,13 +506,10 @@ const TrackStep = ({
         spacing={1.25}
         justifyContent="flex-end"
       >
-        <Button variant="outlined" onClick={onSaveDraft} disabled={!canSaveDraft}>
-          {isSaving ? 'Saving…' : 'Save draft'}
-        </Button>
         <Button
           variant="contained"
           onClick={onContinue}
-          disabled={!selectedType || disabled || isContinuing}
+          disabled={!selectedType || disabled}
           endIcon={<ArrowRight size={16} />}
         >
           Continue
@@ -575,7 +531,6 @@ const RUBRIC_ITEMS: { label: string; hint: string; emphasis?: boolean }[] = [
 const ProposalStep = ({
   fields,
   disabled,
-  autosavedLabel,
   onChange,
   onBack,
   onSaveDraft,
@@ -588,7 +543,6 @@ const ProposalStep = ({
 }: {
   fields: ProposalFields;
   disabled: boolean;
-  autosavedLabel: string;
   onChange: <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) => void;
   onBack: () => void;
   onSaveDraft: () => void;
@@ -623,20 +577,6 @@ const ProposalStep = ({
           >
             STEP 2 OF 3
           </Typography>
-          {autosavedLabel && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: 'success.main',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-              }}
-            >
-              <CircleDashed size={12} /> Autosaved {autosavedLabel}
-            </Typography>
-          )}
         </Stack>
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
           Proposal
@@ -728,7 +668,7 @@ const ProposalStep = ({
           size="small"
           variant="text"
           startIcon={<Plus size={14} />}
-          disabled={disabled || fields.links.some((l) => !l.trim())}
+          disabled={disabled}
           onClick={() => onChange('links', [...fields.links, ''])}
           sx={{ mb: 2, alignSelf: 'flex-start' }}
         >

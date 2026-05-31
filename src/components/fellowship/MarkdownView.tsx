@@ -217,7 +217,7 @@ export const MarkdownView = ({ content }: Props) => (
       borderColor: 'divider',
       borderRadius: 1.5,
       p: { xs: 3, md: 6 },
-      maxWidth: 780,
+      maxWidth: 920,
       mx: 'auto',
       '& p:first-of-type': { mt: 0 },
     }}
