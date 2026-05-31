@@ -33,18 +33,15 @@ export enum FellowshipReportStatus {
 
 export interface GetFellowshipApplicationResponseDto {
   id: string;
-  userId: string;
-  userName: string | null;
-  userEmail: string | null;
   type: FellowshipType;
   status: FellowshipApplicationStatus;
-  reviewerId: string | null;
-  reviewerName: string | null;
   reviewerRemarks: string | null;
+  applicantId: string;
+  applicantName: string | null;
+  reviewedById: string | null;
+  reviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
-  submittedAt: string | null;
-  reviewedAt: string | null;
 }
 
 export interface GetFellowshipApplicationProposalResponseDto {
@@ -66,6 +63,9 @@ export interface ReviewFellowshipApplicationRequestDto {
     | FellowshipApplicationStatus.REJECTED
     | FellowshipApplicationStatus.CHANGES_REQUESTED;
   reviewerRemarks?: string;
+  // Required when status === ACCEPTED. Must be a Google Drive folder URL —
+  // hosts the unsigned contract and is where the fellow uploads their W-8BEN.
+  driveFolderUrl?: string;
 }
 
 export interface ListFellowshipApplicationsQueryDto extends PaginatedQueryDto {
@@ -125,19 +125,16 @@ export interface StartFellowshipContractRequestDto {
 
 export interface GetFellowshipReportResponseDto {
   id: string;
-  fellowshipId: string;
-  userId: string;
-  userName: string | null;
   month: number;
   year: number;
   status: FellowshipReportStatus;
-  reviewerId: string | null;
-  reviewerName: string | null;
   reviewerRemarks: string | null;
+  fellowshipId: string;
+  fellowName: string;
+  reviewedById: string | null;
+  reviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
-  submittedAt: string | null;
-  reviewedAt: string | null;
 }
 
 export interface GetFellowshipReportContentResponseDto {

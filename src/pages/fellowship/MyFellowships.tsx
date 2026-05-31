@@ -261,9 +261,9 @@ const ChangesRequestedBanner = ({
         >
           {app.reviewerRemarks ?? 'The reviewer has asked for revisions before this can be accepted.'}
         </Typography>
-        {app.reviewerName && (
+        {app.reviewedByName && (
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.75 }}>
-            — {app.reviewerName}
+            — {app.reviewedByName}
           </Typography>
         )}
       </Box>
@@ -746,7 +746,7 @@ const MonthlyReportsPanel = ({
           const status = reportStatusFor(slot, report, now);
           const chip = reportStatusChip(status);
           const subDate = report
-            ? formatDateShort(new Date(report.submittedAt ?? report.updatedAt))
+            ? formatDateShort(new Date(report.updatedAt))
             : formatDateShort(dueDateFor(slot.month, slot.year));
           const clickable = !!report || (isActive && status === 'DUE');
           return (
@@ -875,9 +875,7 @@ const InProgressApplicationsPanel = ({
               >
                 {isDraft
                   ? `Draft · updated ${formatDateShort(new Date(app.updatedAt))}`
-                  : app.submittedAt
-                    ? `Submitted ${formatDateShort(new Date(app.submittedAt))} · under review`
-                    : 'Under review'}
+                  : `Submitted ${formatDateShort(new Date(app.updatedAt))} · under review`}
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
@@ -988,9 +986,7 @@ const PastApplicationsPanel = ({
                   fontSize: '0.72rem',
                 }}
               >
-                {app.submittedAt
-                  ? cycleLabel(app.submittedAt)
-                  : `Updated ${formatDateShort(new Date(app.updatedAt))}`}
+                {cycleLabel(app.createdAt)}
               </Typography>
             </Box>
             <StatusChip status={app.status} />
@@ -1056,9 +1052,6 @@ const ApplicationDetailView = ({
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Updated {new Date(app.updatedAt).toLocaleDateString()}
-                {app.submittedAt && (
-                  <> · submitted {new Date(app.submittedAt).toLocaleDateString()}</>
-                )}
               </Typography>
             </Box>
             <StatusChip status={app.status} />
@@ -1072,7 +1065,7 @@ const ApplicationDetailView = ({
 
           {app.status === FellowshipApplicationStatus.CHANGES_REQUESTED && (
             <Alert severity="warning" sx={{ mb: 3 }}>
-              <strong>Changes requested by {app.reviewerName ?? 'the reviewer'}:</strong>{' '}
+              <strong>Changes requested by {app.reviewedByName ?? 'the reviewer'}:</strong>{' '}
               {app.reviewerRemarks ??
                 'Please revise your proposal before resubmitting.'}
             </Alert>

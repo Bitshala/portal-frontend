@@ -117,6 +117,8 @@ const ApplicationsAdmin = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [driveUrl, setDriveUrl] = useState('');
   const [remarks, setRemarks] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
@@ -147,13 +149,10 @@ const ApplicationsAdmin = () => {
     return allRecords.filter((r) => {
       if (filter === 'IN_REVIEW') {
         if (r.status !== FellowshipApplicationStatus.SUBMITTED) return false;
-        if (!r.reviewerId) return false;
+        if (!r.reviewedById) return false;
       }
       if (!q) return true;
-      return (
-        (r.userName ?? '').toLowerCase().includes(q) ||
-        (r.userEmail ?? '').toLowerCase().includes(q)
-      );
+      return (r.applicantName ?? '').toLowerCase().includes(q);
     });
   }, [allRecords, filter, search]);
 
@@ -161,12 +160,12 @@ const ApplicationsAdmin = () => {
     const arr = [...filtered];
     if (sortKey === 'name') {
       arr.sort((a, b) =>
-        (a.userName ?? a.userEmail ?? '').localeCompare(b.userName ?? b.userEmail ?? ''),
+        (a.applicantName ?? '').localeCompare(b.applicantName ?? ''),
       );
     } else {
       arr.sort((a, b) => {
-        const ta = new Date(a.submittedAt ?? a.createdAt).getTime();
-        const tb = new Date(b.submittedAt ?? b.createdAt).getTime();
+        const ta = new Date(a.createdAt).getTime();
+        const tb = new Date(b.createdAt).getTime();
         return tb - ta;
       });
     }
@@ -182,13 +181,18 @@ const ApplicationsAdmin = () => {
   });
 
   const handleAccept = async () => {
-    if (!selected) return;
+    if (!selected || !isDriveFolderUrl(driveUrl)) return;
     try {
       await reviewMut.mutateAsync({
         id: selected.id,
-        body: { status: FellowshipApplicationStatus.ACCEPTED },
+        body: {
+          status: FellowshipApplicationStatus.ACCEPTED,
+          driveFolderUrl: driveUrl.trim(),
+        },
       });
       setToast({ kind: 'success', msg: 'Accepted — fellowship created in PENDING.' });
+      setAcceptOpen(false);
+      setDriveUrl('');
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -289,7 +293,10 @@ const ApplicationsAdmin = () => {
             onNext={goNext}
             canPrev={selectedIdx > 0}
             canNext={selectedIdx >= 0 && selectedIdx < sorted.length - 1}
-            onAccept={handleAccept}
+            onAccept={() => {
+              setDriveUrl('');
+              setAcceptOpen(true);
+            }}
             onReject={() => {
               setRemarks('');
               setRejectOpen(true);
@@ -334,6 +341,18 @@ const ApplicationsAdmin = () => {
           setRemarks('');
         }}
         onConfirm={handleRequestChanges}
+        busy={reviewMut.isPending}
+      />
+
+      <AcceptDialog
+        open={acceptOpen}
+        value={driveUrl}
+        onChange={setDriveUrl}
+        onCancel={() => {
+          setAcceptOpen(false);
+          setDriveUrl('');
+        }}
+        onConfirm={handleAccept}
         busy={reviewMut.isPending}
       />
     </FellowshipPageLayout>
@@ -520,7 +539,7 @@ const ApplicantList = ({
     <Stack spacing={0.5}>
       {records.map((r) => {
         const isActive = r.id === selectedId;
-        const tint = tintFor(r.userName ?? r.userEmail ?? r.id);
+        const tint = tintFor(r.applicantName ?? r.id);
         return (
           <Box
             key={r.id}
@@ -554,7 +573,7 @@ const ApplicantList = ({
                   flexShrink: 0,
                 }}
               >
-                {initials(r.userName ?? r.userEmail)}
+                {initials(r.applicantName)}
               </Box>
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography
@@ -567,7 +586,7 @@ const ApplicantList = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {r.userName ?? r.userEmail ?? '—'}
+                  {r.applicantName ?? '—'}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -580,23 +599,9 @@ const ApplicantList = ({
                     overflow: 'hidden',
                   }}
                 >
-                  {r.type.charAt(0) + r.type.slice(1).toLowerCase()} fellowship · {relativeDays(r.submittedAt ?? r.createdAt)}
+                  {r.type.charAt(0) + r.type.slice(1).toLowerCase()} fellowship · {relativeDays(r.createdAt)}
                 </Typography>
                 <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                  <Box
-                    sx={{
-                      px: 0.85,
-                      py: 0.15,
-                      borderRadius: 0.4,
-                      bgcolor: 'rgba(255,255,255,0.04)',
-                      color: 'text.secondary',
-                      fontSize: '0.66rem',
-                      fontWeight: 600,
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {r.type.toLowerCase()}
-                  </Box>
                   <StatusPill status={r.status} />
                 </Stack>
               </Box>
@@ -735,7 +740,7 @@ const DetailPane = ({
                 {app.type.toLowerCase()}
               </Box>
               {handle && <> · {handle}</>}
-              {app.submittedAt && <> · submitted {relativeDays(app.submittedAt)}</>}
+              <> · submitted {relativeDays(app.createdAt)}</>
             </Typography>
           </Box>
 
@@ -814,7 +819,7 @@ const DetailPane = ({
             sx={{ mt: 2 }}
             icon={<MessageSquare size={16} />}
           >
-            <strong>{app.reviewerName ?? 'Reviewer'}:</strong> {app.reviewerRemarks}
+            <strong>{app.reviewedByName ?? 'Reviewer'}:</strong> {app.reviewerRemarks}
           </Alert>
         )}
       </Box>
@@ -834,8 +839,8 @@ const DetailPane = ({
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {awaitingApplicant ? (
             <>Awaiting applicant revision</>
-          ) : app.reviewerName ? (
-            <>Reviewed by <strong>{app.reviewerName}</strong></>
+          ) : app.reviewedByName ? (
+            <>Reviewed by <strong>{app.reviewedByName}</strong></>
           ) : (
             <>Awaiting review</>
           )}
@@ -956,6 +961,62 @@ const LinkChip = ({
 );
 
 // ---- shared dialog ----
+
+const isDriveFolderUrl = (v: string): boolean =>
+  /^https:\/\/drive\.google\.com\//.test(v.trim());
+
+const AcceptDialog = ({
+  open,
+  value,
+  onChange,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  open: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) => {
+  const touched = value.trim().length > 0;
+  const valid = isDriveFolderUrl(value);
+  return (
+    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+          Paste the Google Drive folder for this fellow. It hosts the unsigned
+          contract and is where they'll upload their W-8BEN form. Accepting creates
+          a fellowship in PENDING.
+        </Typography>
+        <TextField
+          fullWidth
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://drive.google.com/drive/folders/…"
+          autoFocus
+          error={touched && !valid}
+          helperText={
+            touched && !valid ? 'Enter a valid Google Drive URL (https://drive.google.com/…)' : ' '
+          }
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={onConfirm}
+          disabled={!valid || busy}
+        >
+          {busy ? 'Accepting…' : 'Accept'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const RemarksDialog = ({
   open,

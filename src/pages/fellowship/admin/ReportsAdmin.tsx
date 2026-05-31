@@ -165,7 +165,7 @@ const ReportsAdmin = () => {
         if (map[filter] && r.status !== map[filter]) return false;
       }
       if (q) {
-        const name = (r.userName ?? '').toLowerCase();
+        const name = (r.fellowName ?? '').toLowerCase();
         const mo = formatMonthYear(r.month, r.year).toLowerCase();
         if (!name.includes(q) && !mo.includes(q)) return false;
       }
@@ -175,8 +175,8 @@ const ReportsAdmin = () => {
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      const ta = new Date(a.submittedAt ?? a.updatedAt).getTime();
-      const tb = new Date(b.submittedAt ?? b.updatedAt).getTime();
+      const ta = new Date(a.updatedAt).getTime();
+      const tb = new Date(b.updatedAt).getTime();
       return tb - ta;
     });
   }, [filtered]);
@@ -218,10 +218,10 @@ const ReportsAdmin = () => {
     const rows = sorted.map((r) => {
       const f = fellowshipById.get(r.fellowshipId);
       return [
-        r.userName ?? '',
+        r.fellowName ?? '',
         f?.type ?? '',
         formatMonthYear(r.month, r.year),
-        r.submittedAt ?? '',
+        r.updatedAt ?? '',
         wordsFor(r.id),
         prsFor(r.id),
         r.status,
@@ -467,7 +467,7 @@ const ReportRow = ({
   track: FellowshipType | null;
   onOpen: () => void;
 }) => {
-  const tint = tintFor(report.userName ?? report.userId ?? report.id);
+  const tint = tintFor(report.fellowName ?? report.fellowshipId ?? report.id);
   const trackColor = track ? TRACK_COLORS[track] : '#a1a1aa';
   const pill = STATUS_PILL[report.status];
 
@@ -505,7 +505,7 @@ const ReportRow = ({
             flexShrink: 0,
           }}
         >
-          {initials(report.userName)}
+          {initials(report.fellowName)}
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography
@@ -517,7 +517,7 @@ const ReportRow = ({
               whiteSpace: 'nowrap',
             }}
           >
-            {report.userName ?? '—'}
+            {report.fellowName ?? '—'}
           </Typography>
           {track && (
             <Typography
@@ -540,7 +540,7 @@ const ReportRow = ({
       </Typography>
 
       <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem', color: 'text.secondary' }}>
-        {formatShortDate(report.submittedAt)}
+        {formatShortDate(report.updatedAt)}
       </Typography>
 
       <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>
@@ -608,10 +608,10 @@ const ReportDetail = ({
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            {report.userName ?? '—'} · {formatMonthYear(report.month, report.year)}
+            {report.fellowName ?? '—'} · {formatMonthYear(report.month, report.year)}
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Submitted {formatShortDate(report.submittedAt)} · {wordsFor(report.id)} words ·{' '}
+            Submitted {formatShortDate(report.updatedAt)} · {wordsFor(report.id)} words ·{' '}
             {prsFor(report.id)} PRs
           </Typography>
         </Box>
@@ -637,9 +637,9 @@ const ReportDetail = ({
       {contentQuery.isLoading && <CircularProgress size={20} />}
       {contentQuery.data && <MarkdownView content={contentQuery.data.content} />}
 
-      {report.reviewerName && report.reviewerRemarks && (
+      {report.reviewedByName && report.reviewerRemarks && (
         <Alert severity="info" sx={{ mt: 3 }}>
-          <strong>{report.reviewerName}:</strong> {report.reviewerRemarks}
+          <strong>{report.reviewedByName}:</strong> {report.reviewerRemarks}
         </Alert>
       )}
 
