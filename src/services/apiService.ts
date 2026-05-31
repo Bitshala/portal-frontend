@@ -176,11 +176,13 @@ class ApiService {
     });
   };
 
-  public syncCohortQuestions = async (cohortId: string): Promise<void> => {
+  // Destructively re-applies the cohort's config file (questions, bonus questions,
+  // titles, reading material, activity, exercises, links). TA/Admin only.
+  public syncCohortFromConfig = async (cohortId: string): Promise<void> => {
     await this.request<void>({
       headers: this.getRequestHeaders(),
       method: 'POST',
-      url: `/cohorts/${cohortId}/sync-questions`,
+      url: `/cohorts/${cohortId}/sync-from-config`,
     });
   };
 

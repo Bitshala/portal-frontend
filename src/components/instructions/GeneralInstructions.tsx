@@ -3,10 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Button } from '@mui/material';
 import { ArrowLeft } from 'lucide-react';
 
-interface GeneralInstructionsProps {
-  cohortName: string;
-}
-
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
   <Typography
     variant="h5"
@@ -41,10 +37,10 @@ const BulletItem = ({ children, color = '#fb923c' }: { children: React.ReactNode
   </Box>
 );
 
-const GeneralInstructions: React.FC<GeneralInstructionsProps> = ({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  cohortName,
-}) => {
+// The General Instructions page is intentionally hard-coded: its rich inline
+// formatting (per-phrase colors, bold, colored bullets, callouts) cannot be
+// expressed in the plain-string API content, so the page is kept in the UI.
+const GeneralInstructions: React.FC = () => {
   const navigate = useNavigate();
 
   return (

@@ -1,4 +1,4 @@
-import { StrictMode, lazy } from 'react';
+import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -36,6 +36,7 @@ const CohortFeedback = lazy(() => import('./pages/CohortFeedback.tsx'));
 const AdminPage = lazy(() => import('./pages/admin/page.tsx'));
 const FeedbackAdmin = lazy(() => import('./pages/admin/FeedbackAdmin.tsx'));
 const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
+const GDPresentation = lazy(() => import('./pages/GDPresentation.tsx'));
 
 const router = createBrowserRouter([
   {
@@ -117,6 +118,17 @@ const router = createBrowserRouter([
     {
       path: '/cohortfeedback',
       element: <Layout><CohortFeedback /></Layout>,
+    },
+    {
+      // Full-screen GD presentation — rendered outside Layout (no sidebar), staff only.
+      path: '/:cohortId/present/:weekId',
+      element: (
+        <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+          <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }} />}>
+            <GDPresentation />
+          </Suspense>
+        </ProtectedRoute>
+      ),
     },
     {
       path: '/admin',

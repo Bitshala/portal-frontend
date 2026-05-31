@@ -1,20 +1,30 @@
-export interface BonusQuestion {
-  question: string;
-  image?: string;
+import type { CohortWeekExercise, ReadingMaterialLink } from './api';
+
+// Render model for the instruction sheet. Built from the API cohort response
+// (see helpers/cohortHelpers#toRenderWeeks); the UI no longer holds any static
+// instruction content.
+
+export interface ResolvedAttachment {
+  filename: string;
+  // Authenticated stream URL (GET /cohorts/attachments/:cohortId/:filename).
+  url: string;
 }
 
-export interface RichQuestion {
+export interface RenderQuestion {
   text: string;
-  attachments: { filename: string; url: string }[];
+  attachments: ResolvedAttachment[];
 }
 
-export interface WeekContent {
+export interface RenderWeek {
+  // Cohort week id (GetCohortWeekResponseDto.id) — used to address the week in URLs.
+  id: string;
   week: number;
-  title: string;
-  content: string;
-  gdQuestions: (string | RichQuestion)[];
-  bonusQuestions?: (string | BonusQuestion | RichQuestion)[];
-  assignmentLinks?: Record<number, string>;
-  classroomUrl?: string | null;
-  classroomInviteLink?: string | null;
+  title: string | null;
+  readingMaterial: ReadingMaterialLink[];
+  activity: string | null;
+  questions: RenderQuestion[];
+  bonusQuestions: RenderQuestion[];
+  exercise: CohortWeekExercise | null;
+  classroomAssignmentUrl: string | null;
+  classroomInviteLink: string | null;
 }

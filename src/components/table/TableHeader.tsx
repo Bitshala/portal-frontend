@@ -28,22 +28,12 @@ import {
   BookOpen,
   CalendarClock,
 } from 'lucide-react';
-
-interface Week {
-  id: string;
-  week: number;
-  type: string;
-  hasExercise: boolean;
-  questions: { text: string; attachments: string[] }[];
-  bonusQuestion: { text: string; attachments: string[] }[];
-  classroomAssignmentUrl: string;
-  classroomInviteLink: string;
-}
+import type { GetCohortWeekResponseDto } from '../../types/api';
 
 interface TableHeaderProps {
   week: number;
   selectedWeekId: string;
-  weeks: Week[];
+  weeks: GetCohortWeekResponseDto[];
   onWeekChange: (week: number, weekId: string) => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
