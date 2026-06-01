@@ -214,12 +214,14 @@ const ReportsAdmin = () => {
   };
 
   const handleExport = () => {
-    const header = ['fellow', 'track', 'month', 'submitted', 'words', 'prs', 'status'];
+    const header = ['fellow', 'track', 'project', 'month', 'submitted', 'words', 'prs', 'status'];
+    const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = sorted.map((r) => {
       const f = fellowshipById.get(r.fellowshipId);
       return [
-        r.fellowName ?? '',
+        csvCell(r.fellowName ?? ''),
         f?.type ?? '',
+        csvCell(f?.projectName ?? ''),
         formatMonthYear(r.month, r.year),
         r.updatedAt ?? '',
         wordsFor(r.id),
@@ -316,14 +318,18 @@ const ReportsAdmin = () => {
             </Typography>
           </Box>
         ) : (
-          sorted.map((r) => (
-            <ReportRow
-              key={r.id}
-              report={r}
-              track={fellowshipById.get(r.fellowshipId)?.type ?? null}
-              onOpen={() => setSelected(r)}
-            />
-          ))
+          sorted.map((r) => {
+            const f = fellowshipById.get(r.fellowshipId);
+            return (
+              <ReportRow
+                key={r.id}
+                report={r}
+                track={f?.type ?? null}
+                project={f?.projectName ?? null}
+                onOpen={() => setSelected(r)}
+              />
+            );
+          })
         )}
       </Box>
 
@@ -338,6 +344,7 @@ const ReportsAdmin = () => {
         {selected && (
           <ReportDetail
             report={selected}
+            project={fellowshipById.get(selected.fellowshipId)?.projectName ?? null}
             onClose={() => setSelected(null)}
             onApprove={() => handleApprove(selected)}
             onReject={() => setRejectOpen(true)}
@@ -429,7 +436,7 @@ const FilterPill = ({
 // ---- table ----
 
 const COLS =
-  'minmax(220px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(80px, 0.7fr) minmax(60px, 0.5fr) minmax(130px, 1fr)';
+  'minmax(200px, 1.8fr) minmax(150px, 1.4fr) minmax(100px, 0.9fr) minmax(100px, 0.9fr) minmax(70px, 0.6fr) minmax(55px, 0.5fr) minmax(120px, 1fr)';
 const COL_GAP = 3;
 
 const HeaderRow = () => (
@@ -450,6 +457,7 @@ const HeaderRow = () => (
     }}
   >
     <Box>Fellow</Box>
+    <Box>Project</Box>
     <Box>Month</Box>
     <Box>Submitted</Box>
     <Box>Words</Box>
@@ -461,10 +469,12 @@ const HeaderRow = () => (
 const ReportRow = ({
   report,
   track,
+  project,
   onOpen,
 }: {
   report: GetFellowshipReportResponseDto;
   track: FellowshipType | null;
+  project: string | null;
   onOpen: () => void;
 }) => {
   const tint = tintFor(report.fellowName ?? report.fellowshipId ?? report.id);
@@ -535,6 +545,19 @@ const ReportRow = ({
         </Box>
       </Stack>
 
+      <Typography
+        sx={{
+          fontSize: '0.82rem',
+          color: project ? 'text.primary' : 'text.secondary',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={project ?? undefined}
+      >
+        {project ?? '—'}
+      </Typography>
+
       <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>
         {formatMonthYear(report.month, report.year)}
       </Typography>
@@ -578,12 +601,14 @@ const ReportRow = ({
 
 const ReportDetail = ({
   report,
+  project,
   onClose,
   onApprove,
   onReject,
   isReviewing,
 }: {
   report: GetFellowshipReportResponseDto;
+  project: string | null;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -610,6 +635,11 @@ const ReportDetail = ({
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
             {report.fellowName ?? '—'} · {formatMonthYear(report.month, report.year)}
           </Typography>
+          {project && (
+            <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+              {project}
+            </Typography>
+          )}
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             Submitted {formatShortDate(report.updatedAt)} · {wordsFor(report.id)} words ·{' '}
             {prsFor(report.id)} PRs

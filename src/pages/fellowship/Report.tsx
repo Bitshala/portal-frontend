@@ -104,9 +104,17 @@ const Report = () => {
   };
 
   const handleSubmit = async () => {
-    if (!reportId) return;
+    if (!content.trim() || !fellowshipId) return;
     try {
-      await submitMut.mutateAsync({ id: reportId });
+      let id = reportId;
+      if (!id) {
+        const created = await createMut.mutateAsync({ fellowshipId, month, year, content });
+        id = created.id;
+        navigate(`/fellowship/fellowships/${fellowshipId}/reports/${id}`, { replace: true });
+      } else {
+        await updateMut.mutateAsync({ id, body: { content } });
+      }
+      await submitMut.mutateAsync({ id });
       setToast({ kind: 'success', msg: 'Submitted for review.' });
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -209,7 +217,13 @@ const Report = () => {
                 <Button
                   variant="contained"
                   onClick={handleSubmit}
-                  disabled={!reportId || !isEditable || !content.trim() || submitMut.isPending}
+                  disabled={
+                    !isEditable ||
+                    !content.trim() ||
+                    submitMut.isPending ||
+                    createMut.isPending ||
+                    updateMut.isPending
+                  }
                 >
                   {submitMut.isPending ? 'Submitting…' : 'Submit'}
                 </Button>

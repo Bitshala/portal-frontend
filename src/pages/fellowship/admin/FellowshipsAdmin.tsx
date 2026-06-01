@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
+  InputAdornment,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
-import { Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import StartContractDialog from '../../../components/fellowship/StartContractDialog';
 import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
 import {
   FellowshipStatus,
@@ -22,6 +23,10 @@ import {
 const PAGE_SIZE = 50;
 
 type StatusFilter = 'ALL' | FellowshipStatus;
+type SortKey = 'name' | 'project';
+type SortDir = 'asc' | 'desc';
+
+const ALL_VALUE = '__ALL__';
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'ALL' },
@@ -102,8 +107,11 @@ const formatPayoutPerMonth = (amountUsd: string | null): string => {
 const FellowshipsAdmin = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<StatusFilter>('ALL');
-  const [contractFor, setContractFor] = useState<GetFellowshipResponseDto | null>(null);
-  const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const [projectFilter, setProjectFilter] = useState<string>(ALL_VALUE);
+  const [maintainerFilter, setMaintainerFilter] = useState<string>(ALL_VALUE);
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const { data, isLoading } = useFellowships({ page: 0, pageSize: PAGE_SIZE });
   const reportsQuery = useReports({ page: 0, pageSize: 200 });
@@ -122,10 +130,97 @@ const FellowshipsAdmin = () => {
     return c;
   }, [fellowships]);
 
-  const filtered = useMemo(
-    () => (filter === 'ALL' ? fellowships : fellowships.filter((f) => f.status === filter)),
-    [fellowships, filter],
-  );
+  const projectOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of fellowships) if (f.projectName) s.add(f.projectName);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [fellowships]);
+
+  const maintainerOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of fellowships) if (f.projectMaintainerName) s.add(f.projectMaintainerName);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [fellowships]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return fellowships.filter((f) => {
+      if (filter !== 'ALL' && f.status !== filter) return false;
+      if (projectFilter !== ALL_VALUE && (f.projectName ?? '') !== projectFilter) return false;
+      if (maintainerFilter !== ALL_VALUE && (f.projectMaintainerName ?? '') !== maintainerFilter)
+        return false;
+      if (q) {
+        const haystack = [
+          f.userName ?? '',
+          f.projectName ?? '',
+          f.projectMaintainerName ?? '',
+          handleFor(f) ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [fellowships, filter, search, projectFilter, maintainerFilter]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const keyOf = (f: GetFellowshipResponseDto) =>
+      (sortKey === 'name' ? f.userName : f.projectName)?.toLowerCase() ?? '';
+    return [...filtered].sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      // push blanks to the bottom regardless of direction
+      if (!ka && kb) return 1;
+      if (ka && !kb) return -1;
+      return ka.localeCompare(kb) * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const handleExport = () => {
+    const header = [
+      'fellow',
+      'track',
+      'project',
+      'maintainer',
+      'end_date',
+      'payout',
+      'last_report',
+      'status',
+    ];
+    const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = sorted.map((f) => {
+      const last = lastReportByFellowship.get(f.id);
+      return [
+        csvCell(f.userName ?? ''),
+        f.type,
+        csvCell(f.projectName ?? ''),
+        csvCell(f.projectMaintainerName ?? ''),
+        f.endDate ?? '',
+        formatPayoutPerMonth(f.amountUsd),
+        last ? `${monthShort(last.month)} ${last.year}` : '',
+        f.status,
+      ].join(',');
+    });
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fellowships-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const lastReportByFellowship = useMemo(() => {
     const map = new Map<string, GetFellowshipReportResponseDto>();
@@ -143,8 +238,6 @@ const FellowshipsAdmin = () => {
     return map;
   }, [reports]);
 
-  const firstPending = fellowships.find((f) => f.status === FellowshipStatus.PENDING) ?? null;
-
   return (
     <FellowshipPageLayout
       title="Fellowships"
@@ -152,12 +245,6 @@ const FellowshipsAdmin = () => {
       badge="Admin"
       hideIcon
     >
-      {toast && (
-        <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
-          {toast.msg}
-        </Alert>
-      )}
-
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={1.5}
@@ -177,14 +264,61 @@ const FellowshipsAdmin = () => {
           ))}
         </Stack>
 
-        <Button
-          variant="contained"
-          startIcon={<Plus size={14} />}
-          disabled={!firstPending}
-          onClick={() => firstPending && setContractFor(firstPending)}
-        >
-          New fellowship
-        </Button>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <TextField
+            size="small"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search fellow, project…"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={14} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: 220 }}
+          />
+          <TextField
+            select
+            size="small"
+            label="Project"
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value={ALL_VALUE}>All projects</MenuItem>
+            {projectOptions.map((p) => (
+              <MenuItem key={p} value={p}>
+                {p}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Maintainer"
+            value={maintainerFilter}
+            onChange={(e) => setMaintainerFilter(e.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value={ALL_VALUE}>All maintainers</MenuItem>
+            {maintainerOptions.map((m) => (
+              <MenuItem key={m} value={m}>
+                {m}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button
+            variant="outlined"
+            startIcon={<Download size={14} />}
+            onClick={handleExport}
+            disabled={sorted.length === 0}
+            sx={{ color: 'text.primary', borderColor: 'divider' }}
+          >
+            Export
+          </Button>
+        </Stack>
       </Stack>
 
       <Box
@@ -196,19 +330,19 @@ const FellowshipsAdmin = () => {
           overflow: 'hidden',
         }}
       >
-        <HeaderRow />
+        <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={22} />
           </Box>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No fellowships match this filter.
+              No fellowships match these filters.
             </Typography>
           </Box>
         ) : (
-          filtered.map((f) => (
+          sorted.map((f) => (
             <FellowshipRow
               key={f.id}
               fellowship={f}
@@ -218,16 +352,6 @@ const FellowshipsAdmin = () => {
           ))
         )}
       </Box>
-
-      <StartContractDialog
-        fellowship={contractFor}
-        onClose={() => setContractFor(null)}
-        onSuccess={(msg) => {
-          setToast({ kind: 'success', msg });
-          setContractFor(null);
-        }}
-        onError={(msg) => setToast({ kind: 'error', msg })}
-      />
     </FellowshipPageLayout>
   );
 };
@@ -286,7 +410,44 @@ const COLS =
   '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 100px';
 const COL_GAP = 2;
 
-const HeaderRow = () => (
+const SortableHeader = ({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+}) => (
+  <Box
+    onClick={onClick}
+    sx={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 0.4,
+      cursor: 'pointer',
+      userSelect: 'none',
+      color: active ? 'primary.light' : 'inherit',
+      '&:hover': { color: 'text.primary' },
+    }}
+  >
+    {label}
+    {active &&
+      (dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+  </Box>
+);
+
+const HeaderRow = ({
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) => (
   <Box
     sx={{
       display: 'grid',
@@ -303,9 +464,19 @@ const HeaderRow = () => (
       textTransform: 'uppercase',
     }}
   >
-    <Box>Fellow</Box>
+    <SortableHeader
+      label="Fellow"
+      active={sortKey === 'name'}
+      dir={sortDir}
+      onClick={() => onSort('name')}
+    />
     <Box>Track</Box>
-    <Box>Project</Box>
+    <SortableHeader
+      label="Project"
+      active={sortKey === 'project'}
+      dir={sortDir}
+      onClick={() => onSort('project')}
+    />
     <Box>Maintainer</Box>
     <Box>End date</Box>
     <Box>Payout</Box>
