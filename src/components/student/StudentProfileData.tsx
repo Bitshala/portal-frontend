@@ -28,6 +28,8 @@ interface UserProfile {
   description: string | null;
   background: string | null;
   githubProfileUrl: string | null;
+  portfolioUrl: string | null;
+  linkedinProfileUrl: string | null;
   skills: string[];
   firstHeardAboutBitcoinOn: string | null;
   bitcoinBooksRead: string[];
@@ -263,7 +265,7 @@ const StudentProfileData: React.FC = () => {
                 <Typography sx={hintSx}>Use the email linked to your Discord so roles are assigned correctly.</Typography>
               </Box>
               <Box>
-                <Typography variant="body2" sx={labelSx}>Portfolio / GitHub / Side-project link*</Typography>
+                <Typography variant="body2" sx={labelSx}>GitHub*</Typography>
                 <TextField
                   fullWidth
                   name="githubProfileUrl"
@@ -272,7 +274,35 @@ const StudentProfileData: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   size="small"
+                  placeholder="https://github.com/"
+                  sx={inputSx}
+                />
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={labelSx}>Portfolio / Side Project</Typography>
+                <TextField
+                  fullWidth
+                  name="portfolioUrl"
+                  type="url"
+                  value={profile.portfolioUrl || ''}
+                  onChange={handleInputChange}
+                  size="small"
                   placeholder="https://"
+                  slotProps={{ htmlInput: { maxLength: 2048 } }}
+                  sx={inputSx}
+                />
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={labelSx}>LinkedIn</Typography>
+                <TextField
+                  fullWidth
+                  name="linkedinProfileUrl"
+                  type="url"
+                  value={profile.linkedinProfileUrl || ''}
+                  onChange={handleInputChange}
+                  size="small"
+                  placeholder="https://www.linkedin.com/"
+                  slotProps={{ htmlInput: { maxLength: 2048 } }}
                   sx={inputSx}
                 />
               </Box>

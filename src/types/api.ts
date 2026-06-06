@@ -202,6 +202,8 @@ export interface UpdateUserRequest {
   description?: string;
   background?: string;
   githubProfileUrl?: string;
+  portfolioUrl?: string;
+  linkedinProfileUrl?: string;
   skills?: string[];
   firstHeardAboutBitcoinOn?: string;
   bitcoinBooksRead?: string[];
@@ -226,6 +228,8 @@ export interface GetUserResponse {
   description: string | null;
   background: string | null;
   githubProfileUrl: string | null;
+  portfolioUrl: string | null;
+  linkedinProfileUrl: string | null;
   skills: string[] | null;
   // ISO date (YYYY-MM-DD) of when first heard about Bitcoin
   firstHeardAboutBitcoinOn: string | null;

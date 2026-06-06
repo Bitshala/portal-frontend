@@ -1,5 +1,5 @@
 import { Box, Typography, Chip, Link, Divider } from '@mui/material';
-import { User, MapPin, Github, Book, Clock, MessageSquare } from 'lucide-react';
+import { User, MapPin, Github, Briefcase, Linkedin, Book, Clock, MessageSquare } from 'lucide-react';
 
 interface ProfileData {
   id?: string;
@@ -11,6 +11,8 @@ interface ProfileData {
   description?: string;
   background?: string;
   githubProfileUrl?: string;
+  portfolioUrl?: string;
+  linkedinProfileUrl?: string;
   skills?: string[];
   firstHeardAboutBitcoinOn?: string;
   bitcoinBooksRead?: string[];
@@ -68,6 +70,48 @@ export const ProfileDataCard = ({ profile }: ProfileDataCardProps) => {
                 sx={{ color: '#60a5fa', fontSize: '1rem', '&:hover': { color: '#93c5fd' } }}
               >
                 {profile.githubProfileUrl}
+              </Link>
+            </Box>
+          </>
+        )}
+
+        {/* Portfolio */}
+        {profile.portfolioUrl && (
+          <>
+            <Divider sx={{ borderColor: '#27272a' }} />
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Briefcase size={18} color="#fb923c" />
+                <Typography sx={{ fontWeight: 600, color: '#fb923c', fontSize: '0.95rem' }}>Portfolio</Typography>
+              </Box>
+              <Link
+                href={profile.portfolioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ color: '#60a5fa', fontSize: '1rem', '&:hover': { color: '#93c5fd' } }}
+              >
+                {profile.portfolioUrl}
+              </Link>
+            </Box>
+          </>
+        )}
+
+        {/* LinkedIn */}
+        {profile.linkedinProfileUrl && (
+          <>
+            <Divider sx={{ borderColor: '#27272a' }} />
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Linkedin size={18} color="#fb923c" />
+                <Typography sx={{ fontWeight: 600, color: '#fb923c', fontSize: '0.95rem' }}>LinkedIn</Typography>
+              </Box>
+              <Link
+                href={profile.linkedinProfileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ color: '#60a5fa', fontSize: '1rem', '&:hover': { color: '#93c5fd' } }}
+              >
+                {profile.linkedinProfileUrl}
               </Link>
             </Box>
           </>

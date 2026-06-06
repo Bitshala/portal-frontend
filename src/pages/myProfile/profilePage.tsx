@@ -57,6 +57,8 @@ const ProfilePage: React.FC = () => {
     description: string | null;
     background: string | null;
     githubProfileUrl: string | null;
+    portfolioUrl: string | null;
+    linkedinProfileUrl: string | null;
     skills: string[];
     firstHeardAboutBitcoinOn: string | null;
     bitcoinBooksRead: string[];
@@ -75,6 +77,8 @@ const ProfilePage: React.FC = () => {
     description: null,
     background: null,
     githubProfileUrl: null,
+    portfolioUrl: null,
+    linkedinProfileUrl: null,
     skills: [],
     firstHeardAboutBitcoinOn: null,
     bitcoinBooksRead: [],
@@ -89,7 +93,9 @@ const ProfilePage: React.FC = () => {
     { label: "Discord Display Name", id: "discordGlobalName", value: profile.discordGlobalName },
     { label: "Name", id: "name", value: profile.name },
     { label: "Role", id: "role", value: profile.role },
-    { label: "GitHub Profile", id: "githubProfileUrl", value: profile.githubProfileUrl, type: "url" },
+    { label: "GitHub", id: "githubProfileUrl", value: profile.githubProfileUrl, type: "url" },
+    { label: "Portfolio / Side Project", id: "portfolioUrl", value: profile.portfolioUrl, type: "url" },
+    { label: "LinkedIn", id: "linkedinProfileUrl", value: profile.linkedinProfileUrl, type: "url" },
     { label: "Location", id: "location", value: profile.location },
     { label: "First Heard Bitcoin On", id: "firstHeardAboutBitcoinOn", value: profile.firstHeardAboutBitcoinOn },
     { label: "Why Bitcoin", id: "whyBitcoin", value: profile.whyBitcoin },
