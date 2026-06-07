@@ -9,6 +9,10 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { useStartFellowshipContract } from '../../hooks/fellowshipHooks';
 import type { GetFellowshipResponseDto } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -21,15 +25,18 @@ type Props = {
 };
 
 const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props) => {
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
   const [amountUsd, setAmountUsd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const startMut = useStartFellowshipContract();
 
+  // The picker already blocks invalid end dates via minDate; this guards
+  // typed input and keeps the rule explicit.
   const validate = () => {
     if (!startDate || !endDate || !amountUsd) return 'All fields required.';
-    if (new Date(endDate) <= new Date(startDate)) return 'End date must be after start date.';
+    if (!startDate.isValid() || !endDate.isValid()) return 'Enter valid dates.';
+    if (!endDate.isAfter(startDate, 'day')) return 'End date must be after start date.';
     const n = Number(amountUsd);
     if (Number.isNaN(n) || n <= 0) return 'Amount must be positive.';
     if (!/^\d+(\.\d{1,2})?$/.test(amountUsd)) return 'Amount supports up to 2 decimals.';
@@ -37,8 +44,8 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
   };
 
   const reset = () => {
-    setStartDate('');
-    setEndDate('');
+    setStartDate(null);
+    setEndDate(null);
     setAmountUsd('');
     setError(null);
   };
@@ -54,7 +61,11 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
     try {
       await startMut.mutateAsync({
         id: fellowship.id,
-        body: { startDate, endDate, amountUsd: Number(amountUsd) },
+        body: {
+          startDate: startDate!.format('YYYY-MM-DD'),
+          endDate: endDate!.format('YYYY-MM-DD'),
+          amountUsd: Number(amountUsd),
+        },
       });
       onSuccess('Contract started.');
       reset();
@@ -82,36 +93,37 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
             {error}
           </Alert>
         )}
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <DatePicker
+                label="Start date"
+                value={startDate}
+                onChange={(v) => {
+                  setStartDate(v);
+                  // Keep the range valid if the start moves past the end.
+                  if (v && endDate && !endDate.isAfter(v, 'day')) setEndDate(null);
+                }}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+              <DatePicker
+                label="End date"
+                value={endDate}
+                onChange={setEndDate}
+                minDate={startDate ? startDate.add(1, 'day') : dayjs()}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+            </Stack>
             <TextField
-              label="Start date"
-              type="date"
+              label="Amount (USD, per month)"
               size="small"
               fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <TextField
-              label="End date"
-              type="date"
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              value={amountUsd}
+              onChange={(e) => setAmountUsd(e.target.value)}
+              placeholder="500.00"
             />
           </Stack>
-          <TextField
-            label="Amount (USD, per month)"
-            size="small"
-            fullWidth
-            value={amountUsd}
-            onChange={(e) => setAmountUsd(e.target.value)}
-            placeholder="500.00"
-          />
-        </Stack>
+        </LocalizationProvider>
       </DialogContent>
       <DialogActions>
         <Button
