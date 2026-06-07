@@ -4,6 +4,11 @@ const ORANGE = '#f97316';
 const ORANGE_DARK = '#ea580c';
 const ORANGE_LIGHT = '#fb923c';
 
+// Single source of truth for monospace text in fellowship UI.
+// Convention: mono = dates, handles, amounts, counts; Inter = everything else.
+export const fontFamilyMono =
+  'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+
 export const fellowshipDarkTheme = createTheme({
   palette: {
     mode: 'dark',

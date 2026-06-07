@@ -13,6 +13,7 @@ import { Check, Eye, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import StatusChip from '../../components/fellowship/StatusChip';
 import MarkdownView from '../../components/fellowship/MarkdownView';
+import { fontFamilyMono } from '../../components/fellowship/theme';
 import {
   useApplication,
   useApplicationProposal,
@@ -30,6 +31,7 @@ import {
   type GetFellowshipResponseDto,
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatFellowshipType } from '../../utils/fellowshipFormat';
 
 type MonthSlot = { month: number; year: number; index: number };
 
@@ -424,12 +426,12 @@ const ActiveFellowshipCard = ({
                   fontSize: '0.7rem',
                 }}
               >
-                {fellowship.type}
+                {formatFellowshipType(fellowship.type)}
               </Typography>
             </Stack>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
               {fellowship.projectName ||
-                `${fellowship.type.charAt(0)}${fellowship.type.slice(1).toLowerCase()} fellowship`}
+                `${formatFellowshipType(fellowship.type)} fellowship`}
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               {fellowship.startDate && (
@@ -627,7 +629,7 @@ const Stat = ({ label, value, sub }: { label: string; value: string; sub: string
     >
       {label}
     </Typography>
-    <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{value}</Typography>
+    <Typography sx={{ fontWeight: 700, fontFamily: fontFamilyMono }}>{value}</Typography>
     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
       {sub}
     </Typography>
@@ -795,7 +797,7 @@ const MonthlyReportsPanel = ({
                 </Typography>
                 <Typography
                   variant="caption"
-                  sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem' }}
+                  sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.72rem' }}
                 >
                   {subDate}
                 </Typography>
@@ -871,11 +873,11 @@ const InProgressApplicationsPanel = ({
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-              {app.type.charAt(0) + app.type.slice(1).toLowerCase()} fellowship
+              {formatFellowshipType(app.type)} fellowship
             </Typography>
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem' }}
+              sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.72rem' }}
             >
               {isDraft
                 ? `Draft · updated ${formatDateShort(new Date(app.updatedAt))}`
@@ -979,13 +981,13 @@ const PastApplicationsPanel = ({
                   overflow: 'hidden',
                 }}
               >
-                {app.type.charAt(0) + app.type.slice(1).toLowerCase()} fellowship
+                {formatFellowshipType(app.type)} fellowship
               </Typography>
               <Typography
                 variant="caption"
                 sx={{
                   color: 'text.secondary',
-                  fontFamily: 'monospace',
+                  fontFamily: fontFamilyMono,
                   fontSize: '0.72rem',
                 }}
               >
@@ -1051,7 +1053,7 @@ const ApplicationDetailView = ({
           >
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                {app.type} application
+                {formatFellowshipType(app.type)} application
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Updated {new Date(app.updatedAt).toLocaleDateString()}

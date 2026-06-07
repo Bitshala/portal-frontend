@@ -30,6 +30,9 @@ const COLOR_MAP: Record<string, { bg: string; color: string; border: string }> =
 
 const LABEL_MAP: Record<string, string> = {
   CHANGES_REQUESTED: 'Changes requested',
+  // "Submitted" reads as a dead end to applicants; "Under review" tells them
+  // what is actually happening. Applies to reports too — same semantics.
+  SUBMITTED: 'Under review',
 };
 
 interface Props {

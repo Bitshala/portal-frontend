@@ -17,6 +17,8 @@ import {
 import { Check, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
+import StatusChip from '../../../components/fellowship/StatusChip';
+import { fontFamilyMono } from '../../../components/fellowship/theme';
 import {
   useFellowships,
   useReportContent,
@@ -30,6 +32,7 @@ import {
   type GetFellowshipResponseDto,
 } from '../../../types/fellowship';
 import { extractErrorMessage } from '../../../utils/errorUtils';
+import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 
 const PAGE_SIZE = 100;
 
@@ -84,32 +87,6 @@ const formatShortDate = (iso: string | null): string => {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-};
-
-const STATUS_PILL: Record<
-  FellowshipReportStatus,
-  { label: string; color: string; bg: string }
-> = {
-  [FellowshipReportStatus.DRAFT]: {
-    label: 'Draft',
-    color: '#d4d4d8',
-    bg: 'rgba(161,161,170,0.12)',
-  },
-  [FellowshipReportStatus.SUBMITTED]: {
-    label: 'Submitted',
-    color: '#60a5fa',
-    bg: 'rgba(96,165,250,0.12)',
-  },
-  [FellowshipReportStatus.APPROVED]: {
-    label: 'Approved',
-    color: '#4ade80',
-    bg: 'rgba(74,222,128,0.12)',
-  },
-  [FellowshipReportStatus.REJECTED]: {
-    label: 'Rejected',
-    color: '#f87171',
-    bg: 'rgba(248,113,113,0.12)',
-  },
 };
 
 // ---- page ----
@@ -422,7 +399,7 @@ const FilterPill = ({
     <Box
       component="span"
       sx={{
-        fontFamily: 'monospace',
+        fontFamily: fontFamilyMono,
         fontSize: '0.72rem',
         color: active ? 'primary.light' : 'text.secondary',
         opacity: active ? 1 : 0.75,
@@ -479,7 +456,6 @@ const ReportRow = ({
 }) => {
   const tint = tintFor(report.fellowName ?? report.fellowshipId ?? report.id);
   const trackColor = track ? TRACK_COLORS[track] : '#a1a1aa';
-  const pill = STATUS_PILL[report.status];
 
   return (
     <Box
@@ -539,7 +515,7 @@ const ReportRow = ({
                 fontWeight: 700,
               }}
             >
-              {track}
+              {formatFellowshipType(track)}
             </Typography>
           )}
         </Box>
@@ -558,40 +534,24 @@ const ReportRow = ({
         {project ?? '—'}
       </Typography>
 
-      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>
+      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem' }}>
         {formatMonthYear(report.month, report.year)}
       </Typography>
 
-      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem', color: 'text.secondary' }}>
+      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem', color: 'text.secondary' }}>
         {formatShortDate(report.updatedAt)}
       </Typography>
 
-      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>
+      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem' }}>
         {wordsFor(report.id)}
       </Typography>
 
-      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>
+      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem' }}>
         {prsFor(report.id)}
       </Typography>
 
       <Box>
-        <Box
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.6,
-            px: 1,
-            py: 0.3,
-            borderRadius: 4,
-            bgcolor: pill.bg,
-            color: pill.color,
-            fontSize: '0.72rem',
-            fontWeight: 600,
-          }}
-        >
-          <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: pill.color }} />
-          {pill.label}
-        </Box>
+        <StatusChip status={report.status} />
       </Box>
     </Box>
   );
@@ -615,7 +575,6 @@ const ReportDetail = ({
   isReviewing: boolean;
 }) => {
   const contentQuery = useReportContent(report.id);
-  const pill = STATUS_PILL[report.status];
   return (
     <Box sx={{ width: '100%', p: { xs: 3, md: 5 } }}>
       <Button
@@ -645,23 +604,7 @@ const ReportDetail = ({
             {prsFor(report.id)} PRs
           </Typography>
         </Box>
-        <Box
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.6,
-            px: 1,
-            py: 0.3,
-            borderRadius: 4,
-            bgcolor: pill.bg,
-            color: pill.color,
-            fontSize: '0.72rem',
-            fontWeight: 600,
-          }}
-        >
-          <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: pill.color }} />
-          {pill.label}
-        </Box>
+        <StatusChip status={report.status} size="medium" />
       </Stack>
 
       {contentQuery.isLoading && <CircularProgress size={20} />}
