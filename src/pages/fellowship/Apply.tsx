@@ -55,6 +55,9 @@ import {
 
 // X/Twitter-style long-form limit per section — mirrored server-side.
 const LONG_TEXT_LIMIT = 3000;
+// Titles surface in list rows, dialog headers and the print view —
+// long enough to be descriptive, short enough to stay scannable.
+const TITLE_LIMIT = 120;
 
 type TrackOption = {
   value: FellowshipType;
@@ -669,6 +672,8 @@ const ProposalStep = ({
           onChange={(e) => onChange('title', e.target.value)}
           disabled={disabled}
           placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
+          slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+          helperText={<CharCount value={fields.title} limit={TITLE_LIMIT} />}
           sx={{ mb: 2.5 }}
         />
 
@@ -880,17 +885,17 @@ const ProposalStep = ({
   );
 };
 
-// Live character counter rendered as helperText under long-form fields.
-const CharCount = ({ value }: { value: string }) => (
+// Live character counter rendered as helperText under length-capped fields.
+const CharCount = ({ value, limit = LONG_TEXT_LIMIT }: { value: string; limit?: number }) => (
   <Box
     component="span"
     sx={{
       display: 'block',
       textAlign: 'right',
-      color: value.length >= LONG_TEXT_LIMIT ? 'warning.main' : 'text.secondary',
+      color: value.length >= limit ? 'warning.main' : 'text.secondary',
     }}
   >
-    {value.length.toLocaleString('en-US')} / {LONG_TEXT_LIMIT.toLocaleString('en-US')}
+    {value.length.toLocaleString('en-US')} / {limit.toLocaleString('en-US')}
   </Box>
 );
 
