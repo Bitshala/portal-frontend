@@ -19,13 +19,14 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ExternalLink,
-  Github,
+  FileDown,
   MessageSquare,
   Search,
   X,
 } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
+import ProposalView from '../../../components/fellowship/ProposalView';
+import StatusChip from '../../../components/fellowship/StatusChip';
 import {
   useApplications,
   useApplicationProposal,
@@ -36,21 +37,22 @@ import {
   type GetFellowshipApplicationResponseDto,
 } from '../../../types/fellowship';
 import { extractErrorMessage } from '../../../utils/errorUtils';
-import { parseProposal } from '../../../utils/proposalFormat';
+import { formatFellowshipType } from '../../../utils/fellowshipFormat';
+import { normalizeGithub, parseProposal } from '../../../utils/proposalFormat';
 
 const PAGE_SIZE = 50;
 
 type FilterValue =
   | 'SUBMITTED'
-  | 'IN_REVIEW'
   | 'CHANGES_REQUESTED'
   | 'ACCEPTED'
   | 'REJECTED'
   | 'ALL';
 
+// "Submitted" and the old reviewer-assigned "In review" state collapse into a
+// single applicant-facing "Under review" bucket.
 const FILTERS: { label: string; value: FilterValue }[] = [
-  { label: 'Submitted', value: 'SUBMITTED' },
-  { label: 'In review', value: 'IN_REVIEW' },
+  { label: 'Under review', value: 'SUBMITTED' },
   { label: 'Changes requested', value: 'CHANGES_REQUESTED' },
   { label: 'Accepted', value: 'ACCEPTED' },
   { label: 'Rejected', value: 'REJECTED' },
@@ -99,14 +101,6 @@ const relativeDays = (iso: string | null): string => {
   return mo === 1 ? '1mo ago' : `${mo}mo ago`;
 };
 
-const handleFromProposalGithub = (gh: string) => {
-  if (!gh) return '';
-  if (gh.startsWith('@')) return gh;
-  const m = gh.match(/github\.com\/([^/\s]+)/i);
-  if (m) return `@${m[1]}`;
-  return gh;
-};
-
 // ---- page ----
 
 const ApplicationsAdmin = () => {
@@ -123,7 +117,7 @@ const ApplicationsAdmin = () => {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const apiStatus =
-    filter === 'ALL' || filter === 'IN_REVIEW'
+    filter === 'ALL'
       ? undefined
       : filter === 'SUBMITTED'
         ? FellowshipApplicationStatus.SUBMITTED
@@ -142,19 +136,14 @@ const ApplicationsAdmin = () => {
 
   const allRecords = useMemo(() => data?.records ?? [], [data?.records]);
 
-  // Client-side filter for In review (since API doesn't have that status)
-  // and for the free-text search.
+  // Client-side free-text search on top of the API status filter.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return allRecords.filter((r) => {
-      if (filter === 'IN_REVIEW') {
-        if (r.status !== FellowshipApplicationStatus.SUBMITTED) return false;
-        if (!r.reviewedById) return false;
-      }
-      if (!q) return true;
-      return (r.applicantName ?? '').toLowerCase().includes(q);
-    });
-  }, [allRecords, filter, search]);
+    if (!q) return allRecords;
+    return allRecords.filter((r) =>
+      (r.applicantName ?? '').toLowerCase().includes(q),
+    );
+  }, [allRecords, search]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -599,10 +588,10 @@ const ApplicantList = ({
                     overflow: 'hidden',
                   }}
                 >
-                  {r.type.charAt(0) + r.type.slice(1).toLowerCase()} fellowship · {relativeDays(r.createdAt)}
+                  {formatFellowshipType(r.type)} fellowship · {relativeDays(r.createdAt)}
                 </Typography>
                 <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                  <StatusPill status={r.status} />
+                  <StatusChip status={r.status} />
                 </Stack>
               </Box>
             </Stack>
@@ -612,52 +601,6 @@ const ApplicantList = ({
     </Stack>
   </Box>
 );
-
-const StatusPill = ({ status }: { status: FellowshipApplicationStatus }) => {
-  const map: Record<FellowshipApplicationStatus, { label: string; color: string; bg: string }> = {
-    [FellowshipApplicationStatus.DRAFT]: {
-      label: 'Draft',
-      color: '#d4d4d8',
-      bg: 'rgba(161,161,170,0.12)',
-    },
-    [FellowshipApplicationStatus.SUBMITTED]: {
-      label: 'Submitted',
-      color: '#fbbf24',
-      bg: 'rgba(251,191,36,0.12)',
-    },
-    [FellowshipApplicationStatus.CHANGES_REQUESTED]: {
-      label: 'Changes requested',
-      color: '#fb923c',
-      bg: 'rgba(251,146,60,0.12)',
-    },
-    [FellowshipApplicationStatus.ACCEPTED]: {
-      label: 'Accepted',
-      color: '#4ade80',
-      bg: 'rgba(74,222,128,0.12)',
-    },
-    [FellowshipApplicationStatus.REJECTED]: {
-      label: 'Rejected',
-      color: '#f87171',
-      bg: 'rgba(248,113,113,0.12)',
-    },
-  };
-  const p = map[status];
-  return (
-    <Box
-      sx={{
-        px: 0.85,
-        py: 0.15,
-        borderRadius: 0.4,
-        bgcolor: p.bg,
-        color: p.color,
-        fontSize: '0.66rem',
-        fontWeight: 600,
-      }}
-    >
-      {p.label}
-    </Box>
-  );
-};
 
 // ---- detail pane ----
 
@@ -708,7 +651,7 @@ const DetailPane = ({
   isReviewing: boolean;
 }) => {
   const fields = useMemo(() => parseProposal(proposal), [proposal]);
-  const handle = handleFromProposalGithub(fields.github);
+  const handle = fields.github ? `@${normalizeGithub(fields.github)}` : '';
   const isFinal =
     app.status === FellowshipApplicationStatus.ACCEPTED ||
     app.status === FellowshipApplicationStatus.REJECTED;
@@ -731,20 +674,39 @@ const DetailPane = ({
           <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {fields.title || `${app.type.charAt(0)}${app.type.slice(1).toLowerCase()} fellowship`}
+                {fields.title || `${formatFellowshipType(app.type)} fellowship`}
               </Typography>
-              <StatusPill status={app.status} />
+              <StatusChip status={app.status} />
             </Stack>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                {app.type.toLowerCase()}
-              </Box>
+              {formatFellowshipType(app.type)}
               {handle && <> · {handle}</>}
               <> · submitted {relativeDays(app.createdAt)}</>
             </Typography>
           </Box>
 
           <Stack direction="row" spacing={0.75}>
+            <IconButton
+              onClick={() =>
+                window.open(
+                  `/fellowship/applications/${app.id}/proposal/print`,
+                  '_blank',
+                )
+              }
+              size="small"
+              title="Export as PDF"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 0.5,
+                color: 'text.secondary',
+                width: 28,
+                height: 28,
+                '&:hover': { color: 'text.primary', bgcolor: 'rgba(255,255,255,0.04)' },
+              }}
+            >
+              <FileDown size={14} />
+            </IconButton>
             <PaginatorButton onClick={onPrev} disabled={!canPrev} dir="prev" />
             <Typography
               variant="caption"
@@ -763,54 +725,8 @@ const DetailPane = ({
             <CircularProgress size={20} />
           </Box>
         ) : (
-          <>
-            <Section title="Problem statement">
-              <Typography
-                variant="body2"
-                sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-              >
-                {fields.problemStatement || '—'}
-              </Typography>
-            </Section>
-
-            <Section title="6-month plan">
-              <Typography
-                variant="body2"
-                sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-              >
-                {fields.plan || '—'}
-              </Typography>
-            </Section>
-
-            {(fields.github || fields.links.some((l) => l.trim())) && (
-              <Section title="Links">
-                <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
-                  {fields.github && (
-                    <LinkChip
-                      href={
-                        fields.github.startsWith('http')
-                          ? fields.github
-                          : `https://github.com/${fields.github.replace(/^@/, '')}`
-                      }
-                      icon={<Github size={13} />}
-                      label={fields.github.replace(/^https?:\/\//, '')}
-                    />
-                  )}
-                  {fields.links
-                    .map((l) => l.trim())
-                    .filter(Boolean)
-                    .map((l) => (
-                      <LinkChip
-                        key={l}
-                        href={l.startsWith('http') ? l : `https://${l}`}
-                        icon={<ExternalLink size={13} />}
-                        label={l.replace(/^https?:\/\//, '')}
-                      />
-                    ))}
-                </Stack>
-              </Section>
-            )}
-          </>
+          // Reviewers read proposals in full, so no expandable clamping here.
+          <ProposalView proposal={proposal} />
         )}
 
         {app.status !== FellowshipApplicationStatus.SUBMITTED && app.reviewerRemarks && (
@@ -905,65 +821,14 @@ const PaginatorButton = ({
   </IconButton>
 );
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <Box sx={{ mt: 2.5 }}>
-    <Typography
-      variant="caption"
-      sx={{
-        color: 'text.secondary',
-        letterSpacing: 1,
-        fontSize: '0.68rem',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        display: 'block',
-        mb: 1,
-      }}
-    >
-      {title}
-    </Typography>
-    {children}
-  </Box>
-);
-
-const LinkChip = ({
-  href,
-  icon,
-  label,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-}) => (
-  <Box
-    component="a"
-    href={href}
-    target="_blank"
-    rel="noreferrer"
-    sx={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 0.75,
-      px: 1.25,
-      py: 0.5,
-      borderRadius: 0.5,
-      border: '1px solid',
-      borderColor: 'divider',
-      color: 'text.primary',
-      fontSize: '0.78rem',
-      textDecoration: 'none',
-      transition: 'border-color 0.15s, color 0.15s',
-      '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
-    }}
-  >
-    {icon}
-    <Box component="span">{label}</Box>
-  </Box>
-);
-
 // ---- shared dialog ----
 
+// Require an actual Drive *folder* URL (optionally account-scoped /u/N/),
+// not just any drive.google.com link — the folder hosts the fellow's docs.
 const isDriveFolderUrl = (v: string): boolean =>
-  /^https:\/\/drive\.google\.com\//.test(v.trim());
+  /^https:\/\/drive\.google\.com\/drive\/(u\/\d+\/)?folders\/[\w-]+([?#].*)?$/.test(
+    v.trim(),
+  );
 
 const AcceptDialog = ({
   open,
@@ -999,7 +864,9 @@ const AcceptDialog = ({
           autoFocus
           error={touched && !valid}
           helperText={
-            touched && !valid ? 'Enter a valid Google Drive URL (https://drive.google.com/…)' : ' '
+            touched && !valid
+              ? 'Enter a Google Drive folder URL (https://drive.google.com/drive/folders/…)'
+              : ' '
           }
         />
       </DialogContent>

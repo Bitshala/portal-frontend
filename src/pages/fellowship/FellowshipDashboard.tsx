@@ -15,8 +15,9 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { ArrowLeft, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
+import ProposalDialog from '../../components/fellowship/ProposalDialog';
 import StartContractDialog from '../../components/fellowship/StartContractDialog';
 import StatusChip from '../../components/fellowship/StatusChip';
 import { useFellowship, useMyReports } from '../../hooks/fellowshipHooks';
@@ -24,20 +25,24 @@ import {
   FellowshipStatus,
   type FellowshipOnboardingDto,
 } from '../../types/fellowship';
+import { formatFellowshipType } from '../../utils/fellowshipFormat';
+import { githubProfileUrl } from '../../utils/proposalFormat';
 
 const ONBOARDING_FIELDS: {
   key: keyof FellowshipOnboardingDto;
   label: string;
   multiline?: boolean;
   chips?: boolean;
+  // Renders the value as a clickable link; handles bare GitHub usernames too.
+  link?: boolean;
 }[] = [
-  { key: 'githubProfile', label: 'GitHub profile' },
+  { key: 'githubProfile', label: 'GitHub profile', link: true },
   { key: 'location', label: 'Location' },
   { key: 'academicBackground', label: 'Academic background' },
   { key: 'graduationYear', label: 'Graduation year' },
   { key: 'professionalExperience', label: 'Professional experience', multiline: true },
   { key: 'projectName', label: 'Project name' },
-  { key: 'projectGithubLink', label: 'Project GitHub link' },
+  { key: 'projectGithubLink', label: 'Project GitHub link', link: true },
   { key: 'projectMaintainerName', label: 'Project maintainer' },
   { key: 'mentorContact', label: 'Mentor contact' },
   { key: 'domains', label: 'Domains', chips: true },
@@ -81,11 +86,13 @@ const ReadOnlyField = ({
   value,
   multiline,
   fullWidth,
+  href,
 }: {
   label: string;
   value: string;
   multiline?: boolean;
   fullWidth?: boolean;
+  href?: string;
 }) => (
   <Grid size={{ xs: 12, md: fullWidth ? 12 : 6 }}>
     <Typography
@@ -111,7 +118,23 @@ const ReadOnlyField = ({
         wordBreak: 'break-word',
       }}
     >
-      {value || '—'}
+      {value && href ? (
+        <Box
+          component="a"
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          sx={{
+            color: 'primary.light',
+            textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          {value}
+        </Box>
+      ) : (
+        value || '—'
+      )}
     </Typography>
   </Grid>
 );
@@ -151,6 +174,7 @@ const FellowshipDashboard = () => {
   const navigate = useNavigate();
   const [onboardingOpen, setOnboardingOpen] = useState(true);
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [proposalOpen, setProposalOpen] = useState(false);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const { data: fellowship, isLoading } = useFellowship(id ?? '', { enabled: !!id });
@@ -210,7 +234,7 @@ const FellowshipDashboard = () => {
             <Box>
               <Stack direction="row" spacing={1.5} alignItems="center" mb={0.5}>
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  {fellowship.type} fellowship
+                  {formatFellowshipType(fellowship.type)} fellowship
                 </Typography>
                 <StatusChip status={fellowship.status} />
               </Stack>
@@ -229,8 +253,8 @@ const FellowshipDashboard = () => {
               </Typography>
             </Box>
 
-            {isPending && (
-              <Stack direction="row" spacing={1.25} alignItems="center">
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              {isPending && (
                 <Box
                   sx={{
                     display: 'inline-flex',
@@ -249,11 +273,21 @@ const FellowshipDashboard = () => {
                   <Check size={13} strokeWidth={3} />
                   Accepted
                 </Box>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<FileText size={15} />}
+                onClick={() => setProposalOpen(true)}
+                sx={{ color: 'text.primary', borderColor: 'divider' }}
+              >
+                View proposal
+              </Button>
+              {isPending && (
                 <Button variant="contained" onClick={() => setContractDialogOpen(true)}>
                   Start contract
                 </Button>
-              </Stack>
-            )}
+              )}
+            </Stack>
           </Stack>
           {isPending && (
             <Alert severity="info" sx={{ mt: 2 }}>
@@ -263,6 +297,12 @@ const FellowshipDashboard = () => {
           )}
         </CardContent>
       </Card>
+
+      <ProposalDialog
+        applicationId={proposalOpen ? fellowship.applicationId : null}
+        title={`${formatFellowshipType(fellowship.type)} fellowship proposal`}
+        onClose={() => setProposalOpen(false)}
+      />
 
       <StartContractDialog
         fellowship={contractDialogOpen ? fellowship : null}
@@ -320,6 +360,7 @@ const FellowshipDashboard = () => {
                     value={value}
                     multiline={f.multiline}
                     fullWidth={f.multiline}
+                    href={f.link && value ? githubProfileUrl(value) : undefined}
                   />
                 );
               })}

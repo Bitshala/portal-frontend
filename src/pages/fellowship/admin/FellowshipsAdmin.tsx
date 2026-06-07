@@ -4,14 +4,18 @@ import {
   Box,
   Button,
   CircularProgress,
+  IconButton,
   InputAdornment,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { ChevronDown, ChevronUp, Download, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, FileText, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
+import ProposalDialog from '../../../components/fellowship/ProposalDialog';
+import StatusChip from '../../../components/fellowship/StatusChip';
+import { fontFamilyMono } from '../../../components/fellowship/theme';
 import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
 import {
   FellowshipStatus,
@@ -19,6 +23,7 @@ import {
   type GetFellowshipResponseDto,
   type GetFellowshipReportResponseDto,
 } from '../../../types/fellowship';
+import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 
 const PAGE_SIZE = 50;
 
@@ -39,12 +44,6 @@ const TRACK_COLORS: Record<FellowshipType, string> = {
   [FellowshipType.DEVELOPER]: '#fb923c',
   [FellowshipType.DESIGNER]: '#60a5fa',
   [FellowshipType.EDUCATOR]: '#a78bfa',
-};
-
-const STATUS_DOT: Record<FellowshipStatus, { color: string; label: string }> = {
-  [FellowshipStatus.PENDING]: { color: '#fbbf24', label: 'Pending' },
-  [FellowshipStatus.ACTIVE]: { color: '#4ade80', label: 'Active' },
-  [FellowshipStatus.COMPLETED]: { color: '#60a5fa', label: 'Completed' },
 };
 
 // ---- helpers ----
@@ -112,6 +111,8 @@ const FellowshipsAdmin = () => {
   const [maintainerFilter, setMaintainerFilter] = useState<string>(ALL_VALUE);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  // Application whose proposal is open in the viewer dialog.
+  const [proposalAppId, setProposalAppId] = useState<string | null>(null);
 
   const { data, isLoading } = useFellowships({ page: 0, pageSize: PAGE_SIZE });
   const reportsQuery = useReports({ page: 0, pageSize: 200 });
@@ -348,10 +349,16 @@ const FellowshipsAdmin = () => {
               fellowship={f}
               lastReport={lastReportByFellowship.get(f.id)}
               onOpen={() => navigate(`/fellowship/fellowships/${f.id}`)}
+              onViewProposal={() => setProposalAppId(f.applicationId)}
             />
           ))
         )}
       </Box>
+
+      <ProposalDialog
+        applicationId={proposalAppId}
+        onClose={() => setProposalAppId(null)}
+      />
     </FellowshipPageLayout>
   );
 };
@@ -393,7 +400,7 @@ const FilterPill = ({
     <Box
       component="span"
       sx={{
-        fontFamily: 'monospace',
+        fontFamily: fontFamilyMono,
         fontSize: '0.72rem',
         color: active ? 'primary.light' : 'text.secondary',
         opacity: active ? 1 : 0.75,
@@ -407,7 +414,7 @@ const FilterPill = ({
 // ---- table header ----
 
 const COLS =
-  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 100px';
+  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 110px 44px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -482,6 +489,7 @@ const HeaderRow = ({
     <Box>Payout</Box>
     <Box>Last report</Box>
     <Box>Status</Box>
+    <Box aria-label="Actions" />
   </Box>
 );
 
@@ -491,14 +499,15 @@ const FellowshipRow = ({
   fellowship,
   lastReport,
   onOpen,
+  onViewProposal,
 }: {
   fellowship: GetFellowshipResponseDto;
   lastReport?: GetFellowshipReportResponseDto;
   onOpen: () => void;
+  onViewProposal: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
-  const dot = STATUS_DOT[fellowship.status];
 
   return (
     <Box
@@ -552,7 +561,7 @@ const FellowshipRow = ({
           {handleFor(fellowship) && (
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.7rem' }}
+              sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.7rem' }}
             >
               {handleFor(fellowship)}
             </Typography>
@@ -563,13 +572,13 @@ const FellowshipRow = ({
       {/* Track */}
       <Box
         sx={{
-          fontSize: '0.7rem',
+          fontSize: '0.78rem',
           fontWeight: 700,
-          letterSpacing: 0.8,
+          letterSpacing: 0.4,
           color: trackColor,
         }}
       >
-        {fellowship.type}
+        {formatFellowshipType(fellowship.type)}
       </Box>
 
       {/* Project */}
@@ -606,7 +615,7 @@ const FellowshipRow = ({
       {/* End date */}
       <Typography
         sx={{
-          fontFamily: 'monospace',
+          fontFamily: fontFamilyMono,
           fontSize: '0.78rem',
           color: fellowship.endDate ? 'text.primary' : 'text.secondary',
         }}
@@ -617,7 +626,7 @@ const FellowshipRow = ({
       {/* Payout */}
       <Typography
         sx={{
-          fontFamily: 'monospace',
+          fontFamily: fontFamilyMono,
           fontSize: '0.78rem',
           color: 'text.primary',
         }}
@@ -628,7 +637,7 @@ const FellowshipRow = ({
       {/* Last report */}
       <Typography
         sx={{
-          fontFamily: 'monospace',
+          fontFamily: fontFamilyMono,
           fontSize: '0.78rem',
           color: 'text.secondary',
         }}
@@ -637,10 +646,28 @@ const FellowshipRow = ({
       </Typography>
 
       {/* Status */}
-      <Stack direction="row" alignItems="center" spacing={0.75}>
-        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: dot.color }} />
-        <Typography sx={{ fontSize: '0.82rem', color: 'text.primary' }}>{dot.label}</Typography>
-      </Stack>
+      <Box>
+        <StatusChip status={fellowship.status} />
+      </Box>
+
+      {/* Actions */}
+      <IconButton
+        size="small"
+        title="View proposal"
+        aria-label="View proposal"
+        onClick={(e) => {
+          e.stopPropagation();
+          onViewProposal();
+        }}
+        sx={{
+          color: 'text.secondary',
+          width: 28,
+          height: 28,
+          '&:hover': { color: 'text.primary' },
+        }}
+      >
+        <FileText size={14} />
+      </IconButton>
     </Box>
   );
 };

@@ -43,6 +43,7 @@ const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
 const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
 const FellowshipDashboard = lazy(() => import('./pages/fellowship/FellowshipDashboard.tsx'));
 const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
+const ProposalPrint = lazy(() => import('./pages/fellowship/ProposalPrint.tsx'));
 const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/ApplicationsAdmin.tsx'));
 const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/FellowshipsAdmin.tsx'));
 const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
@@ -206,6 +207,13 @@ const router = createBrowserRouter([
     {
       path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
       element: <Layout><ProtectedRoute>{withFellowshipFallback(<Report />)}</ProtectedRoute></Layout>,
+    },
+    {
+      // Print-friendly proposal view — deliberately unwrapped from Layout so
+      // only the document itself prints. Access control happens server-side
+      // (applicants can read their own proposal, admins any).
+      path: '/fellowship/applications/:id/proposal/print',
+      element: <ProtectedRoute>{withFellowshipFallback(<ProposalPrint />)}</ProtectedRoute>,
     },
     {
       path: '/admin/fellowships',
