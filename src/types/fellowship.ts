@@ -73,6 +73,12 @@ export interface ListFellowshipApplicationsQueryDto extends PaginatedQueryDto {
   type?: FellowshipType;
 }
 
+export interface GithubUserCheckResponseDto {
+  // true/false when GitHub answered; null when the check could not be
+  // performed (rate limit, network) — callers must treat null as "unknown".
+  exists: boolean | null;
+}
+
 // =========================
 // Fellowships
 // =========================
@@ -102,6 +108,8 @@ export interface GetFellowshipResponseDto extends FellowshipOnboardingDto {
   userId: string;
   userName: string | null;
   userEmail: string | null;
+  // The application this fellowship was created from — links back to the proposal.
+  applicationId: string;
   type: FellowshipType;
   status: FellowshipStatus;
   startDate: string | null;

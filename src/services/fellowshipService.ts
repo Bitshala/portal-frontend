@@ -9,6 +9,7 @@ import type {
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
   GetFellowshipResponseDto,
+  GithubUserCheckResponseDto,
   ListFellowshipApplicationsQueryDto,
   ListFellowshipReportsQueryDto,
   ReviewFellowshipApplicationRequestDto,
@@ -144,6 +145,16 @@ class FellowshipService {
       url: `/fellowship-applications/${id}/review`,
       data: body,
     });
+  };
+
+  // Soft check that a GitHub account exists — advisory only, never blocks.
+  public checkGithubUser = async (username: string): Promise<GithubUserCheckResponseDto> => {
+    const { data } = await this.request<GithubUserCheckResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/fellowship-applications/github/${encodeURIComponent(username)}`,
+    });
+    return data;
   };
 
   // =========================

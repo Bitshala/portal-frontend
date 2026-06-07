@@ -26,7 +26,9 @@ export const serializeProposal = (f: ProposalFields): string => {
   parts.push(`${SECTION_HEADINGS.problem}\n\n${f.problemStatement.trim()}`);
   parts.push(`${SECTION_HEADINGS.plan}\n\n${f.plan.trim()}`);
   const lines: string[] = [];
-  if (f.github.trim()) lines.push(`- GitHub: ${f.github.trim()}`);
+  // Store the canonical bare username, whatever form the user typed it in.
+  const github = normalizeGithub(f.github);
+  if (github) lines.push(`- GitHub: ${github}`);
   for (const link of f.links) {
     const v = link.trim();
     if (v) lines.push(`- ${v}`);
@@ -89,7 +91,7 @@ export const parseProposal = (text: string): ProposalFields => {
 // Validation
 // =========================
 
-const GITHUB_URL_RE = /^https?:\/\/(www\.)?github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]){0,38}\/?$/i;
+const GITHUB_URL_RE = /^https?:\/\/(www\.)?github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]){0,38})\/?$/i;
 const GITHUB_HANDLE_RE = /^@?[A-Za-z0-9](?:[A-Za-z0-9-]){0,38}$/;
 const URL_RE = /^https?:\/\/[^\s.]+\.[^\s]+$/i;
 
@@ -98,7 +100,26 @@ export const validateGithub = (value: string): string | null => {
   if (!v) return null;
   if (GITHUB_URL_RE.test(v)) return null;
   if (GITHUB_HANDLE_RE.test(v)) return null;
-  return 'Enter a GitHub handle (e.g. @aarav-m) or full URL (https://github.com/aarav-m).';
+  return 'Enter a GitHub username (e.g. aarav-m) or profile URL (https://github.com/aarav-m).';
+};
+
+/**
+ * Canonicalize any accepted GitHub input (`@handle`, `handle`, profile URL)
+ * to the bare username. Invalid input is returned trimmed but untouched so
+ * the validation error stays visible on what the user actually typed.
+ */
+export const normalizeGithub = (value: string): string => {
+  const v = value.trim();
+  if (!v) return '';
+  const urlMatch = v.match(GITHUB_URL_RE);
+  if (urlMatch) return urlMatch[2];
+  if (GITHUB_HANDLE_RE.test(v)) return v.replace(/^@/, '');
+  return v;
+};
+
+export const githubProfileUrl = (value: string): string => {
+  const handle = normalizeGithub(value);
+  return handle.startsWith('http') ? handle : `https://github.com/${handle}`;
 };
 
 export const validateLink = (value: string): string | null => {
@@ -106,4 +127,27 @@ export const validateLink = (value: string): string | null => {
   if (!v) return null;
   if (URL_RE.test(v)) return null;
   return 'Enter a full URL starting with http:// or https://';
+};
+
+// Compare links ignoring protocol, www, case, and trailing slashes so
+// "https://Foo.com/x/" and "http://foo.com/x" count as the same link.
+const normalizeUrlForCompare = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+
+/** Indices of links that duplicate an earlier entry (empty entries ignored). */
+export const duplicateLinkIndices = (links: string[]): Set<number> => {
+  const seen = new Set<string>();
+  const dups = new Set<number>();
+  links.forEach((link, i) => {
+    const key = normalizeUrlForCompare(link);
+    if (!key) return;
+    if (seen.has(key)) dups.add(i);
+    else seen.add(key);
+  });
+  return dups;
 };

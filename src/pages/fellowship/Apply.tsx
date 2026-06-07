@@ -15,6 +15,8 @@ import {
   Check,
   CheckCircle2,
   Code2,
+  ExternalLink,
+  Github,
   Lightbulb,
   PenTool,
   Plus,
@@ -22,7 +24,9 @@ import {
   X,
 } from 'lucide-react';
 import { IconButton } from '@mui/material';
+import ExpandableText from '../../components/fellowship/ExpandableText';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
+import LinkChip from '../../components/fellowship/LinkChip';
 import {
   useApplication,
   useApplicationProposal,
@@ -35,15 +39,22 @@ import {
   FellowshipApplicationStatus,
   FellowshipType,
 } from '../../types/fellowship';
+import fellowshipService from '../../services/fellowshipService';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
   EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
+  duplicateLinkIndices,
+  githubProfileUrl,
+  normalizeGithub,
   parseProposal,
   serializeProposal,
   validateGithub,
   validateLink,
   type ProposalFields,
 } from '../../utils/proposalFormat';
+
+// X/Twitter-style long-form limit per section — mirrored server-side.
+const LONG_TEXT_LIMIT = 3000;
 
 type TrackOption = {
   value: FellowshipType;
@@ -130,13 +141,48 @@ const Apply = () => {
     currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
   const isResubmit = currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
 
+  const dupLinkIndices = useMemo(
+    () => duplicateLinkIndices(fields.links),
+    [fields.links],
+  );
+
+  // Advisory GitHub account check — a missing account warns but never blocks.
+  const [githubCheck, setGithubCheck] = useState<{
+    handle: string;
+    exists: boolean | null;
+  } | null>(null);
+
+  const handleGithubBlur = () => {
+    if (validateGithub(fields.github)) return;
+    const handle = normalizeGithub(fields.github);
+    if (!handle) {
+      setGithubCheck(null);
+      return;
+    }
+    // Canonicalize whatever form was typed (URL, @handle) to the bare username.
+    if (handle !== fields.github) setField('github', handle);
+    if (githubCheck?.handle === handle) return;
+    fellowshipService
+      .checkGithubUser(handle)
+      .then((res) => setGithubCheck({ handle, exists: res.exists }))
+      .catch(() => setGithubCheck({ handle, exists: null }));
+  };
+
+  const githubWarning =
+    githubCheck &&
+    githubCheck.exists === false &&
+    normalizeGithub(fields.github) === githubCheck.handle
+      ? `GitHub user "${githubCheck.handle}" was not found — double-check the username.`
+      : null;
+
   const proposalReady = useMemo(() => {
     if (fields.problemStatement.trim().length === 0) return false;
     if (fields.plan.trim().length === 0) return false;
     if (validateGithub(fields.github)) return false;
     if (fields.links.some((l) => validateLink(l))) return false;
+    if (dupLinkIndices.size > 0) return false;
     return true;
-  }, [fields.problemStatement, fields.plan, fields.github, fields.links]);
+  }, [fields.problemStatement, fields.plan, fields.github, fields.links, dupLinkIndices]);
 
   const resetEditor = () => {
     setActiveId(null);
@@ -158,6 +204,11 @@ const Apply = () => {
         proposal: serializeProposal(fields),
       });
       setActiveId(created.id);
+      // Reflect the draft in the URL so a refresh resumes this draft instead
+      // of starting a fresh editor (which would then collide with the
+      // one-draft-per-type rule on the next save).
+      searchParams.set('appId', created.id);
+      setSearchParams(searchParams, { replace: true });
       return created.id;
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -190,8 +241,26 @@ const Apply = () => {
     setStep(1);
   };
 
-  const handleContinueFromProposal = () => {
+  const handleContinueFromProposal = async () => {
     if (!proposalReady) return;
+    // Persist before moving to review so progress survives a refresh —
+    // create the draft on first Continue, update it afterwards.
+    if (isEditable && selectedType) {
+      try {
+        if (activeId) {
+          await updateMut.mutateAsync({
+            id: activeId,
+            body: { proposal: serializeProposal(fields) },
+          });
+        } else {
+          const id = await ensureDraftExists();
+          if (!id) return; // creation failed — toast already shown
+        }
+      } catch (e) {
+        setToast({ kind: 'error', msg: extractErrorMessage(e) });
+        return;
+      }
+    }
     setStep(2);
   };
 
@@ -256,7 +325,9 @@ const Apply = () => {
         onJump={(i) => {
           if (i === 0) setStep(0);
           if (i === 1 && selectedType) setStep(1);
-          if (i === 2 && selectedType && proposalReady) setStep(2);
+          // Jumping to review goes through the same save-then-advance path
+          // as the Continue button.
+          if (i === 2 && selectedType && proposalReady) void handleContinueFromProposal();
         }}
       />
 
@@ -282,6 +353,9 @@ const Apply = () => {
           showDiscard={!!activeId && isEditable}
           onDiscard={handleDiscard}
           isDiscarding={deleteMut.isPending}
+          dupLinkIndices={dupLinkIndices}
+          onGithubBlur={handleGithubBlur}
+          githubWarning={githubWarning}
         />
       )}
 
@@ -540,6 +614,9 @@ const ProposalStep = ({
   showDiscard,
   onDiscard,
   isDiscarding,
+  dupLinkIndices,
+  onGithubBlur,
+  githubWarning,
 }: {
   fields: ProposalFields;
   disabled: boolean;
@@ -552,6 +629,9 @@ const ProposalStep = ({
   showDiscard: boolean;
   onDiscard: () => void;
   isDiscarding: boolean;
+  dupLinkIndices: Set<number>;
+  onGithubBlur: () => void;
+  githubWarning: string | null;
 }) => {
   return (
     <Box
@@ -601,6 +681,8 @@ const ProposalStep = ({
           onChange={(e) => onChange('problemStatement', e.target.value)}
           disabled={disabled}
           placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
+          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          helperText={<CharCount value={fields.problemStatement} />}
           sx={{ mb: 2.5 }}
         />
 
@@ -613,25 +695,38 @@ const ProposalStep = ({
           onChange={(e) => onChange('plan', e.target.value)}
           disabled={disabled}
           placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
+          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          helperText={<CharCount value={fields.plan} />}
           sx={{ mb: 2.5 }}
         />
 
-        <FieldLabel>GitHub handle</FieldLabel>
+        <FieldLabel>GitHub username</FieldLabel>
         <TextField
           fullWidth
           value={fields.github}
           onChange={(e) => onChange('github', e.target.value)}
+          onBlur={onGithubBlur}
           disabled={disabled}
-          placeholder="@aarav-m"
+          placeholder="aarav-m or https://github.com/aarav-m"
           error={!!validateGithub(fields.github)}
           helperText={validateGithub(fields.github) ?? ' '}
-          sx={{ mb: 2 }}
+          sx={{ mb: githubWarning ? 0 : 2 }}
         />
+        {githubWarning && (
+          <Typography
+            variant="caption"
+            sx={{ color: 'warning.main', display: 'block', mb: 2 }}
+          >
+            {githubWarning}
+          </Typography>
+        )}
 
         <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
         <Stack spacing={1.25} sx={{ mb: 1 }}>
           {fields.links.map((link, idx) => {
-            const error = validateLink(link);
+            const error =
+              validateLink(link) ??
+              (dupLinkIndices.has(idx) ? 'Duplicate link — already added above.' : null);
             const showRemove = fields.links.length > 1;
             return (
               <Stack key={idx} direction="row" spacing={1} alignItems="flex-start">
@@ -707,10 +802,10 @@ const ProposalStep = ({
             <Button
               variant="contained"
               onClick={onContinue}
-              disabled={!canContinue || disabled}
+              disabled={!canContinue || disabled || isSaving}
               endIcon={<ArrowRight size={16} />}
             >
-              Continue
+              {isSaving ? 'Saving…' : 'Continue'}
             </Button>
           </Stack>
         </Stack>
@@ -784,6 +879,20 @@ const ProposalStep = ({
     </Box>
   );
 };
+
+// Live character counter rendered as helperText under long-form fields.
+const CharCount = ({ value }: { value: string }) => (
+  <Box
+    component="span"
+    sx={{
+      display: 'block',
+      textAlign: 'right',
+      color: value.length >= LONG_TEXT_LIMIT ? 'warning.main' : 'text.secondary',
+    }}
+  >
+    {value.length.toLocaleString('en-US')} / {LONG_TEXT_LIMIT.toLocaleString('en-US')}
+  </Box>
+);
 
 const FieldLabel = ({ children }: { children: React.ReactNode }) => (
   <Typography
@@ -885,27 +994,39 @@ const ReviewStep = ({
 
         <Box>
           <FieldLabel>Problem statement</FieldLabel>
-          <Typography
-            variant="body2"
-            sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-          >
-            {fields.problemStatement || '—'}
-          </Typography>
+          {fields.problemStatement ? (
+            <ExpandableText text={fields.problemStatement} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              —
+            </Typography>
+          )}
         </Box>
 
         <Box>
           <FieldLabel>6-month plan & milestones</FieldLabel>
-          <Typography
-            variant="body2"
-            sx={{ color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-          >
-            {fields.plan || '—'}
-          </Typography>
+          {fields.plan ? (
+            <ExpandableText text={fields.plan} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              —
+            </Typography>
+          )}
         </Box>
 
         <Box>
-          <FieldLabel>GitHub handle</FieldLabel>
-          <Typography variant="body2">{fields.github || '—'}</Typography>
+          <FieldLabel>GitHub username</FieldLabel>
+          {fields.github ? (
+            <LinkChip
+              href={githubProfileUrl(fields.github)}
+              icon={<Github size={13} />}
+              label={`@${normalizeGithub(fields.github)}`}
+            />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              —
+            </Typography>
+          )}
         </Box>
         <Box>
           <FieldLabel>Links</FieldLabel>
@@ -914,17 +1035,17 @@ const ReviewStep = ({
               —
             </Typography>
           ) : (
-            <Stack spacing={0.5}>
+            <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
               {fields.links
-                .filter((l) => l.trim())
-                .map((l, i) => (
-                  <Typography
-                    key={i}
-                    variant="body2"
-                    sx={{ wordBreak: 'break-all', color: 'text.primary' }}
-                  >
-                    {l}
-                  </Typography>
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .map((l) => (
+                  <LinkChip
+                    key={l}
+                    href={l.startsWith('http') ? l : `https://${l}`}
+                    icon={<ExternalLink size={13} />}
+                    label={l.replace(/^https?:\/\//, '')}
+                  />
                 ))}
             </Stack>
           )}
