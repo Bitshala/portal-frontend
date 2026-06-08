@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Stack,
   TextField,
   Typography,
@@ -32,6 +33,7 @@ import {
   useApplicationProposal,
   useCreateApplication,
   useDeleteApplication,
+  useMyApplications,
   useSubmitApplication,
   useUpdateApplication,
 } from '../../hooks/fellowshipHooks';
@@ -97,6 +99,7 @@ type StepIndex = 0 | 1 | 2;
 const STEP_LABELS = ['Track', 'Proposal', 'Review & submit'] as const;
 
 const Apply = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const appIdFromUrl = searchParams.get('appId');
 
@@ -105,14 +108,22 @@ const Apply = () => {
   const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
   const [step, setStep] = useState<StepIndex>(0);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
+  const myApplicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
 
   const createMut = useCreateApplication();
   const updateMut = useUpdateApplication();
   const submitMut = useSubmitApplication();
   const deleteMut = useDeleteApplication();
+
+  useEffect(() => {
+    if (!submitted) return;
+    const timer = setTimeout(() => navigate('/fellowship/me', { replace: true }), 1800);
+    return () => clearTimeout(timer);
+  }, [navigate, submitted]);
 
   useEffect(() => {
     if (appIdFromUrl && appIdFromUrl !== activeId) setActiveId(appIdFromUrl);
@@ -148,6 +159,42 @@ const Apply = () => {
     }
   }, [activeId, loadedApp.data?.type, loadedApp.data?.status]);
 
+  const existingSameTypeApp = useMemo(() => {
+    if (!selectedType) return null;
+    const sameType = (myApplicationsQuery.data?.records ?? []).filter(
+      (a) => a.type === selectedType,
+    );
+    return (
+      sameType.find(
+        (a) =>
+          a.status === FellowshipApplicationStatus.DRAFT ||
+          a.status === FellowshipApplicationStatus.CHANGES_REQUESTED,
+      ) ??
+      sameType.find((a) => a.status === FellowshipApplicationStatus.SUBMITTED) ??
+      null
+    );
+  }, [myApplicationsQuery.data?.records, selectedType]);
+
+  useEffect(() => {
+    if (activeId || !selectedType || myApplicationsQuery.isLoading) return;
+    if (
+      existingSameTypeApp?.status === FellowshipApplicationStatus.DRAFT ||
+      existingSameTypeApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED
+    ) {
+      setActiveId(existingSameTypeApp.id);
+      searchParams.set('appId', existingSameTypeApp.id);
+      setSearchParams(searchParams, { replace: true });
+      setStep(1);
+    }
+  }, [
+    activeId,
+    existingSameTypeApp,
+    myApplicationsQuery.isLoading,
+    searchParams,
+    selectedType,
+    setSearchParams,
+  ]);
+
   const currentApp = activeId ? loadedApp.data : null;
   const isEditable =
     !activeId ||
@@ -166,7 +213,9 @@ const Apply = () => {
   }, [activeId, loadedProposal.data?.proposal]);
 
   useEffect(() => {
+    if (submitted) return;
     if (!selectedType || !isEditable) return;
+    if (!activeId && existingSameTypeApp) return;
     if (activeId && !currentApp) return;
     if (autoSaveInFlight.current) return;
     if (lastSavedRef.current?.id === activeId && lastSavedRef.current.proposal === serializedProposal) return;
@@ -206,7 +255,9 @@ const Apply = () => {
   }, [
     activeId,
     currentApp,
+    existingSameTypeApp,
     isEditable,
+    submitted,
     searchParams,
     selectedType,
     serializedProposal,
@@ -274,6 +325,20 @@ const Apply = () => {
   const ensureDraftExists = async (): Promise<string | null> => {
     if (activeId) return activeId;
     if (!selectedType) return null;
+    if (
+      existingSameTypeApp?.status === FellowshipApplicationStatus.DRAFT ||
+      existingSameTypeApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED
+    ) {
+      setActiveId(existingSameTypeApp.id);
+      searchParams.set('appId', existingSameTypeApp.id);
+      setSearchParams(searchParams, { replace: true });
+      setStep(1);
+      return existingSameTypeApp.id;
+    }
+    if (existingSameTypeApp?.status === FellowshipApplicationStatus.SUBMITTED) {
+      navigate('/fellowship/me', { replace: true });
+      return null;
+    }
     try {
       const created = await createMut.mutateAsync({
         type: selectedType,
@@ -312,8 +377,13 @@ const Apply = () => {
     }
   };
 
+  const trackBlockedMessage =
+    existingSameTypeApp?.status === FellowshipApplicationStatus.SUBMITTED && selectedType
+      ? `You already have a ${TRACK_BY_VALUE[selectedType].title.toLowerCase()} fellowship under review.`
+      : null;
+
   const handleContinueFromTrack = () => {
-    if (!selectedType) return;
+    if (!selectedType || trackBlockedMessage) return;
     setStep(1);
   };
 
@@ -358,13 +428,8 @@ const Apply = () => {
         if (!id) return;
       }
       await submitMut.mutateAsync({ id });
-      setToast({
-        kind: 'success',
-        msg: isResubmit
-          ? 'Application resubmitted — check your email.'
-          : 'Application submitted — check your email.',
-      });
       resetEditor();
+      setSubmitted(true);
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -384,6 +449,18 @@ const Apply = () => {
 
   const setField = <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) =>
     setFields((prev) => ({ ...prev, [k]: v }));
+
+  if (submitted) {
+    return (
+      <FellowshipPageLayout
+        title="Application submitted"
+        subtitle="Your proposal has been sent for review."
+        hideIcon
+      >
+        <SubmissionSuccess />
+      </FellowshipPageLayout>
+    );
+  }
 
   return (
     <FellowshipPageLayout
@@ -415,6 +492,7 @@ const Apply = () => {
           disabled={!isEditable}
           onSelect={setSelectedType}
           onContinue={handleContinueFromTrack}
+          blockedMessage={trackBlockedMessage}
         />
       )}
 
@@ -452,6 +530,44 @@ const Apply = () => {
     </FellowshipPageLayout>
   );
 };
+
+const SubmissionSuccess = () => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'rgba(74,222,128,0.35)',
+      borderRadius: 0.75,
+      bgcolor: 'rgba(74,222,128,0.08)',
+      p: { xs: 3, md: 5 },
+      textAlign: 'center',
+    }}
+  >
+    <Box
+      sx={{
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        bgcolor: 'rgba(74,222,128,0.14)',
+        color: '#4ade80',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        mb: 2,
+      }}
+    >
+      <CheckCircle2 size={30} />
+    </Box>
+    <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
+      Application submitted successfully
+    </Typography>
+    <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+      <CircularProgress size={16} sx={{ color: '#4ade80' }} />
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        You are being redirected to My Fellowships.
+      </Typography>
+    </Stack>
+  </Box>
+);
 
 // ---- Stepper ----
 
@@ -561,11 +677,13 @@ const TrackStep = ({
   disabled,
   onSelect,
   onContinue,
+  blockedMessage,
 }: {
   selectedType: FellowshipType | null;
   disabled: boolean;
   onSelect: (t: FellowshipType) => void;
   onContinue: () => void;
+  blockedMessage: string | null;
 }) => {
   return (
     <Box
@@ -653,15 +771,16 @@ const TrackStep = ({
         })}
       </Box>
 
-      <Stack
-        direction="row"
-        spacing={1.25}
-        justifyContent="flex-end"
-      >
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} justifyContent="flex-end" alignItems={{ xs: 'stretch', sm: 'center' }}>
+        {blockedMessage && (
+          <Alert severity="info" sx={{ mr: { sm: 'auto' } }}>
+            {blockedMessage}
+          </Alert>
+        )}
         <Button
           variant="contained"
           onClick={onContinue}
-          disabled={!selectedType || disabled}
+          disabled={!selectedType || disabled || !!blockedMessage}
           endIcon={<ArrowRight size={16} />}
         >
           Continue
