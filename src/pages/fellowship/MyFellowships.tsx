@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   LinearProgress,
   Stack,
@@ -32,6 +33,7 @@ import {
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
+import { parseProposal } from '../../utils/proposalFormat';
 
 type MonthSlot = { month: number; year: number; index: number };
 
@@ -130,6 +132,18 @@ const MyFellowships = () => {
     );
   }, [fellowshipsQuery.data]);
 
+  const activeProposalQuery = useApplicationProposal(activeFellowship?.applicationId ?? '', {
+    enabled: !!activeFellowship?.applicationId && !activeFellowship?.projectName,
+  });
+  const activeProposalTitle = useMemo(
+    () =>
+      activeProposalQuery.data?.proposal
+        ? parseProposal(activeProposalQuery.data.proposal).title
+        : '',
+    [activeProposalQuery.data?.proposal],
+  );
+  const activeProjectTitle = activeFellowship?.projectName || activeProposalTitle || 'Project title';
+
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
 
   const isLoading =
@@ -195,6 +209,7 @@ const MyFellowships = () => {
         <Stack spacing={2.5}>
           <ActiveFellowshipCard
             fellowship={activeFellowship}
+            projectTitle={activeProjectTitle}
             reports={reports.filter((r) => r.fellowshipId === activeFellowship.id)}
             onOpenProposal={() => navigate(`/fellowship/fellowships/${activeFellowship.id}`)}
             onSubmitReport={(month, year) =>
@@ -327,11 +342,13 @@ const EmptyState = ({ onApply }: { onApply: () => void }) => (
 
 const ActiveFellowshipCard = ({
   fellowship,
+  projectTitle,
   reports,
   onOpenProposal,
   onSubmitReport,
 }: {
   fellowship: GetFellowshipResponseDto;
+  projectTitle: string;
   reports: GetFellowshipReportResponseDto[];
   onOpenProposal: () => void;
   onSubmitReport: (month: number, year: number) => void;
@@ -417,21 +434,25 @@ const ActiveFellowshipCard = ({
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <StatusChip status={fellowship.status} />
-              <Typography
-                variant="caption"
+              <Chip
+                size="small"
+                label={formatFellowshipType(fellowship.type)}
                 sx={{
+                  height: 26,
+                  borderRadius: 999,
+                  border: '1px solid',
+                  borderColor: 'primary.dark',
+                  bgcolor: 'rgba(251, 146, 60, 0.12)',
                   color: 'primary.light',
                   fontWeight: 700,
                   letterSpacing: 1,
                   fontSize: '0.7rem',
+                  textTransform: 'uppercase',
                 }}
-              >
-                {formatFellowshipType(fellowship.type)}
-              </Typography>
+              />
             </Stack>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-              {fellowship.projectName ||
-                `${formatFellowshipType(fellowship.type)} fellowship`}
+              {projectTitle}
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               {fellowship.startDate && (
