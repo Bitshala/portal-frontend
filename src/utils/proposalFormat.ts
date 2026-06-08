@@ -42,7 +42,7 @@ export const parseProposal = (text: string): ProposalFields => {
   const titleMatch = text.match(/^#\s+(.+?)\s*$/m);
   const sectionRegex = (heading: string) =>
     new RegExp(
-      `${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`,
+      `${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(?:\\n|$)([\\s\\S]*?)(?=\\n##\\s|$)`,
     );
   const problemMatch = text.match(sectionRegex(SECTION_HEADINGS.problem));
   const planMatch = text.match(sectionRegex(SECTION_HEADINGS.plan));
@@ -76,11 +76,20 @@ export const parseProposal = (text: string): ProposalFields => {
     portfolioMatch ||
     collectedLinks.length > 0;
   if (!recognized) {
-    return { ...EMPTY_PROPOSAL_FIELDS, problemStatement: text, links: [''] };
+    const planOnlyMatch = text.match(sectionRegex(SECTION_HEADINGS.plan));
+    return {
+      ...EMPTY_PROPOSAL_FIELDS,
+      problemStatement: text.replace(sectionRegex(SECTION_HEADINGS.plan), '').trim(),
+      plan: planOnlyMatch?.[1]?.trim() ?? '',
+      links: [''],
+    };
   }
+  const problemStatement = (problemMatch?.[1] ?? '')
+    .replace(sectionRegex(SECTION_HEADINGS.plan), '')
+    .trim();
   return {
     title: titleMatch?.[1]?.trim() ?? '',
-    problemStatement: problemMatch?.[1]?.trim() ?? '',
+    problemStatement,
     plan: planMatch?.[1]?.trim() ?? '',
     github: githubMatch?.[1]?.trim() ?? '',
     links: collectedLinks.length > 0 ? collectedLinks : [''],

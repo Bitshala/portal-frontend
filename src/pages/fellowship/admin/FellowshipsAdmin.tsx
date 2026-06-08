@@ -16,7 +16,7 @@ import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageL
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
+import { useApplicationProposal, useFellowships, useReports } from '../../../hooks/fellowshipHooks';
 import {
   FellowshipStatus,
   FellowshipType,
@@ -24,6 +24,7 @@ import {
   type GetFellowshipReportResponseDto,
 } from '../../../types/fellowship';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
+import { parseProposal } from '../../../utils/proposalFormat';
 
 const PAGE_SIZE = 50;
 
@@ -414,7 +415,7 @@ const FilterPill = ({
 // ---- table header ----
 
 const COLS =
-  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 110px 44px';
+  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 110px 64px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -489,7 +490,7 @@ const HeaderRow = ({
     <Box>Payout</Box>
     <Box>Last report</Box>
     <Box>Status</Box>
-    <Box aria-label="Actions" />
+    <Box>Actions</Box>
   </Box>
 );
 
@@ -508,6 +509,17 @@ const FellowshipRow = ({
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
+  const proposalQuery = useApplicationProposal(fellowship.applicationId, {
+    enabled: !fellowship.projectName,
+  });
+  const proposalTitle = useMemo(
+    () =>
+      proposalQuery.data?.proposal
+        ? parseProposal(proposalQuery.data.proposal).title
+        : '',
+    [proposalQuery.data?.proposal],
+  );
+  const projectTitle = fellowship.projectName || proposalTitle;
 
   return (
     <Box
@@ -591,9 +603,9 @@ const FellowshipRow = ({
           pr: 1,
         }}
       >
-        {fellowship.projectName || (
+        {projectTitle || (
           <Box component="span" sx={{ color: 'text.secondary' }}>
-            Project name not provided
+            Project title not provided
           </Box>
         )}
       </Typography>

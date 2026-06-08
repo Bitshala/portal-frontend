@@ -964,6 +964,9 @@ const ApplicationsPanel = ({
       title: 'Drafts',
       items: list.filter((a) => a.status === FellowshipApplicationStatus.DRAFT),
       empty: 'No saved drafts.',
+      color: '#fb923c',
+      bg: 'rgba(251,146,60,0.08)',
+      border: 'rgba(251,146,60,0.28)',
     },
     {
       title: 'Under review',
@@ -973,11 +976,17 @@ const ApplicationsPanel = ({
           a.status === FellowshipApplicationStatus.CHANGES_REQUESTED,
       ),
       empty: 'No applications under review.',
+      color: '#fbbf24',
+      bg: 'rgba(251,191,36,0.08)',
+      border: 'rgba(251,191,36,0.28)',
     },
     {
       title: 'Rejected',
       items: list.filter((a) => a.status === FellowshipApplicationStatus.REJECTED),
       empty: 'No rejected applications.',
+      color: '#f87171',
+      bg: 'rgba(248,113,113,0.08)',
+      border: 'rgba(248,113,113,0.28)',
     },
   ];
 
@@ -1011,7 +1020,7 @@ const ApplicationsPanel = ({
               <Typography
                 variant="caption"
                 sx={{
-                  color: 'text.secondary',
+                  color: section.color,
                   fontWeight: 700,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
@@ -1019,15 +1028,27 @@ const ApplicationsPanel = ({
               >
                 {section.title}
               </Typography>
-              <Chip size="small" label={section.items.length} sx={{ height: 20 }} />
+              <Chip
+                size="small"
+                label={section.items.length}
+                sx={{
+                  height: 20,
+                  bgcolor: section.bg,
+                  color: section.color,
+                  border: '1px solid',
+                  borderColor: section.border,
+                  fontWeight: 700,
+                }}
+              />
             </Stack>
 
             {section.items.length === 0 ? (
               <Box
                 sx={{
                   border: '1px dashed',
-                  borderColor: 'divider',
+                  borderColor: section.border,
                   borderRadius: 0.6,
+                  bgcolor: section.bg,
                   px: 1.75,
                   py: 1.25,
                   color: 'text.secondary',
@@ -1048,6 +1069,9 @@ const ApplicationsPanel = ({
                   <ApplicationCard
                     key={app.id}
                     app={app}
+                    accentColor={section.color}
+                    accentBg={section.bg}
+                    accentBorder={section.border}
                     onOpen={onOpen}
                     onContinue={onContinue}
                   />
@@ -1063,10 +1087,16 @@ const ApplicationsPanel = ({
 
 const ApplicationCard = ({
   app,
+  accentColor,
+  accentBg,
+  accentBorder,
   onOpen,
   onContinue,
 }: {
   app: GetFellowshipApplicationResponseDto;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
   onOpen: (id: string) => void;
   onContinue: (id: string) => void;
 }) => {
@@ -1093,21 +1123,21 @@ const ApplicationCard = ({
         justifyContent: 'space-between',
         gap: 2,
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: accentBorder,
         borderRadius: 0.75,
-        bgcolor: 'rgba(255,255,255,0.025)',
+        bgcolor: accentBg,
         px: 1.75,
         py: 1.2,
         cursor: 'pointer',
         transition: 'border-color 0.15s ease, background-color 0.15s ease',
         '&:hover': {
-          borderColor: 'primary.light',
+          borderColor: accentColor,
           bgcolor: 'rgba(255,255,255,0.04)',
         },
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', color: 'text.primary' }}>
           {title}
         </Typography>
         <Typography
@@ -1126,7 +1156,11 @@ const ApplicationCard = ({
           e.stopPropagation();
           handleClick();
         }}
-        sx={{ color: 'text.primary', flexShrink: 0 }}
+        sx={{
+          color: isDraft || needsChanges ? accentColor : 'text.primary',
+          borderColor: isDraft || needsChanges ? accentBorder : undefined,
+          flexShrink: 0,
+        }}
       >
         {primaryAction}
       </Button>

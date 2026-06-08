@@ -121,9 +121,11 @@ const Apply = () => {
   // Hydrate the editor from a saved draft exactly once per application. Re-parsing
   // on every refetch (e.g. after a save) would clobber the user's in-progress edits.
   const hydratedFor = useRef<string | null>(null);
+  const openedEditorFor = useRef<string | null>(null);
   useEffect(() => {
     if (!activeId) {
       hydratedFor.current = null;
+      openedEditorFor.current = null;
       return;
     }
     if (hydratedFor.current === activeId) return;
@@ -134,8 +136,17 @@ const Apply = () => {
   }, [activeId, loadedProposal.data?.proposal]);
 
   useEffect(() => {
-    if (activeId && loadedApp.data?.type) setSelectedType(loadedApp.data.type);
-  }, [activeId, loadedApp.data?.type]);
+    if (!activeId || !loadedApp.data?.type) return;
+    setSelectedType(loadedApp.data.type);
+    if (
+      openedEditorFor.current !== activeId &&
+      (loadedApp.data.status === FellowshipApplicationStatus.DRAFT ||
+        loadedApp.data.status === FellowshipApplicationStatus.CHANGES_REQUESTED)
+    ) {
+      setStep(1);
+      openedEditorFor.current = activeId;
+    }
+  }, [activeId, loadedApp.data?.type, loadedApp.data?.status]);
 
   const currentApp = activeId ? loadedApp.data : null;
   const isEditable =
@@ -249,6 +260,7 @@ const Apply = () => {
 
   const resetEditor = () => {
     lastSavedRef.current = null;
+    openedEditorFor.current = null;
     setActiveId(null);
     setFields(EMPTY_FIELDS);
     setSelectedType(null);
