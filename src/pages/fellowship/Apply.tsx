@@ -144,6 +144,66 @@ const Apply = () => {
     currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
   const isResubmit = currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
 
+  const serializedProposal = useMemo(() => serializeProposal(fields), [fields]);
+  const lastSavedRef = useRef<{ id: string; proposal: string } | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveInFlight = useRef(false);
+
+  useEffect(() => {
+    if (!activeId || loadedProposal.data?.proposal === undefined) return;
+    lastSavedRef.current = { id: activeId, proposal: loadedProposal.data.proposal };
+  }, [activeId, loadedProposal.data?.proposal]);
+
+  useEffect(() => {
+    if (!selectedType || !isEditable) return;
+    if (activeId && !currentApp) return;
+    if (autoSaveInFlight.current) return;
+    if (lastSavedRef.current?.id === activeId && lastSavedRef.current.proposal === serializedProposal) return;
+
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      void (async () => {
+        autoSaveInFlight.current = true;
+        try {
+          if (activeId) {
+            await updateMut.mutateAsync({
+              id: activeId,
+              body: { proposal: serializedProposal },
+            });
+            lastSavedRef.current = { id: activeId, proposal: serializedProposal };
+          } else {
+            const created = await createMut.mutateAsync({
+              type: selectedType,
+              proposal: serializedProposal,
+            });
+            setActiveId(created.id);
+            searchParams.set('appId', created.id);
+            setSearchParams(searchParams, { replace: true });
+            lastSavedRef.current = { id: created.id, proposal: serializedProposal };
+          }
+        } catch (e) {
+          setToast({ kind: 'error', msg: extractErrorMessage(e) });
+        } finally {
+          autoSaveInFlight.current = false;
+        }
+      })();
+    }, 1000);
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [
+    activeId,
+    currentApp,
+    isEditable,
+    searchParams,
+    selectedType,
+    serializedProposal,
+    setSearchParams,
+    createMut,
+    updateMut,
+  ]);
+
   const dupLinkIndices = useMemo(
     () => duplicateLinkIndices(fields.links),
     [fields.links],
@@ -188,6 +248,7 @@ const Apply = () => {
   }, [fields.problemStatement, fields.plan, fields.github, fields.links, dupLinkIndices]);
 
   const resetEditor = () => {
+    lastSavedRef.current = null;
     setActiveId(null);
     setFields(EMPTY_FIELDS);
     setSelectedType(null);
@@ -204,8 +265,9 @@ const Apply = () => {
     try {
       const created = await createMut.mutateAsync({
         type: selectedType,
-        proposal: serializeProposal(fields),
+        proposal: serializedProposal,
       });
+      lastSavedRef.current = { id: created.id, proposal: serializedProposal };
       setActiveId(created.id);
       // Reflect the draft in the URL so a refresh resumes this draft instead
       // of starting a fresh editor (which would then collide with the
@@ -225,8 +287,9 @@ const Apply = () => {
       if (activeId) {
         await updateMut.mutateAsync({
           id: activeId,
-          body: { proposal: serializeProposal(fields) },
+          body: { proposal: serializedProposal },
         });
+        lastSavedRef.current = { id: activeId, proposal: serializedProposal };
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
         const id = await ensureDraftExists();
@@ -239,8 +302,6 @@ const Apply = () => {
 
   const handleContinueFromTrack = () => {
     if (!selectedType) return;
-    // No draft is created here — a draft only exists once the user explicitly
-    // clicks "Save draft" (or submits). This keeps phantom drafts from appearing.
     setStep(1);
   };
 
@@ -253,8 +314,9 @@ const Apply = () => {
         if (activeId) {
           await updateMut.mutateAsync({
             id: activeId,
-            body: { proposal: serializeProposal(fields) },
+            body: { proposal: serializedProposal },
           });
+          lastSavedRef.current = { id: activeId, proposal: serializedProposal };
         } else {
           const id = await ensureDraftExists();
           if (!id) return; // creation failed — toast already shown
@@ -276,8 +338,9 @@ const Apply = () => {
       if (id) {
         await updateMut.mutateAsync({
           id,
-          body: { proposal: serializeProposal(fields) },
+          body: { proposal: serializedProposal },
         });
+        lastSavedRef.current = { id, proposal: serializedProposal };
       } else {
         id = await ensureDraftExists();
         if (!id) return;

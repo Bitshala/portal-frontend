@@ -217,32 +217,21 @@ const MyFellowships = () => {
                 `/fellowship/fellowships/${activeFellowship.id}/reports/new?month=${month}&year=${year}`,
               )
             }
+            onOpenReport={(reportId) =>
+              navigate(`/fellowship/fellowships/${activeFellowship.id}/reports/${reportId}`)
+            }
+            onNewReport={(month, year) =>
+              navigate(
+                `/fellowship/fellowships/${activeFellowship.id}/reports/new?month=${month}&year=${year}`,
+              )
+            }
           />
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.4fr) minmax(0, 1fr)' },
-              gap: 2.5,
-            }}
-          >
-            <MonthlyReportsPanel
-              fellowship={activeFellowship}
-              reports={reports.filter((r) => r.fellowshipId === activeFellowship.id)}
-              onOpenReport={(reportId) =>
-                navigate(`/fellowship/fellowships/${activeFellowship.id}/reports/${reportId}`)
-              }
-              onNewReport={(month, year) =>
-                navigate(
-                  `/fellowship/fellowships/${activeFellowship.id}/reports/new?month=${month}&year=${year}`,
-                )
-              }
-            />
-            <PastApplicationsPanel
-              applications={applications}
-              onOpen={setSelectedAppId}
-            />
-          </Box>
+          <ApplicationsPanel
+            applications={applications.filter((app) => app.id !== activeFellowship.applicationId)}
+            onOpen={setSelectedAppId}
+            onContinue={(id) => navigate(`/fellowship/apply?appId=${id}`)}
+          />
         </Stack>
       )}
     </FellowshipPageLayout>
@@ -346,13 +335,18 @@ const ActiveFellowshipCard = ({
   reports,
   onOpenProposal,
   onSubmitReport,
+  onOpenReport,
+  onNewReport,
 }: {
   fellowship: GetFellowshipResponseDto;
   projectTitle: string;
   reports: GetFellowshipReportResponseDto[];
   onOpenProposal: () => void;
   onSubmitReport: (month: number, year: number) => void;
+  onOpenReport: (reportId: string) => void;
+  onNewReport: (month: number, year: number) => void;
 }) => {
+  const [expanded, setExpanded] = useState(true);
   const isActive = fellowship.status === FellowshipStatus.ACTIVE;
   const hasContract = !!fellowship.startDate && !!fellowship.endDate;
 
@@ -463,7 +457,14 @@ const ActiveFellowshipCard = ({
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1.25}>
+          <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="outlined"
+              onClick={() => setExpanded((v) => !v)}
+              sx={{ color: 'text.primary' }}
+            >
+              {expanded ? 'Collapse' : 'Expand'}
+            </Button>
             <Button
               variant="outlined"
               startIcon={<Eye size={15} />}
@@ -484,13 +485,13 @@ const ActiveFellowshipCard = ({
           </Stack>
         </Stack>
 
-        {!hasContract && (
+        {expanded && !hasContract && (
           <Alert severity="info" sx={{ mt: 2.5 }}>
             Your application is accepted. An admin will start your contract soon.
           </Alert>
         )}
 
-        {hasContract && months.length > 0 && (
+        {expanded && hasContract && months.length > 0 && (
           <>
             <Stack
               direction="row"
@@ -625,6 +626,15 @@ const ActiveFellowshipCard = ({
                         : `${Math.abs(daysToDue)} day${Math.abs(daysToDue) === 1 ? '' : 's'} overdue`
                     : 'all reports filed'
                 }
+              />
+            </Box>
+
+            <Box sx={{ mt: 3 }}>
+              <MonthlyReportsPanel
+                fellowship={fellowship}
+                reports={reports}
+                onOpenReport={onOpenReport}
+                onNewReport={onNewReport}
               />
             </Box>
           </>
@@ -935,9 +945,10 @@ const InProgressApplicationsPanel = ({
   </Box>
 );
 
-const PastApplicationsPanel = ({
+const ApplicationsPanel = ({
   applications,
   onOpen,
+  onContinue,
 }: {
   applications: ReturnType<typeof useMyApplications>['data'] extends infer T
     ? T extends { records: infer R }
@@ -945,10 +956,31 @@ const PastApplicationsPanel = ({
       : never
     : never;
   onOpen: (id: string) => void;
+  onContinue: (id: string) => void;
 }) => {
-  const list = (applications ?? []).filter(
-    (a) => a.status !== FellowshipApplicationStatus.DRAFT,
-  );
+  const list = applications ?? [];
+  const sections = [
+    {
+      title: 'Drafts',
+      items: list.filter((a) => a.status === FellowshipApplicationStatus.DRAFT),
+      empty: 'No saved drafts.',
+    },
+    {
+      title: 'Under review',
+      items: list.filter(
+        (a) =>
+          a.status === FellowshipApplicationStatus.SUBMITTED ||
+          a.status === FellowshipApplicationStatus.CHANGES_REQUESTED,
+      ),
+      empty: 'No applications under review.',
+    },
+    {
+      title: 'Rejected',
+      items: list.filter((a) => a.status === FellowshipApplicationStatus.REJECTED),
+      empty: 'No rejected applications.',
+    },
+  ];
+
   return (
     <Box
       sx={{
@@ -959,66 +991,145 @@ const PastApplicationsPanel = ({
         p: { xs: 2.5, md: 3 },
       }}
     >
-      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-        Past applications
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+        Your applications
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2.5 }}>
+        Track drafts, submissions, and rejections.
       </Typography>
 
       {list.length === 0 && (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          No prior applications.
+          No applications yet.
         </Typography>
       )}
 
-      <Stack spacing={1}>
-        {list.map((app) => (
-          <Box
-            key={app.id}
-            onClick={() => onOpen(app.id)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.75,
-              py: 1.25,
-              borderRadius: 0.6,
-              border: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'rgba(255,255,255,0.025)',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s ease, background-color 0.15s ease',
-              '&:hover': {
-                borderColor: 'primary.light',
-                bgcolor: 'rgba(255,255,255,0.04)',
-              },
-            }}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                sx={{
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                }}
-              >
-                {formatFellowshipType(app.type)} fellowship
-              </Typography>
+      <Stack spacing={2.5}>
+        {sections.map((section) => (
+          <Box key={section.title}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <Typography
                 variant="caption"
                 sx={{
                   color: 'text.secondary',
-                  fontFamily: fontFamilyMono,
-                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
                 }}
               >
-                {cycleLabel(app.createdAt)}
+                {section.title}
               </Typography>
-            </Box>
-            <StatusChip status={app.status} />
+              <Chip size="small" label={section.items.length} sx={{ height: 20 }} />
+            </Stack>
+
+            {section.items.length === 0 ? (
+              <Box
+                sx={{
+                  border: '1px dashed',
+                  borderColor: 'divider',
+                  borderRadius: 0.6,
+                  px: 1.75,
+                  py: 1.25,
+                  color: 'text.secondary',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {section.empty}
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr',
+                  gap: 1.25,
+                }}
+              >
+                {section.items.map((app) => (
+                  <ApplicationCard
+                    key={app.id}
+                    app={app}
+                    onOpen={onOpen}
+                    onContinue={onContinue}
+                  />
+                ))}
+              </Box>
+            )}
           </Box>
         ))}
       </Stack>
+    </Box>
+  );
+};
+
+const ApplicationCard = ({
+  app,
+  onOpen,
+  onContinue,
+}: {
+  app: GetFellowshipApplicationResponseDto;
+  onOpen: (id: string) => void;
+  onContinue: (id: string) => void;
+}) => {
+  const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
+  const needsChanges = app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+  const primaryAction = isDraft || needsChanges ? 'Continue' : 'View';
+  const handleClick = () => (isDraft || needsChanges ? onContinue(app.id) : onOpen(app.id));
+  const proposalQuery = useApplicationProposal(app.id);
+  const proposalTitle = useMemo(
+    () =>
+      proposalQuery.data?.proposal
+        ? parseProposal(proposalQuery.data.proposal).title
+        : '',
+    [proposalQuery.data?.proposal],
+  );
+  const title = proposalTitle || `${formatFellowshipType(app.type)} fellowship`;
+
+  return (
+    <Box
+      onClick={handleClick}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'rgba(255,255,255,0.025)',
+        px: 1.75,
+        py: 1.2,
+        cursor: 'pointer',
+        transition: 'border-color 0.15s ease, background-color 0.15s ease',
+        '&:hover': {
+          borderColor: 'primary.light',
+          bgcolor: 'rgba(255,255,255,0.04)',
+        },
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+          {title}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.72rem' }}
+        >
+          {cycleLabel(app.createdAt)} · updated {formatDateShort(new Date(app.updatedAt))}
+        </Typography>
+      </Box>
+
+      <Button
+        size="small"
+        variant={isDraft || needsChanges ? 'outlined' : 'text'}
+        startIcon={isDraft || needsChanges ? <FileText size={14} /> : <Eye size={14} />}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleClick();
+        }}
+        sx={{ color: 'text.primary', flexShrink: 0 }}
+      >
+        {primaryAction}
+      </Button>
     </Box>
   );
 };
