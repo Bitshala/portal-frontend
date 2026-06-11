@@ -40,10 +40,23 @@ const selectSx = {
     '& fieldset': { borderColor: '#3f3f46' },
     '&:hover fieldset': { borderColor: '#f97316' },
     '&.Mui-focused fieldset': { borderColor: '#f97316' },
+    '&.Mui-disabled': {
+      bgcolor: '#1c1c1e',
+      '& fieldset': { borderColor: '#3f3f46' },
+    },
+    '&.Mui-disabled .MuiSelect-select': { WebkitTextFillColor: '#71717a' },
   },
   '& .MuiInputLabel-root': { color: '#a1a1aa' },
   '& .MuiInputLabel-root.Mui-focused': { color: '#f97316' },
+  '& .MuiInputLabel-root.Mui-disabled': { color: '#71717a' },
   '& .MuiSelect-icon': { color: '#a1a1aa' },
+  '& .MuiSelect-icon.Mui-disabled': { color: '#52525b' },
+};
+
+const disabledCheckboxSx = {
+  color: '#52525b',
+  '&.Mui-checked': { color: '#f97316' },
+  '&.Mui-disabled': { color: '#52525b' },
 };
 
 export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
@@ -68,6 +81,7 @@ export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
 
   const isGroupDiscussion = weekType === 'GROUP_DISCUSSION';
   const showExerciseScores = isGroupDiscussion && weekHasExercise === true;
+  const isAttended = editedStudent.attendance;
 
   const scoreOptions = [0, 1, 2, 3, 4, 5];
 
@@ -150,16 +164,26 @@ export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
 
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
         {/* Attendance */}
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={editedStudent.attendance}
-              onChange={handleAttendanceChange}
-              sx={{ color: '#52525b', '&.Mui-checked': { color: '#f97316' } }}
-            />
-          }
-          label={<Typography sx={{ color: '#fafafa', fontWeight: 500 }}>Attended This Week</Typography>}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={editedStudent.attendance}
+                onChange={handleAttendanceChange}
+                sx={{ color: '#52525b', '&.Mui-checked': { color: '#f97316' } }}
+              />
+            }
+            label={<Typography sx={{ color: '#fafafa', fontWeight: 500 }}>Attended This Week</Typography>}
+            sx={{ mr: 0 }}
+          />
+          <Typography
+            variant="body2"
+            sx={{ color: '#a1a1aa', visibility: isAttended ? 'hidden' : 'visible' }}
+            aria-hidden={isAttended}
+          >
+            Mark attendance to enter scores.
+          </Typography>
+        </Box>
 
         {/* Group Assignment */}
         <Box>
@@ -204,14 +228,15 @@ export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
         {/* GD Scores — only for GROUP_DISCUSSION weeks */}
         {isGroupDiscussion && (
           <Box>
-            <Typography sx={{ color: '#d4d4d8', fontWeight: 600, mb: 2 }}>Group Discussion Scores</Typography>
+            <Typography sx={{ color: isAttended ? '#d4d4d8' : '#71717a', fontWeight: 600, mb: 2 }}>Group Discussion Scores</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr 1fr' }, gap: 2 }}>
               {(['fa', 'fb', 'fc', 'fd'] as const).map(key => (
-                <FormControl key={key} fullWidth sx={selectSx}>
+                <FormControl key={key} fullWidth sx={selectSx} disabled={!isAttended}>
                   <InputLabel>{gdLabels[key]}</InputLabel>
                   <Select
                     value={editedStudent.gdScore[key]}
                     label={gdLabels[key]}
+                    disabled={!isAttended}
                     onChange={e => handleGdChange(key, Number(e.target.value))}
                     MenuProps={{ PaperProps: { sx: { bgcolor: '#18181b', border: '1px solid #27272a', color: '#fafafa' } } }}
                   >
@@ -230,25 +255,27 @@ export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
         {/* Bonus Scores — only for GROUP_DISCUSSION weeks */}
         {isGroupDiscussion && (
           <Box>
-            <Typography sx={{ color: '#d4d4d8', fontWeight: 600, mb: 2 }}>Bonus Scores</Typography>
+            <Typography sx={{ color: isAttended ? '#d4d4d8' : '#71717a', fontWeight: 600, mb: 2 }}>Bonus Scores</Typography>
             <FormControlLabel
               control={
                 <Checkbox
                   checked={editedStudent.bonusScore.attempt > 0}
                   onChange={handleBonusAttemptChange}
-                  sx={{ color: '#52525b', '&.Mui-checked': { color: '#f97316' } }}
+                  disabled={!isAttended}
+                  sx={disabledCheckboxSx}
                 />
               }
-              label={<Typography sx={{ color: '#fafafa', fontWeight: 500 }}>Bonus Attempted</Typography>}
+              label={<Typography sx={{ color: isAttended ? '#fafafa' : '#71717a', fontWeight: 500 }}>Bonus Attempted</Typography>}
               sx={{ mb: 2 }}
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               {(['good', 'followUp'] as const).map(key => (
-                <FormControl key={key} fullWidth sx={selectSx}>
+                <FormControl key={key} fullWidth sx={selectSx} disabled={!isAttended}>
                   <InputLabel>{bonusLabels[key]}</InputLabel>
                   <Select
                     value={editedStudent.bonusScore[key]}
                     label={bonusLabels[key]}
+                    disabled={!isAttended}
                     onChange={e => handleBonusChange(key, Number(e.target.value))}
                     MenuProps={{ PaperProps: { sx: { bgcolor: '#18181b', border: '1px solid #27272a', color: '#fafafa' } } }}
                   >
@@ -267,27 +294,29 @@ export const ScoreEditModal: React.FC<ScoreEditModalProps> = ({
         {/* Exercise Scores — only for GROUP_DISCUSSION weeks with exercises */}
         {showExerciseScores && (
           <Box>
-            <Typography sx={{ color: '#d4d4d8', fontWeight: 600, mb: 2 }}>Exercise Scores</Typography>
+            <Typography sx={{ color: isAttended ? '#d4d4d8' : '#71717a', fontWeight: 600, mb: 2 }}>Exercise Scores</Typography>
             <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={editedStudent.exerciseScore.Submitted}
                     onChange={(_, checked) => handleExerciseChange('Submitted', checked)}
-                    sx={{ color: '#52525b', '&.Mui-checked': { color: '#f97316' } }}
+                    disabled={!isAttended}
+                    sx={disabledCheckboxSx}
                   />
                 }
-                label={<Typography sx={{ color: '#fafafa', fontWeight: 500 }}>Submitted</Typography>}
+                label={<Typography sx={{ color: isAttended ? '#fafafa' : '#71717a', fontWeight: 500 }}>Submitted</Typography>}
               />
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={editedStudent.exerciseScore.privateTest}
                     onChange={(_, checked) => handleExerciseChange('privateTest', checked)}
-                    sx={{ color: '#52525b', '&.Mui-checked': { color: '#f97316' } }}
+                    disabled={!isAttended}
+                    sx={disabledCheckboxSx}
                   />
                 }
-                label={<Typography sx={{ color: '#fafafa', fontWeight: 500 }}>Tests Passing</Typography>}
+                label={<Typography sx={{ color: isAttended ? '#fafafa' : '#71717a', fontWeight: 500 }}>Tests Passing</Typography>}
               />
             </Box>
           </Box>
