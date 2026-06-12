@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -11,12 +11,21 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ChevronDown, ChevronUp, Download, FileText, Search } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Download,
+  FileText,
+  Search,
+} from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import { useApplicationProposal, useFellowships, useReports } from '../../../hooks/fellowshipHooks';
+import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
+import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
 import {
   FellowshipStatus,
   FellowshipType,
@@ -24,9 +33,11 @@ import {
   type GetFellowshipReportResponseDto,
 } from '../../../types/fellowship';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
-import { parseProposal } from '../../../utils/proposalFormat';
 
-const PAGE_SIZE = 50;
+// Filtering/search/sort happen client-side, so fetch a large page from the API
+// and paginate the table locally.
+const FETCH_PAGE_SIZE = 500;
+const ROWS_PER_PAGE = 25;
 
 type StatusFilter = 'ALL' | FellowshipStatus;
 type SortKey = 'name' | 'project';
@@ -112,10 +123,11 @@ const FellowshipsAdmin = () => {
   const [maintainerFilter, setMaintainerFilter] = useState<string>(ALL_VALUE);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [page, setPage] = useState(0);
   // Application whose proposal is open in the viewer dialog.
   const [proposalAppId, setProposalAppId] = useState<string | null>(null);
 
-  const { data, isLoading } = useFellowships({ page: 0, pageSize: PAGE_SIZE });
+  const { data, isLoading } = useFellowships({ page: 0, pageSize: FETCH_PAGE_SIZE });
   const reportsQuery = useReports({ page: 0, pageSize: 200 });
 
   const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
@@ -179,6 +191,17 @@ const FellowshipsAdmin = () => {
       return ka.localeCompare(kb) * dir;
     });
   }, [filtered, sortKey, sortDir]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filter, search, projectFilter, maintainerFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / ROWS_PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = useMemo(
+    () => sorted.slice(safePage * ROWS_PER_PAGE, (safePage + 1) * ROWS_PER_PAGE),
+    [sorted, safePage],
+  );
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -272,12 +295,14 @@ const FellowshipsAdmin = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search fellow, project…"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={14} />
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={14} />
+                  </InputAdornment>
+                ),
+              },
             }}
             sx={{ minWidth: 220 }}
           />
@@ -344,15 +369,25 @@ const FellowshipsAdmin = () => {
             </Typography>
           </Box>
         ) : (
-          sorted.map((f) => (
-            <FellowshipRow
-              key={f.id}
-              fellowship={f}
-              lastReport={lastReportByFellowship.get(f.id)}
-              onOpen={() => navigate(`/fellowship/fellowships/${f.id}`)}
-              onViewProposal={() => setProposalAppId(f.applicationId)}
-            />
-          ))
+          <>
+            {pageRows.map((f) => (
+              <FellowshipRow
+                key={f.id}
+                fellowship={f}
+                lastReport={lastReportByFellowship.get(f.id)}
+                onOpen={() => navigate(`/fellowship/fellowships/${f.id}`)}
+                onViewProposal={() => setProposalAppId(f.applicationId)}
+              />
+            ))}
+            {sorted.length > ROWS_PER_PAGE && (
+              <PaginationFooter
+                page={safePage}
+                pageCount={pageCount}
+                total={sorted.length}
+                onChange={setPage}
+              />
+            )}
+          </>
         )}
       </Box>
 
@@ -494,6 +529,63 @@ const HeaderRow = ({
   </Box>
 );
 
+// ---- pagination footer ----
+
+const PaginationFooter = ({
+  page,
+  pageCount,
+  total,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  onChange: (page: number) => void;
+}) => {
+  const from = page * ROWS_PER_PAGE + 1;
+  const to = Math.min((page + 1) * ROWS_PER_PAGE, total);
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ px: 2, py: 1 }}
+    >
+      <Typography
+        sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
+      >
+        {from}–{to} of {total}
+      </Typography>
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <IconButton
+          size="small"
+          aria-label="Previous page"
+          disabled={page === 0}
+          onClick={() => onChange(page - 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronLeft size={16} />
+        </IconButton>
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
+        >
+          {page + 1} / {pageCount}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label="Next page"
+          disabled={page >= pageCount - 1}
+          onClick={() => onChange(page + 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronRight size={16} />
+        </IconButton>
+      </Stack>
+    </Stack>
+  );
+};
+
 // ---- row ----
 
 const FellowshipRow = ({
@@ -509,17 +601,7 @@ const FellowshipRow = ({
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
-  const proposalQuery = useApplicationProposal(fellowship.applicationId, {
-    enabled: !fellowship.projectName,
-  });
-  const proposalTitle = useMemo(
-    () =>
-      proposalQuery.data?.proposal
-        ? parseProposal(proposalQuery.data.proposal).title
-        : '',
-    [proposalQuery.data?.proposal],
-  );
-  const projectTitle = fellowship.projectName || proposalTitle;
+  const projectTitle = useFellowshipProjectTitle(fellowship);
 
   return (
     <Box

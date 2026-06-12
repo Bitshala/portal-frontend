@@ -85,6 +85,13 @@ const Report = () => {
   const current = reportId ? report.data : null;
   const isEditable = !reportId || current?.status === FellowshipReportStatus.DRAFT;
 
+  // Reports can't predate the program or be filed more than a year ahead.
+  const maxYear = new Date().getFullYear() + 1;
+  const yearError =
+    creatingNew && (!Number.isInteger(year) || year < 2020 || year > maxYear)
+      ? `Enter a year between 2020 and ${maxYear}.`
+      : null;
+
   const handleSaveDraft = async () => {
     if (!fellowshipId || !content.trim()) return;
     try {
@@ -183,7 +190,9 @@ const Report = () => {
                     value={year}
                     onChange={(e) => setYear(Number(e.target.value))}
                     size="small"
-                    inputProps={{ min: 2020 }}
+                    inputProps={{ min: 2020, max: maxYear }}
+                    error={!!yearError}
+                    helperText={yearError}
                     sx={{ minWidth: 120 }}
                   />
                 </Stack>
@@ -210,7 +219,13 @@ const Report = () => {
                 <Button
                   variant="outlined"
                   onClick={handleSaveDraft}
-                  disabled={!isEditable || !content.trim() || createMut.isPending || updateMut.isPending}
+                  disabled={
+                    !isEditable ||
+                    !content.trim() ||
+                    !!yearError ||
+                    createMut.isPending ||
+                    updateMut.isPending
+                  }
                 >
                   {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
                 </Button>
@@ -220,6 +235,7 @@ const Report = () => {
                   disabled={
                     !isEditable ||
                     !content.trim() ||
+                    !!yearError ||
                     submitMut.isPending ||
                     createMut.isPending ||
                     updateMut.isPending

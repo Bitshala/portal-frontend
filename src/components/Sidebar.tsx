@@ -28,10 +28,12 @@ import {
   BookOpen,
   BarChart3,
   Award,
+  FileCheck,
   FileText,
   ClipboardList,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useMyFellowships } from '../hooks/fellowshipHooks';
 import { useUser } from '../hooks/userHooks';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types/enums';
@@ -61,9 +63,16 @@ const instructionLinks = [
   { label: 'Programming Bitcoin', path: '/pb-instructions' },
 ];
 
-const fellowshipStudentLinks = [
-  { label: 'Apply', path: '/fellowship/apply', icon: FileText },
+// The apply form has no sidebar entry — it opens from the Apply button on
+// the My Applications page.
+const baseFellowshipStudentLinks: NavItem[] = [
+  { label: 'My Applications', path: '/fellowship/applications', icon: ClipboardList },
+];
+
+// Shown only once an application is approved (i.e. a fellowship exists).
+const awardedFellowshipStudentLinks: NavItem[] = [
   { label: 'My Fellowships', path: '/fellowship/me', icon: Award },
+  { label: 'My Reports', path: '/fellowship/reports', icon: FileCheck },
 ];
 
 const adminFellowshipLinks = [
@@ -154,7 +163,23 @@ const Sidebar = () => {
     user?.role === UserRole.ADMIN || user?.role === UserRole.TEACHING_ASSISTANT;
   const navItems = isAdmin ? adminNavItems : studentNavItems;
 
+  // My Fellowships / My Reports only make sense once an application has been
+  // approved — approval is what creates the user's first fellowship.
+  const myFellowshipsQuery = useMyFellowships({ page: 0, pageSize: 1 });
+  const hasFellowship = (myFellowshipsQuery.data?.totalRecords ?? 0) > 0;
+  const fellowshipStudentLinks = hasFellowship
+    ? [...baseFellowshipStudentLinks, ...awardedFellowshipStudentLinks]
+    : baseFellowshipStudentLinks;
+
   const isActive = (path: string) => location.pathname === path;
+
+  // The apply form opens from the My Applications page (it has no sidebar
+  // entry of its own), so it keeps that link highlighted.
+  const isStudentLinkActive = (path: string) =>
+    isActive(path) ||
+    (path === '/fellowship/applications' &&
+      (location.pathname === '/fellowship' ||
+        location.pathname.startsWith('/fellowship/apply')));
 
   const fellowshipsSectionActive =
     location.pathname.startsWith('/fellowship') ||
@@ -259,7 +284,7 @@ const Sidebar = () => {
             <ListItemButton
               onClick={() =>
                 collapsed
-                  ? navigate('/fellowship/me')
+                  ? navigate('/fellowship/applications')
                   : setFellowshipsOpen((o) => !o)
               }
               sx={{
@@ -307,7 +332,7 @@ const Sidebar = () => {
                 }}
               >
                 {fellowshipStudentLinks.map((link) => {
-                  const active = isActive(link.path);
+                  const active = isStudentLinkActive(link.path);
                   const Icon = link.icon;
                   return (
                     <ListItemButton
@@ -388,7 +413,7 @@ const Sidebar = () => {
                 sx={{ pl: 2.5, borderLeft: '1px solid #3f3f46', ml: 3, mt: 0.5 }}
               >
                 {fellowshipStudentLinks.map((link) => {
-                  const active = isActive(link.path);
+                  const active = isStudentLinkActive(link.path);
                   return (
                     <ListItemButton
                       key={link.path}

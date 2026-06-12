@@ -25,6 +25,7 @@ import {
   useReports,
   useReviewReport,
 } from '../../../hooks/fellowshipHooks';
+import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
 import {
   FellowshipReportStatus,
   FellowshipType,
@@ -39,7 +40,8 @@ const PAGE_SIZE = 100;
 type StatusFilter = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'ALL';
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
-  { label: 'Submitted', value: 'SUBMITTED' },
+  // StatusChip renders SUBMITTED as "Under review" — keep the pill in sync.
+  { label: 'Under review', value: 'SUBMITTED' },
   { label: 'Approved', value: 'APPROVED' },
   { label: 'Rejected', value: 'REJECTED' },
   { label: 'All', value: 'ALL' },
@@ -295,18 +297,14 @@ const ReportsAdmin = () => {
             </Typography>
           </Box>
         ) : (
-          sorted.map((r) => {
-            const f = fellowshipById.get(r.fellowshipId);
-            return (
-              <ReportRow
-                key={r.id}
-                report={r}
-                track={f?.type ?? null}
-                project={f?.projectName ?? null}
-                onOpen={() => setSelected(r)}
-              />
-            );
-          })
+          sorted.map((r) => (
+            <ReportRow
+              key={r.id}
+              report={r}
+              fellowship={fellowshipById.get(r.fellowshipId)}
+              onOpen={() => setSelected(r)}
+            />
+          ))
         )}
       </Box>
 
@@ -321,7 +319,7 @@ const ReportsAdmin = () => {
         {selected && (
           <ReportDetail
             report={selected}
-            project={fellowshipById.get(selected.fellowshipId)?.projectName ?? null}
+            fellowship={fellowshipById.get(selected.fellowshipId)}
             onClose={() => setSelected(null)}
             onApprove={() => handleApprove(selected)}
             onReject={() => setRejectOpen(true)}
@@ -445,17 +443,17 @@ const HeaderRow = () => (
 
 const ReportRow = ({
   report,
-  track,
-  project,
+  fellowship,
   onOpen,
 }: {
   report: GetFellowshipReportResponseDto;
-  track: FellowshipType | null;
-  project: string | null;
+  fellowship?: GetFellowshipResponseDto;
   onOpen: () => void;
 }) => {
   const tint = tintFor(report.fellowName ?? report.fellowshipId ?? report.id);
+  const track = fellowship?.type ?? null;
   const trackColor = track ? TRACK_COLORS[track] : '#a1a1aa';
+  const project = useFellowshipProjectTitle(fellowship) || null;
 
   return (
     <Box
@@ -561,20 +559,21 @@ const ReportRow = ({
 
 const ReportDetail = ({
   report,
-  project,
+  fellowship,
   onClose,
   onApprove,
   onReject,
   isReviewing,
 }: {
   report: GetFellowshipReportResponseDto;
-  project: string | null;
+  fellowship?: GetFellowshipResponseDto;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
   isReviewing: boolean;
 }) => {
   const contentQuery = useReportContent(report.id);
+  const project = useFellowshipProjectTitle(fellowship) || null;
   return (
     <Box sx={{ width: '100%', p: { xs: 3, md: 5 } }}>
       <Button

@@ -303,11 +303,22 @@ const Apply = () => {
   const proposalReady = useMemo(() => {
     if (fields.problemStatement.trim().length === 0) return false;
     if (fields.plan.trim().length === 0) return false;
+    if (fields.mentorName.trim().length === 0) return false;
+    if (fields.mentorContact.trim().length === 0) return false;
     if (validateGithub(fields.github)) return false;
     if (fields.links.some((l) => validateLink(l))) return false;
     if (dupLinkIndices.size > 0) return false;
     return true;
-  }, [fields.problemStatement, fields.plan, fields.github, fields.links, dupLinkIndices]);
+  }, [
+    fields.problemStatement,
+    fields.plan,
+    fields.mentorName,
+    fields.mentorContact,
+    fields.github,
+    fields.links,
+    dupLinkIndices,
+    proposalTooLong,
+  ]);
 
   const resetEditor = () => {
     lastSavedRef.current = null;
@@ -899,6 +910,47 @@ const ProposalStep = ({
           sx={{ mb: 2.5 }}
         />
 
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <FieldLabel>Mentor name</FieldLabel>
+            <TextField
+              fullWidth
+              value={fields.mentorName}
+              onChange={(e) => onChange('mentorName', e.target.value)}
+              disabled={disabled}
+              placeholder="Satoshi Rao"
+              slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+              helperText=" "
+            />
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <FieldLabel>Mentor contact</FieldLabel>
+            <TextField
+              fullWidth
+              value={fields.mentorContact}
+              onChange={(e) => onChange('mentorContact', e.target.value)}
+              disabled={disabled}
+              placeholder="Email, Telegram or Discord"
+              slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+              helperText=" "
+            />
+          </Box>
+        </Stack>
+
+        <FieldLabel>Mentor testimonial</FieldLabel>
+        <TextField
+          fullWidth
+          multiline
+          minRows={3}
+          value={fields.mentorTestimonial}
+          onChange={(e) => onChange('mentorTestimonial', e.target.value)}
+          disabled={disabled}
+          placeholder="A short note from your mentor on your work and why they back this proposal."
+          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          helperText={<CharCount value={fields.mentorTestimonial} />}
+          sx={{ mb: 2.5 }}
+        />
+
         <FieldLabel>GitHub username</FieldLabel>
         <TextField
           fullWidth
@@ -1206,6 +1258,32 @@ const ReviewStep = ({
           <FieldLabel>6-month plan & milestones</FieldLabel>
           {fields.plan ? (
             <ExpandableText text={fields.plan} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              —
+            </Typography>
+          )}
+        </Box>
+
+        <Box>
+          <FieldLabel>Mentor</FieldLabel>
+          {fields.mentorName || fields.mentorContact ? (
+            <>
+              <Typography>
+                {fields.mentorName || '—'}
+                {fields.mentorContact && (
+                  <Box component="span" sx={{ color: 'text.secondary' }}>
+                    {' '}
+                    · {fields.mentorContact}
+                  </Box>
+                )}
+              </Typography>
+              {fields.mentorTestimonial && (
+                <Box sx={{ mt: 1 }}>
+                  <ExpandableText text={fields.mentorTestimonial} />
+                </Box>
+              )}
+            </>
           ) : (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               —

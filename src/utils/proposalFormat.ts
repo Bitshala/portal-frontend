@@ -2,6 +2,9 @@ export type ProposalFields = {
   title: string;
   problemStatement: string;
   plan: string;
+  mentorName: string;
+  mentorContact: string;
+  mentorTestimonial: string;
   github: string;
   links: string[];
 };
@@ -10,6 +13,9 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
   title: '',
   problemStatement: '',
   plan: '',
+  mentorName: '',
+  mentorContact: '',
+  mentorTestimonial: '',
   github: '',
   links: [''],
 };
@@ -17,6 +23,8 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
 const SECTION_HEADINGS = {
   problem: '## Problem Statement',
   plan: '## 6-Month Plan & Milestones',
+  mentor: '## Mentor',
+  testimonial: '## Mentor Testimonial',
   links: '## Links',
 };
 
@@ -25,6 +33,12 @@ export const serializeProposal = (f: ProposalFields): string => {
   if (f.title.trim()) parts.push(`# ${f.title.trim()}`);
   parts.push(`${SECTION_HEADINGS.problem}\n\n${f.problemStatement.trim()}`);
   parts.push(`${SECTION_HEADINGS.plan}\n\n${f.plan.trim()}`);
+  const mentorLines: string[] = [];
+  if (f.mentorName.trim()) mentorLines.push(`- Name: ${f.mentorName.trim()}`);
+  if (f.mentorContact.trim()) mentorLines.push(`- Contact: ${f.mentorContact.trim()}`);
+  if (mentorLines.length) parts.push(`${SECTION_HEADINGS.mentor}\n\n${mentorLines.join('\n')}`);
+  if (f.mentorTestimonial.trim())
+    parts.push(`${SECTION_HEADINGS.testimonial}\n\n${f.mentorTestimonial.trim()}`);
   const lines: string[] = [];
   // Store the canonical bare username, whatever form the user typed it in.
   const github = normalizeGithub(f.github);
@@ -46,6 +60,12 @@ export const parseProposal = (text: string): ProposalFields => {
     );
   const problemMatch = text.match(sectionRegex(SECTION_HEADINGS.problem));
   const planMatch = text.match(sectionRegex(SECTION_HEADINGS.plan));
+  // Mentor name/contact are bullets scoped to their own section so they can't
+  // collide with similarly-labelled bullets elsewhere in the proposal.
+  const mentorSection = text.match(sectionRegex(SECTION_HEADINGS.mentor));
+  const mentorName = mentorSection?.[1]?.match(/^-\s*Name:\s*(.+?)\s*$/m)?.[1] ?? '';
+  const mentorContact = mentorSection?.[1]?.match(/^-\s*Contact:\s*(.+?)\s*$/m)?.[1] ?? '';
+  const testimonialMatch = text.match(sectionRegex(SECTION_HEADINGS.testimonial));
   const githubMatch = text.match(/^-\s*GitHub:\s*(.+?)\s*$/m);
   // Legacy single Portfolio bullet — fold into links array.
   const portfolioMatch = text.match(/^-\s*Portfolio:\s*(.+?)\s*$/m);
@@ -72,6 +92,8 @@ export const parseProposal = (text: string): ProposalFields => {
     titleMatch ||
     problemMatch ||
     planMatch ||
+    mentorSection ||
+    testimonialMatch ||
     githubMatch ||
     portfolioMatch ||
     collectedLinks.length > 0;
@@ -91,6 +113,9 @@ export const parseProposal = (text: string): ProposalFields => {
     title: titleMatch?.[1]?.trim() ?? '',
     problemStatement,
     plan: planMatch?.[1]?.trim() ?? '',
+    mentorName,
+    mentorContact,
+    mentorTestimonial: testimonialMatch?.[1]?.trim() ?? '',
     github: githubMatch?.[1]?.trim() ?? '',
     links: collectedLinks.length > 0 ? collectedLinks : [''],
   };

@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -8,11 +7,12 @@ import {
   DialogTitle,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import dayjs, { Dayjs } from 'dayjs';
+import { Dayjs } from 'dayjs';
 import { useStartFellowshipContract } from '../../hooks/fellowshipHooks';
 import type { GetFellowshipResponseDto } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -24,46 +24,71 @@ type Props = {
   onError: (msg: string) => void;
 };
 
+// Mirrors @Max(5000) on StartFellowshipContractDto in the backend.
+const MAX_AMOUNT_USD = 5000;
+const MAX_MONTHS = 24;
+
+// Field-level validators return the error to show, or null. They run on every
+// keystroke so mistakes surface immediately, not on submit.
+const validateMonths = (raw: string): string | null => {
+  if (!raw.trim()) return null;
+  if (!/^\d+$/.test(raw.trim())) return 'Enter a whole number of months.';
+  const n = Number(raw);
+  if (n < 1) return 'Duration must be at least 1 month.';
+  if (n > MAX_MONTHS) return `Duration cannot exceed ${MAX_MONTHS} months.`;
+  return null;
+};
+
+const validateAmount = (raw: string): string | null => {
+  if (!raw.trim()) return null;
+  const n = Number(raw);
+  if (Number.isNaN(n)) return 'Enter a numeric amount.';
+  if (n <= 0) return 'Amount must be positive.';
+  if (n > MAX_AMOUNT_USD)
+    return `Amount cannot exceed $${MAX_AMOUNT_USD.toLocaleString('en-US')}/mo.`;
+  if (!/^\d+(\.\d{1,2})?$/.test(raw.trim())) return 'Amount supports up to 2 decimals.';
+  return null;
+};
+
 const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props) => {
   const [startDate, setStartDate] = useState<Dayjs | null>(null);
-  const [endDate, setEndDate] = useState<Dayjs | null>(null);
+  const [months, setMonths] = useState('6');
   const [amountUsd, setAmountUsd] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const startMut = useStartFellowshipContract();
 
-  // The picker already blocks invalid end dates via minDate; this guards
-  // typed input and keeps the rule explicit.
-  const validate = () => {
-    if (!startDate || !endDate || !amountUsd) return 'All fields required.';
-    if (!startDate.isValid() || !endDate.isValid()) return 'Enter valid dates.';
-    if (!endDate.isAfter(startDate, 'day')) return 'End date must be after start date.';
-    const n = Number(amountUsd);
-    if (Number.isNaN(n) || n <= 0) return 'Amount must be positive.';
-    if (!/^\d+(\.\d{1,2})?$/.test(amountUsd)) return 'Amount supports up to 2 decimals.';
-    return null;
-  };
+  const monthsError = validateMonths(months);
+  const amountError = validateAmount(amountUsd);
+  const startDateError =
+    startDate && !startDate.isValid() ? 'Enter a valid date.' : null;
+
+  const endDate = useMemo(() => {
+    if (!startDate || !startDate.isValid() || monthsError || !months.trim()) return null;
+    return startDate.add(Number(months), 'month');
+  }, [startDate, months, monthsError]);
+
+  const canSubmit =
+    !!startDate &&
+    !startDateError &&
+    !!months.trim() &&
+    !monthsError &&
+    !!amountUsd.trim() &&
+    !amountError &&
+    !startMut.isPending;
 
   const reset = () => {
     setStartDate(null);
-    setEndDate(null);
+    setMonths('6');
     setAmountUsd('');
-    setError(null);
   };
 
   const handleSubmit = async () => {
-    if (!fellowship) return;
-    const err = validate();
-    if (err) {
-      setError(err);
-      return;
-    }
-    setError(null);
+    if (!fellowship || !canSubmit || !endDate) return;
     try {
       await startMut.mutateAsync({
         id: fellowship.id,
         body: {
           startDate: startDate!.format('YYYY-MM-DD'),
-          endDate: endDate!.format('YYYY-MM-DD'),
+          endDate: endDate.format('YYYY-MM-DD'),
           amountUsd: Number(amountUsd),
         },
       });
@@ -88,30 +113,31 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
         Start contract — {fellowship?.userName ?? fellowship?.userEmail ?? 'Fellowship'}
       </DialogTitle>
       <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <DatePicker
                 label="Start date"
                 value={startDate}
-                onChange={(v) => {
-                  setStartDate(v);
-                  // Keep the range valid if the start moves past the end.
-                  if (v && endDate && !endDate.isAfter(v, 'day')) setEndDate(null);
+                onChange={setStartDate}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    fullWidth: true,
+                    error: !!startDateError,
+                    helperText: startDateError ?? ' ',
+                  },
                 }}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
-              <DatePicker
-                label="End date"
-                value={endDate}
-                onChange={setEndDate}
-                minDate={startDate ? startDate.add(1, 'day') : dayjs()}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              <TextField
+                label="Duration (months)"
+                size="small"
+                fullWidth
+                value={months}
+                onChange={(e) => setMonths(e.target.value)}
+                placeholder="6"
+                error={!!monthsError}
+                helperText={monthsError ?? `Up to ${MAX_MONTHS} months.`}
               />
             </Stack>
             <TextField
@@ -121,7 +147,20 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
               value={amountUsd}
               onChange={(e) => setAmountUsd(e.target.value)}
               placeholder="500.00"
+              error={!!amountError}
+              helperText={
+                amountError ?? `Up to $${MAX_AMOUNT_USD.toLocaleString('en-US')}/mo.`
+              }
             />
+            {endDate && (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Contract ends{' '}
+                <Typography component="span" variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                  {endDate.format('MMM D, YYYY')}
+                </Typography>
+                .
+              </Typography>
+            )}
           </Stack>
         </LocalizationProvider>
       </DialogContent>
@@ -134,7 +173,7 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
         >
           Cancel
         </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={startMut.isPending}>
+        <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit}>
           {startMut.isPending ? 'Starting…' : 'Start contract'}
         </Button>
       </DialogActions>

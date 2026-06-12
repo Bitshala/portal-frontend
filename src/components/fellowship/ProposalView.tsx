@@ -73,6 +73,25 @@ export const ProposalView = ({
         <LongText text={fields.plan} expandable={expandable} />
       </ProposalSection>
 
+      {(fields.mentorName || fields.mentorContact) && (
+        <ProposalSection title="Mentor">
+          <Typography variant="body2" sx={{ color: 'text.primary' }}>
+            {fields.mentorName || '—'}
+            {fields.mentorContact && (
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                {' '}
+                · {fields.mentorContact}
+              </Box>
+            )}
+          </Typography>
+          {fields.mentorTestimonial && (
+            <Box sx={{ mt: 1 }}>
+              <LongText text={fields.mentorTestimonial} expandable={expandable} />
+            </Box>
+          )}
+        </ProposalSection>
+      )}
+
       {(fields.github || links.length > 0) && (
         <ProposalSection title="Links">
           <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
