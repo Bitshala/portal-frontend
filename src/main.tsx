@@ -43,7 +43,6 @@ const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
 const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
 const MyApplications = lazy(() => import('./pages/fellowship/MyApplications.tsx'));
 const MyReports = lazy(() => import('./pages/fellowship/MyReports.tsx'));
-const FellowshipDashboard = lazy(() => import('./pages/fellowship/FellowshipDashboard.tsx'));
 const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
 const ProposalPrint = lazy(() => import('./pages/fellowship/ProposalPrint.tsx'));
 const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/ApplicationsAdmin.tsx'));
@@ -209,10 +208,6 @@ const router = createBrowserRouter([
     {
       path: '/fellowship/reports',
       element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyReports />)}</ProtectedRoute></Layout>,
-    },
-    {
-      path: '/fellowship/fellowships/:id',
-      element: <Layout><ProtectedRoute>{withFellowshipFallback(<FellowshipDashboard />)}</ProtectedRoute></Layout>,
     },
     {
       path: '/fellowship/fellowships/:fellowshipId/reports/:id?',

@@ -1,16 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
-import { ArrowRight, FileText } from 'lucide-react';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Stack,
+  Typography,
+} from '@mui/material';
+import { ArrowRight, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
-import ProposalDialog from '../../components/fellowship/ProposalDialog';
+import ProposalView from '../../components/fellowship/ProposalView';
 import StatusChip from '../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../components/fellowship/theme';
-import { useApplicationProposal, useMyApplications } from '../../hooks/fellowshipHooks';
+import {
+  useApplicationProposal,
+  useDeleteApplication,
+  useMyApplications,
+  useSubmitApplication,
+} from '../../hooks/fellowshipHooks';
 import {
   FellowshipApplicationStatus,
   type GetFellowshipApplicationResponseDto,
 } from '../../types/fellowship';
+import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
 import { parseProposal } from '../../utils/proposalFormat';
 
@@ -32,8 +45,11 @@ const formatDate = (iso: string): string =>
 const MyApplications = () => {
   const navigate = useNavigate();
   const { data, isLoading } = useMyApplications({ page: 0, pageSize: 50 });
+  const deleteMut = useDeleteApplication();
+  const submitMut = useSubmitApplication();
   const [filter, setFilter] = useState<StatusFilter>('ALL');
-  const [proposalAppId, setProposalAppId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const applications = useMemo(() => {
     const records = data?.records ?? [];
@@ -60,12 +76,48 @@ const MyApplications = () => {
     [applications, filter],
   );
 
+  // Fall back to the first row when nothing is explicitly selected (or the
+  // selected one was filtered/deleted away), mirroring the admin review pane.
+  const selectedIdx = filtered.findIndex((a) => a.id === selectedId);
+  const selected = selectedIdx >= 0 ? filtered[selectedIdx] : filtered[0] ?? null;
+  const effectiveSelectedId = selected?.id ?? null;
+
+  const proposalQuery = useApplicationProposal(effectiveSelectedId ?? '', {
+    enabled: !!effectiveSelectedId,
+  });
+
+  const handleDiscard = async (id: string) => {
+    if (!confirm('Discard this draft? This cannot be undone.')) return;
+    setActionError(null);
+    try {
+      await deleteMut.mutateAsync({ id });
+      if (selectedId === id) setSelectedId(null);
+    } catch (e) {
+      setActionError(extractErrorMessage(e));
+    }
+  };
+
+  const handleResubmit = async (id: string) => {
+    setActionError(null);
+    try {
+      await submitMut.mutateAsync({ id });
+    } catch (e) {
+      setActionError(extractErrorMessage(e));
+    }
+  };
+
   return (
     <FellowshipPageLayout
       title="My applications"
       subtitle="Track the status of your fellowship applications."
       hideIcon
     >
+      {actionError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
+
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress size={22} />
@@ -125,45 +177,36 @@ const MyApplications = () => {
             </Button>
           </Stack>
 
-          {filtered.length === 0 ? (
-            <Box
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 0.75,
-                bgcolor: 'background.paper',
-                py: 6,
-                textAlign: 'center',
-              }}
-            >
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                No applications with this status.
-              </Typography>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 0.75,
-                bgcolor: 'background.paper',
-                overflow: 'hidden',
-              }}
-            >
-              {filtered.map((app) => (
-                <ApplicationRow
-                  key={app.id}
-                  app={app}
-                  onContinue={() => navigate(`/fellowship/apply?appId=${app.id}`)}
-                  onViewProposal={() => setProposalAppId(app.id)}
-                />
-              ))}
-            </Box>
-          )}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 360px) minmax(0, 1fr)' },
+              gap: 2,
+            }}
+          >
+            <ApplicationList
+              records={filtered}
+              selectedId={effectiveSelectedId}
+              onSelect={setSelectedId}
+            />
+
+            {selected ? (
+              <ApplicationDetail
+                app={selected}
+                proposal={proposalQuery.data?.proposal ?? ''}
+                isLoadingProposal={proposalQuery.isLoading}
+                onContinue={() => navigate(`/fellowship/apply?appId=${selected.id}`)}
+                onDiscard={() => handleDiscard(selected.id)}
+                onResubmit={() => handleResubmit(selected.id)}
+                isDiscarding={deleteMut.isPending}
+                isResubmitting={submitMut.isPending}
+              />
+            ) : (
+              <EmptyDetail />
+            )}
+          </Box>
         </>
       )}
-
-      <ProposalDialog applicationId={proposalAppId} onClose={() => setProposalAppId(null)} />
     </FellowshipPageLayout>
   );
 };
@@ -214,14 +257,70 @@ const FilterPill = ({
   </Box>
 );
 
-const ApplicationRow = ({
+// ---- left list ----
+
+const ApplicationList = ({
+  records,
+  selectedId,
+  onSelect,
+}: {
+  records: GetFellowshipApplicationResponseDto[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) => {
+  if (records.length === 0) {
+    return (
+      <Box
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 0.75,
+          bgcolor: 'background.paper',
+          p: 4,
+          textAlign: 'center',
+        }}
+      >
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          No applications with this status.
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        p: 1.25,
+        maxHeight: '74vh',
+        overflowY: 'auto',
+      }}
+    >
+      <Stack spacing={0.5}>
+        {records.map((app) => (
+          <ApplicationListItem
+            key={app.id}
+            app={app}
+            active={app.id === selectedId}
+            onSelect={() => onSelect(app.id)}
+          />
+        ))}
+      </Stack>
+    </Box>
+  );
+};
+
+const ApplicationListItem = ({
   app,
-  onContinue,
-  onViewProposal,
+  active,
+  onSelect,
 }: {
   app: GetFellowshipApplicationResponseDto;
-  onContinue: () => void;
-  onViewProposal: () => void;
+  active: boolean;
+  onSelect: () => void;
 }) => {
   const proposalQuery = useApplicationProposal(app.id);
   const title = useMemo(
@@ -229,31 +328,29 @@ const ApplicationRow = ({
       proposalQuery.data?.proposal ? parseProposal(proposalQuery.data.proposal).title : '',
     [proposalQuery.data?.proposal],
   );
-  const editable =
-    app.status === FellowshipApplicationStatus.DRAFT ||
-    app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
 
   return (
-    <Stack
-      direction={{ xs: 'column', sm: 'row' }}
-      spacing={1.5}
-      alignItems={{ xs: 'flex-start', sm: 'center' }}
+    <Box
+      onClick={onSelect}
       sx={{
-        px: 2.5,
-        py: 2,
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        '&:last-of-type': { borderBottom: 'none' },
+        p: 1.25,
+        borderRadius: 0.5,
+        cursor: 'pointer',
+        bgcolor: active ? 'rgba(249,115,22,0.06)' : 'transparent',
+        transition: 'all 0.12s',
+        '&:hover': active ? {} : { bgcolor: 'rgba(255,255,255,0.03)' },
       }}
     >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
         <Typography
           sx={{
             fontWeight: 600,
-            fontSize: '0.92rem',
+            fontSize: '0.88rem',
+            color: 'text.primary',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            minWidth: 0,
           }}
         >
           {title || (
@@ -262,31 +359,161 @@ const ApplicationRow = ({
             </Box>
           )}
         </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.72rem' }}
-        >
+        <StatusChip status={app.status} />
+      </Stack>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          fontFamily: fontFamilyMono,
+          fontSize: '0.72rem',
+          display: 'block',
+          mt: 0.5,
+        }}
+      >
+        {formatFellowshipType(app.type)} · updated {formatDate(app.updatedAt)}
+      </Typography>
+    </Box>
+  );
+};
+
+// ---- right detail ----
+
+const EmptyDetail = () => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.75,
+      bgcolor: 'background.paper',
+      p: 6,
+      textAlign: 'center',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+      Select an application from the list to view its proposal.
+    </Typography>
+  </Box>
+);
+
+const ApplicationDetail = ({
+  app,
+  proposal,
+  isLoadingProposal,
+  onContinue,
+  onDiscard,
+  onResubmit,
+  isDiscarding,
+  isResubmitting,
+}: {
+  app: GetFellowshipApplicationResponseDto;
+  proposal: string;
+  isLoadingProposal: boolean;
+  onContinue: () => void;
+  onDiscard: () => void;
+  onResubmit: () => void;
+  isDiscarding: boolean;
+  isResubmitting: boolean;
+}) => {
+  const fields = useMemo(() => parseProposal(proposal), [proposal]);
+  const title = fields.title || `${formatFellowshipType(app.type)} fellowship`;
+  const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
+  const needsChanges = app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+  const hasActions = isDraft || needsChanges;
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Box sx={{ p: { xs: 2.5, md: 3 }, flex: 1, overflowY: 'auto', maxHeight: '74vh' }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {title}
+          </Typography>
+          <StatusChip status={app.status} />
+        </Stack>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {formatFellowshipType(app.type)} · updated {formatDate(app.updatedAt)}
         </Typography>
-      </Box>
-      <Stack direction="row" spacing={1.25} alignItems="center">
-        <StatusChip status={app.status} />
-        <Button
-          size="small"
-          variant="text"
-          startIcon={<FileText size={14} />}
-          onClick={onViewProposal}
-          sx={{ color: 'text.secondary' }}
-        >
-          Proposal
-        </Button>
-        {editable && (
-          <Button size="small" variant="outlined" onClick={onContinue}>
-            Continue
-          </Button>
+
+        {needsChanges && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <strong>Changes requested by {app.reviewedByName ?? 'the reviewer'}:</strong>{' '}
+            {app.reviewerRemarks ?? 'Please revise your proposal before resubmitting.'}
+          </Alert>
         )}
-      </Stack>
-    </Stack>
+        {app.status === FellowshipApplicationStatus.REJECTED && app.reviewerRemarks && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            <strong>Reviewer remarks:</strong> {app.reviewerRemarks}
+          </Alert>
+        )}
+        {app.status === FellowshipApplicationStatus.ACCEPTED && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            Application accepted. A fellowship entry has been created for you.
+          </Alert>
+        )}
+
+        <Box sx={{ mt: 1.5 }}>
+          {isLoadingProposal && !proposal ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={20} />
+            </Box>
+          ) : (
+            <ProposalView proposal={proposal} expandable />
+          )}
+        </Box>
+      </Box>
+
+      {hasActions && (
+        <Box
+          sx={{
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            p: 2,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 1,
+            flexWrap: 'wrap',
+          }}
+        >
+          {isDraft && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<Trash2 size={14} />}
+              onClick={onDiscard}
+              disabled={isDiscarding}
+            >
+              Discard
+            </Button>
+          )}
+          {needsChanges && (
+            <Button
+              variant="outlined"
+              startIcon={<RefreshCw size={14} />}
+              onClick={onResubmit}
+              disabled={isResubmitting}
+              sx={{ color: 'text.primary', borderColor: 'divider' }}
+            >
+              {isResubmitting ? 'Resubmitting…' : 'Resubmit as-is'}
+            </Button>
+          )}
+          <Button variant="contained" startIcon={<FileText size={14} />} onClick={onContinue}>
+            {needsChanges ? 'Edit proposal' : 'Continue'}
+          </Button>
+        </Box>
+      )}
+    </Box>
   );
 };
 

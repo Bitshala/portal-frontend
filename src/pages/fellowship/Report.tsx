@@ -21,40 +21,65 @@ import {
   useCreateReport,
   useDeleteReport,
   useFellowship,
+  useMyFellowships,
   useMyReports,
   useReport,
   useReportContent,
   useSubmitReport,
   useUpdateReport,
 } from '../../hooks/fellowshipHooks';
-import { FellowshipReportStatus } from '../../types/fellowship';
+import { FellowshipReportStatus, type GetFellowshipResponseDto } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatFellowshipType } from '../../utils/fellowshipFormat';
+import { useFellowshipProjectTitle } from '../../hooks/useFellowshipProjectTitle';
+
+// Label for a fellowship in the picker: project name (from the proposal) with
+// the track in parens, falling back to just the track when there's no title.
+const FellowshipOptionLabel = ({ fellowship }: { fellowship: GetFellowshipResponseDto }) => {
+  const title = useFellowshipProjectTitle(fellowship);
+  const track = formatFellowshipType(fellowship.type);
+  return <>{title ? `${title} (${track})` : track}</>;
+};
 
 const monthName = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'long' });
 
-const monthOptions = Array.from({ length: 12 }, (_, i) => ({
-  value: i + 1,
-  label: monthName(i + 1),
-}));
-
 const Report = () => {
-  const { fellowshipId, id: reportIdParam } = useParams<{ fellowshipId: string; id?: string }>();
+  const { fellowshipId: routeFellowshipId, id: reportIdParam } = useParams<{
+    fellowshipId: string;
+    id?: string;
+  }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const creatingNew = !reportIdParam || reportIdParam === 'new';
   const reportId = creatingNew ? null : reportIdParam!;
 
-  const initialMonth = Number(searchParams.get('month')) || new Date().getMonth() + 1;
-  const initialYear = Number(searchParams.get('year')) || new Date().getFullYear();
+  const now = useMemo(() => new Date(), []);
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
 
+  // The fellowship a new report is filed against — seeded from the URL but
+  // changeable via the dropdown, so a fellow with several can pick one.
+  const [selectedFellowshipId, setSelectedFellowshipId] = useState<string>(routeFellowshipId ?? '');
+  useEffect(() => {
+    if (routeFellowshipId) setSelectedFellowshipId(routeFellowshipId);
+  }, [routeFellowshipId]);
+  const fellowshipId = selectedFellowshipId;
+
+  const initialMonth = Number(searchParams.get('month')) || currentMonth;
   const [month, setMonth] = useState<number>(initialMonth);
-  const [year, setYear] = useState<number>(initialYear);
   const [content, setContent] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  const { data: fellowship } = useFellowship(fellowshipId ?? '', { enabled: !!fellowshipId });
+  const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 50 });
+  const fellowshipOptions = useMemo(
+    () => fellowshipsQuery.data?.records ?? [],
+    [fellowshipsQuery.data?.records],
+  );
+
+  const { data: fellowship } = useFellowship(fellowshipId, { enabled: !!fellowshipId });
+  const fellowshipTitle = useFellowshipProjectTitle(fellowship);
   const report = useReport(reportId ?? '', { enabled: !!reportId });
   const reportContent = useReportContent(reportId ?? '', {
     enabled: !!reportId && report.data?.status === FellowshipReportStatus.DRAFT,
@@ -71,11 +96,28 @@ const Report = () => {
   }, [reportContent.data?.content]);
 
   useEffect(() => {
-    if (report.data) {
-      setMonth(report.data.month);
-      setYear(report.data.year);
-    }
+    if (report.data) setMonth(report.data.month);
   }, [report.data]);
+
+  // Selectable months run from the fellowship's start month up to the current
+  // month (you can file the current month in advance); reports can't predate the
+  // contract. Year is always the current year, so it isn't a separate field.
+  const monthOptions = useMemo(() => {
+    const start = fellowship?.startDate ? new Date(fellowship.startDate) : null;
+    const startMonth =
+      start && start.getFullYear() === currentYear ? start.getMonth() + 1 : 1;
+    const lo = Math.min(startMonth, currentMonth);
+    const opts: { value: number; label: string }[] = [];
+    for (let m = lo; m <= currentMonth; m++) opts.push({ value: m, label: monthName(m) });
+    return opts.length ? opts : [{ value: currentMonth, label: monthName(currentMonth) }];
+  }, [fellowship?.startDate, currentMonth, currentYear]);
+
+  // Keep the selected month within the allowed range when creating.
+  useEffect(() => {
+    if (creatingNew && !monthOptions.some((o) => o.value === month)) {
+      setMonth(monthOptions[monthOptions.length - 1].value);
+    }
+  }, [monthOptions, creatingNew, month]);
 
   const pastReports = useMemo(
     () => (myReports.data?.records ?? []).filter((r) => r.fellowshipId === fellowshipId),
@@ -84,13 +126,8 @@ const Report = () => {
 
   const current = reportId ? report.data : null;
   const isEditable = !reportId || current?.status === FellowshipReportStatus.DRAFT;
-
-  // Reports can't predate the program or be filed more than a year ahead.
-  const maxYear = new Date().getFullYear() + 1;
-  const yearError =
-    creatingNew && (!Number.isInteger(year) || year < 2020 || year > maxYear)
-      ? `Enter a year between 2020 and ${maxYear}.`
-      : null;
+  // New reports always belong to the current year; existing ones keep their own.
+  const year = current?.year ?? currentYear;
 
   const handleSaveDraft = async () => {
     if (!fellowshipId || !content.trim()) return;
@@ -99,7 +136,7 @@ const Report = () => {
         await updateMut.mutateAsync({ id: reportId, body: { content } });
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year, content });
+        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content });
         setToast({ kind: 'success', msg: 'Draft created.' });
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${created.id}`, {
           replace: true,
@@ -115,7 +152,7 @@ const Report = () => {
     try {
       let id = reportId;
       if (!id) {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year, content });
+        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content });
         id = created.id;
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${id}`, { replace: true });
       } else {
@@ -134,7 +171,7 @@ const Report = () => {
     try {
       await deleteMut.mutateAsync({ id: reportId });
       setToast({ kind: 'success', msg: 'Draft deleted.' });
-      navigate(`/fellowship/fellowships/${fellowshipId}`);
+      navigate('/fellowship/reports');
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -148,8 +185,8 @@ const Report = () => {
         </Alert>
       )}
 
-      <Button variant="text" size="small" onClick={() => navigate(`/fellowship/fellowships/${fellowshipId}`)} sx={{ mb: 2 }}>
-        ← Back to dashboard
+      <Button variant="text" size="small" onClick={() => navigate('/fellowship/reports')} sx={{ mb: 2 }}>
+        ← Back to reports
       </Button>
 
       <Grid container spacing={3}>
@@ -159,7 +196,11 @@ const Report = () => {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ sm: 'center' }} mb={2}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                    {fellowship?.projectName || fellowship?.type || 'Fellowship'}
+                    {fellowshipTitle
+                      ? `${fellowshipTitle}${fellowship ? ` (${formatFellowshipType(fellowship.type)})` : ''}`
+                      : fellowship
+                        ? formatFellowshipType(fellowship.type)
+                        : 'Fellowship'}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>
                     {monthName(month)} {year}
@@ -169,7 +210,26 @@ const Report = () => {
               </Stack>
 
               {creatingNew && (
-                <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+                  <TextField
+                    select
+                    label="Fellowship"
+                    value={fellowshipOptions.some((f) => f.id === fellowshipId) ? fellowshipId : ''}
+                    onChange={(e) => setSelectedFellowshipId(e.target.value)}
+                    size="small"
+                    sx={{ minWidth: 220 }}
+                  >
+                    {fellowshipOptions.length === 0 && (
+                      <MenuItem value="" disabled>
+                        No fellowships
+                      </MenuItem>
+                    )}
+                    {fellowshipOptions.map((f) => (
+                      <MenuItem key={f.id} value={f.id}>
+                        <FellowshipOptionLabel fellowship={f} />
+                      </MenuItem>
+                    ))}
+                  </TextField>
                   <TextField
                     select
                     label="Month"
@@ -184,17 +244,6 @@ const Report = () => {
                       </MenuItem>
                     ))}
                   </TextField>
-                  <TextField
-                    label="Year"
-                    type="number"
-                    value={year}
-                    onChange={(e) => setYear(Number(e.target.value))}
-                    size="small"
-                    inputProps={{ min: 2020, max: maxYear }}
-                    error={!!yearError}
-                    helperText={yearError}
-                    sx={{ minWidth: 120 }}
-                  />
                 </Stack>
               )}
 
@@ -221,8 +270,8 @@ const Report = () => {
                   onClick={handleSaveDraft}
                   disabled={
                     !isEditable ||
+                    !fellowshipId ||
                     !content.trim() ||
-                    !!yearError ||
                     createMut.isPending ||
                     updateMut.isPending
                   }
@@ -234,8 +283,8 @@ const Report = () => {
                   onClick={handleSubmit}
                   disabled={
                     !isEditable ||
+                    !fellowshipId ||
                     !content.trim() ||
-                    !!yearError ||
                     submitMut.isPending ||
                     createMut.isPending ||
                     updateMut.isPending

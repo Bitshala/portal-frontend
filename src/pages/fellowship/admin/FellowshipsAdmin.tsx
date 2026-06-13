@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -18,10 +18,12 @@ import {
   ChevronUp,
   Download,
   FileText,
+  PlayCircle,
   Search,
 } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
+import StartContractDialog from '../../../components/fellowship/StartContractDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
@@ -34,9 +36,10 @@ import {
 } from '../../../types/fellowship';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 
-// Filtering/search/sort happen client-side, so fetch a large page from the API
-// and paginate the table locally.
-const FETCH_PAGE_SIZE = 500;
+// Filtering/search/sort happen client-side, so fetch a full page from the API
+// and paginate the table locally. Capped at 100 — the backend rejects larger
+// pageSize values with a 400.
+const FETCH_PAGE_SIZE = 100;
 const ROWS_PER_PAGE = 25;
 
 type StatusFilter = 'ALL' | FellowshipStatus;
@@ -116,7 +119,6 @@ const formatPayoutPerMonth = (amountUsd: string | null): string => {
 // ---- page ----
 
 const FellowshipsAdmin = () => {
-  const navigate = useNavigate();
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<string>(ALL_VALUE);
@@ -124,11 +126,15 @@ const FellowshipsAdmin = () => {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page, setPage] = useState(0);
-  // Application whose proposal is open in the viewer dialog.
-  const [proposalAppId, setProposalAppId] = useState<string | null>(null);
+  // Fellowship whose proposal is open in the viewer dialog (Start contract is
+  // offered from inside that dialog for PENDING fellowships).
+  const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose "Start contract" dialog is open (admin-only action).
+  const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const { data, isLoading } = useFellowships({ page: 0, pageSize: FETCH_PAGE_SIZE });
-  const reportsQuery = useReports({ page: 0, pageSize: 200 });
+  const reportsQuery = useReports({ page: 0, pageSize: 100 });
 
   const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
   const reports = useMemo(() => reportsQuery.data?.records ?? [], [reportsQuery.data?.records]);
@@ -270,6 +276,12 @@ const FellowshipsAdmin = () => {
       badge="Admin"
       hideIcon
     >
+      {toast && (
+        <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
+          {toast.msg}
+        </Alert>
+      )}
+
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={1.5}
@@ -374,9 +386,8 @@ const FellowshipsAdmin = () => {
               <FellowshipRow
                 key={f.id}
                 fellowship={f}
-                lastReport={lastReportByFellowship.get(f.id)}
-                onOpen={() => navigate(`/fellowship/fellowships/${f.id}`)}
-                onViewProposal={() => setProposalAppId(f.applicationId)}
+                onOpen={() => setProposalFellowship(f)}
+                onViewProposal={() => setProposalFellowship(f)}
               />
             ))}
             {sorted.length > ROWS_PER_PAGE && (
@@ -392,8 +403,32 @@ const FellowshipsAdmin = () => {
       </Box>
 
       <ProposalDialog
-        applicationId={proposalAppId}
-        onClose={() => setProposalAppId(null)}
+        applicationId={proposalFellowship?.applicationId ?? null}
+        onClose={() => setProposalFellowship(null)}
+        actions={
+          proposalFellowship?.status === FellowshipStatus.PENDING ? (
+            <Button
+              variant="contained"
+              startIcon={<PlayCircle size={15} />}
+              onClick={() => {
+                setContractFellowship(proposalFellowship);
+                setProposalFellowship(null);
+              }}
+            >
+              Start contract
+            </Button>
+          ) : null
+        }
+      />
+
+      <StartContractDialog
+        fellowship={contractFellowship}
+        onClose={() => setContractFellowship(null)}
+        onSuccess={(msg) => {
+          setToast({ kind: 'success', msg });
+          setContractFellowship(null);
+        }}
+        onError={(msg) => setToast({ kind: 'error', msg })}
       />
     </FellowshipPageLayout>
   );
@@ -449,8 +484,7 @@ const FilterPill = ({
 
 // ---- table header ----
 
-const COLS =
-  '200px 100px minmax(0, 1.6fr) minmax(0, 1fr) 120px 100px 100px 110px 64px';
+const COLS = '200px 100px minmax(0, 1.6fr) 120px 100px 110px 64px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -520,10 +554,8 @@ const HeaderRow = ({
       dir={sortDir}
       onClick={() => onSort('project')}
     />
-    <Box>Maintainer</Box>
     <Box>End date</Box>
     <Box>Payout</Box>
-    <Box>Last report</Box>
     <Box>Status</Box>
     <Box>Actions</Box>
   </Box>
@@ -590,12 +622,10 @@ const PaginationFooter = ({
 
 const FellowshipRow = ({
   fellowship,
-  lastReport,
   onOpen,
   onViewProposal,
 }: {
   fellowship: GetFellowshipResponseDto;
-  lastReport?: GetFellowshipReportResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
 }) => {
@@ -692,20 +722,6 @@ const FellowshipRow = ({
         )}
       </Typography>
 
-      {/* Maintainer */}
-      <Typography
-        sx={{
-          fontSize: '0.82rem',
-          color: fellowship.projectMaintainerName ? 'text.primary' : 'text.secondary',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          pr: 1,
-        }}
-      >
-        {fellowship.projectMaintainerName ?? '—'}
-      </Typography>
-
       {/* End date */}
       <Typography
         sx={{
@@ -726,17 +742,6 @@ const FellowshipRow = ({
         }}
       >
         {formatPayoutPerMonth(fellowship.amountUsd)}
-      </Typography>
-
-      {/* Last report */}
-      <Typography
-        sx={{
-          fontFamily: fontFamilyMono,
-          fontSize: '0.78rem',
-          color: 'text.secondary',
-        }}
-      >
-        {lastReport ? `${monthShort(lastReport.month)} ${lastReport.year}` : '—'}
       </Typography>
 
       {/* Status */}

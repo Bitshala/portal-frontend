@@ -1,5 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Controller, useForm, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
   Alert,
   Box,
@@ -8,6 +11,7 @@ import {
   Stack,
   TextField,
   Typography,
+  type TextFieldProps,
 } from '@mui/material';
 import {
   ArrowLeft,
@@ -60,6 +64,68 @@ const LONG_TEXT_LIMIT = 3000;
 // Titles surface in list rows, dialog headers and the print view —
 // long enough to be descriptive, short enough to stay scannable.
 const TITLE_LIMIT = 120;
+// Per-link cap and link-count cap. Together with the section caps these keep the
+// serialized payload comfortably under the server's 20,000-char ceiling, so the
+// overall limit can't be tripped from the UI.
+const LINK_LIMIT = 500;
+const MAX_LINKS = 20;
+
+// ---- Validation schema (react-hook-form + zod) ----
+
+// GitHub is required on the Developer track and optional elsewhere, so the
+// schema is built per-track. Everything else is shared.
+const makeProposalSchema = (githubRequired: boolean) =>
+  z
+    .object({
+      title: z.string().max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
+      problemStatement: z
+        .string()
+        .trim()
+        .min(1, { message: 'Problem statement is required.' })
+        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
+      plan: z
+        .string()
+        .trim()
+        .min(1, { message: '6-month plan is required.' })
+        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
+      mentorName: z
+        .string()
+        .trim()
+        .min(1, { message: 'Mentor name is required.' })
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      mentorContact: z
+        .string()
+        .trim()
+        .min(1, { message: 'Mentor contact is required.' })
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      mentorTestimonial: z
+        .string()
+        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
+      github: z.string(),
+      links: z
+        .array(
+          z
+            .string()
+            .max(LINK_LIMIT, { message: 'This link is too long.' })
+            .refine((l) => !validateLink(l), {
+              message: 'Enter a full URL starting with http:// or https://',
+            }),
+        )
+        .max(MAX_LINKS, { message: `Add at most ${MAX_LINKS} links.` }),
+    })
+    .superRefine((data, ctx) => {
+      const gh = data.github.trim();
+      if (githubRequired && normalizeGithub(gh).length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['github'], message: 'GitHub username is required.' });
+      } else {
+        const ghError = validateGithub(gh);
+        if (ghError) ctx.addIssue({ code: 'custom', path: ['github'], message: ghError });
+      }
+      // Cross-field check: flag links that duplicate an earlier one.
+      for (const i of duplicateLinkIndices(data.links)) {
+        ctx.addIssue({ code: 'custom', path: ['links', i], message: 'Duplicate link — already added above.' });
+      }
+    });
 
 type TrackOption = {
   value: FellowshipType;
@@ -96,6 +162,10 @@ const TRACK_BY_VALUE: Record<FellowshipType, TrackOption> = TRACK_OPTIONS.reduce
 
 type StepIndex = 0 | 1 | 2;
 
+// Result of the advisory GitHub account check. 'checking' is in-flight;
+// 'unknown' is the null case (rate-limited / unreachable), distinct from 'missing'.
+type GithubCheckStatus = 'checking' | 'exists' | 'missing' | 'unknown';
+
 const STEP_LABELS = ['Track', 'Proposal', 'Review & submit'] as const;
 
 const Apply = () => {
@@ -104,11 +174,28 @@ const Apply = () => {
   const appIdFromUrl = searchParams.get('appId');
 
   const [selectedType, setSelectedType] = useState<FellowshipType | null>(null);
-  const [fields, setFields] = useState<ProposalFields>(EMPTY_FIELDS);
   const [activeId, setActiveId] = useState<string | null>(appIdFromUrl);
   const [step, setStep] = useState<StepIndex>(0);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  // GitHub matters most for the Developer track, so it's required there; for
+  // Designer/Educator it's optional (but still format-checked when provided).
+  const githubRequired = selectedType === FellowshipType.DEVELOPER;
+
+  const resolver = useMemo(() => zodResolver(makeProposalSchema(githubRequired)), [githubRequired]);
+  const form = useForm<ProposalFields>({
+    resolver,
+    defaultValues: EMPTY_FIELDS,
+    // Validate on blur, then keep errors fresh as the user types to clear them.
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
+  });
+  const { control, getValues, setValue, reset } = form;
+
+  // Live values drive autosave, the GitHub check and the review preview.
+  const values = useWatch({ control }) as ProposalFields;
+  const serializedProposal = useMemo(() => serializeProposal(values), [values]);
 
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
@@ -121,7 +208,9 @@ const Apply = () => {
 
   useEffect(() => {
     if (!submitted) return;
-    const timer = setTimeout(() => navigate('/fellowship/me', { replace: true }), 1800);
+    // Land back on My Applications — the fellowship pages only appear once an
+    // application is accepted, so sending a fresh submission there is confusing.
+    const timer = setTimeout(() => navigate('/fellowship/applications', { replace: true }), 1800);
     return () => clearTimeout(timer);
   }, [navigate, submitted]);
 
@@ -133,6 +222,7 @@ const Apply = () => {
   // on every refetch (e.g. after a save) would clobber the user's in-progress edits.
   const hydratedFor = useRef<string | null>(null);
   const openedEditorFor = useRef<string | null>(null);
+  const lastSavedRef = useRef<{ id: string; proposal: string } | null>(null);
   useEffect(() => {
     if (!activeId) {
       hydratedFor.current = null;
@@ -141,10 +231,13 @@ const Apply = () => {
     }
     if (hydratedFor.current === activeId) return;
     if (loadedProposal.data?.proposal !== undefined) {
-      setFields(parseProposal(loadedProposal.data.proposal));
+      const parsed = parseProposal(loadedProposal.data.proposal);
+      reset(parsed);
       hydratedFor.current = activeId;
+      // Seed the autosave baseline so hydration doesn't trigger a redundant save.
+      lastSavedRef.current = { id: activeId, proposal: serializeProposal(parsed) };
     }
-  }, [activeId, loadedProposal.data?.proposal]);
+  }, [activeId, loadedProposal.data?.proposal, reset]);
 
   useEffect(() => {
     if (!activeId || !loadedApp.data?.type) return;
@@ -202,15 +295,8 @@ const Apply = () => {
     currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
   const isResubmit = currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
 
-  const serializedProposal = useMemo(() => serializeProposal(fields), [fields]);
-  const lastSavedRef = useRef<{ id: string; proposal: string } | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveInFlight = useRef(false);
-
-  useEffect(() => {
-    if (!activeId || loadedProposal.data?.proposal === undefined) return;
-    lastSavedRef.current = { id: activeId, proposal: loadedProposal.data.proposal };
-  }, [activeId, loadedProposal.data?.proposal]);
 
   useEffect(() => {
     if (submitted) return;
@@ -266,65 +352,52 @@ const Apply = () => {
     updateMut,
   ]);
 
-  const dupLinkIndices = useMemo(
-    () => duplicateLinkIndices(fields.links),
-    [fields.links],
-  );
-
-  // Advisory GitHub account check — a missing account warns but never blocks.
+  // Advisory GitHub account check — strictly informational, it never blocks
+  // submission. Three outcomes map to three states: the account exists, GitHub
+  // confirmed it's missing (false), or the check couldn't run (null → unknown).
   const [githubCheck, setGithubCheck] = useState<{
     handle: string;
-    exists: boolean | null;
+    status: GithubCheckStatus;
   } | null>(null);
 
   const handleGithubBlur = () => {
-    if (validateGithub(fields.github)) return;
-    const handle = normalizeGithub(fields.github);
+    const raw = getValues('github');
+    if (validateGithub(raw)) return;
+    const handle = normalizeGithub(raw);
     if (!handle) {
       setGithubCheck(null);
       return;
     }
     // Canonicalize whatever form was typed (URL, @handle) to the bare username.
-    if (handle !== fields.github) setField('github', handle);
-    if (githubCheck?.handle === handle) return;
+    if (handle !== raw) setValue('github', handle, { shouldValidate: true });
+    // Already have a settled result for this exact handle — don't re-hit the API.
+    if (githubCheck?.handle === handle && githubCheck.status !== 'checking') return;
+    setGithubCheck({ handle, status: 'checking' });
     fellowshipService
       .checkGithubUser(handle)
-      .then((res) => setGithubCheck({ handle, exists: res.exists }))
-      .catch(() => setGithubCheck({ handle, exists: null }));
+      .then((res) =>
+        setGithubCheck({
+          handle,
+          // null is "couldn't verify", NOT "missing" — keep them distinct.
+          status: res.exists === true ? 'exists' : res.exists === false ? 'missing' : 'unknown',
+        }),
+      )
+      .catch(() => setGithubCheck({ handle, status: 'unknown' }));
   };
 
-  const githubWarning =
-    githubCheck &&
-    githubCheck.exists === false &&
-    normalizeGithub(fields.github) === githubCheck.handle
-      ? `GitHub user "${githubCheck.handle}" was not found — double-check the username.`
+  // Only surface the result while it still matches what's in the field, so an
+  // edit after the check clears a now-stale indicator.
+  const githubStatus =
+    githubCheck && normalizeGithub(values.github ?? '') === githubCheck.handle
+      ? githubCheck.status
       : null;
-
-  const proposalReady = useMemo(() => {
-    if (fields.problemStatement.trim().length === 0) return false;
-    if (fields.plan.trim().length === 0) return false;
-    if (fields.mentorName.trim().length === 0) return false;
-    if (fields.mentorContact.trim().length === 0) return false;
-    if (validateGithub(fields.github)) return false;
-    if (fields.links.some((l) => validateLink(l))) return false;
-    if (dupLinkIndices.size > 0) return false;
-    return true;
-  }, [
-    fields.problemStatement,
-    fields.plan,
-    fields.mentorName,
-    fields.mentorContact,
-    fields.github,
-    fields.links,
-    dupLinkIndices,
-    proposalTooLong,
-  ]);
 
   const resetEditor = () => {
     lastSavedRef.current = null;
     openedEditorFor.current = null;
+    hydratedFor.current = null;
     setActiveId(null);
-    setFields(EMPTY_FIELDS);
+    reset(EMPTY_FIELDS);
     setSelectedType(null);
     setStep(0);
     if (searchParams.has('appId')) {
@@ -333,8 +406,14 @@ const Apply = () => {
     }
   };
 
-  const ensureDraftExists = async (): Promise<string | null> => {
-    if (activeId) return activeId;
+  // Create the draft if it doesn't exist yet, otherwise update it. Returns the
+  // application id, or null if creation failed / is blocked.
+  const persistDraft = async (proposal: string): Promise<string | null> => {
+    if (activeId) {
+      await updateMut.mutateAsync({ id: activeId, body: { proposal } });
+      lastSavedRef.current = { id: activeId, proposal };
+      return activeId;
+    }
     if (!selectedType) return null;
     if (
       existingSameTypeApp?.status === FellowshipApplicationStatus.DRAFT ||
@@ -343,46 +422,30 @@ const Apply = () => {
       setActiveId(existingSameTypeApp.id);
       searchParams.set('appId', existingSameTypeApp.id);
       setSearchParams(searchParams, { replace: true });
-      setStep(1);
+      await updateMut.mutateAsync({ id: existingSameTypeApp.id, body: { proposal } });
+      lastSavedRef.current = { id: existingSameTypeApp.id, proposal };
       return existingSameTypeApp.id;
     }
     if (existingSameTypeApp?.status === FellowshipApplicationStatus.SUBMITTED) {
-      navigate('/fellowship/me', { replace: true });
+      navigate('/fellowship/applications', { replace: true });
       return null;
     }
-    try {
-      const created = await createMut.mutateAsync({
-        type: selectedType,
-        proposal: serializedProposal,
-      });
-      lastSavedRef.current = { id: created.id, proposal: serializedProposal };
-      setActiveId(created.id);
-      // Reflect the draft in the URL so a refresh resumes this draft instead
-      // of starting a fresh editor (which would then collide with the
-      // one-draft-per-type rule on the next save).
-      searchParams.set('appId', created.id);
-      setSearchParams(searchParams, { replace: true });
-      return created.id;
-    } catch (e) {
-      setToast({ kind: 'error', msg: extractErrorMessage(e) });
-      return null;
-    }
+    const created = await createMut.mutateAsync({ type: selectedType, proposal });
+    lastSavedRef.current = { id: created.id, proposal };
+    setActiveId(created.id);
+    // Reflect the draft in the URL so a refresh resumes this draft instead of
+    // starting a fresh editor (which would collide with the one-draft-per-type rule).
+    searchParams.set('appId', created.id);
+    setSearchParams(searchParams, { replace: true });
+    return created.id;
   };
 
+  // Save draft skips validation — drafts are allowed to be incomplete.
   const handleSaveDraft = async () => {
     if (!selectedType) return;
     try {
-      if (activeId) {
-        await updateMut.mutateAsync({
-          id: activeId,
-          body: { proposal: serializedProposal },
-        });
-        lastSavedRef.current = { id: activeId, proposal: serializedProposal };
-        setToast({ kind: 'success', msg: 'Draft saved.' });
-      } else {
-        const id = await ensureDraftExists();
-        if (id) setToast({ kind: 'success', msg: 'Draft created.' });
-      }
+      const id = await persistDraft(serializeProposal(getValues()));
+      if (id) setToast({ kind: 'success', msg: 'Draft saved.' });
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -398,53 +461,34 @@ const Apply = () => {
     setStep(1);
   };
 
-  const handleContinueFromProposal = async () => {
-    if (!proposalReady) return;
-    // Persist before moving to review so progress survives a refresh —
-    // create the draft on first Continue, update it afterwards.
+  // Continue → validate the whole proposal via the resolver; only advance (and
+  // persist) when it passes. Invalid fields light up inline automatically.
+  const handleContinueFromProposal = form.handleSubmit(async (data) => {
     if (isEditable && selectedType) {
       try {
-        if (activeId) {
-          await updateMut.mutateAsync({
-            id: activeId,
-            body: { proposal: serializedProposal },
-          });
-          lastSavedRef.current = { id: activeId, proposal: serializedProposal };
-        } else {
-          const id = await ensureDraftExists();
-          if (!id) return; // creation failed — toast already shown
-        }
+        const id = await persistDraft(serializeProposal(data));
+        if (!id) return; // creation failed / blocked — toast already shown
       } catch (e) {
         setToast({ kind: 'error', msg: extractErrorMessage(e) });
         return;
       }
     }
     setStep(2);
-  };
+  });
 
-  const handleSubmit = async () => {
+  // Final submit goes through the same validation, then submits for review.
+  const handleSubmit = form.handleSubmit(async (data) => {
     if (!selectedType) return;
     try {
-      // Create the application on submit if the user never saved a draft;
-      // otherwise persist the latest edits before submitting.
-      let id = activeId;
-      if (id) {
-        await updateMut.mutateAsync({
-          id,
-          body: { proposal: serializedProposal },
-        });
-        lastSavedRef.current = { id, proposal: serializedProposal };
-      } else {
-        id = await ensureDraftExists();
-        if (!id) return;
-      }
+      const id = await persistDraft(serializeProposal(data));
+      if (!id) return;
       await submitMut.mutateAsync({ id });
       resetEditor();
       setSubmitted(true);
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
-  };
+  });
 
   const handleDiscard = async () => {
     if (!activeId) return;
@@ -457,9 +501,6 @@ const Apply = () => {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
   };
-
-  const setField = <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) =>
-    setFields((prev) => ({ ...prev, [k]: v }));
 
   if (submitted) {
     return (
@@ -491,9 +532,8 @@ const Apply = () => {
         onJump={(i) => {
           if (i === 0) setStep(0);
           if (i === 1 && selectedType) setStep(1);
-          // Jumping to review goes through the same save-then-advance path
-          // as the Continue button.
-          if (i === 2 && selectedType && proposalReady) void handleContinueFromProposal();
+          // Jumping to review runs the same validate-then-advance path as Continue.
+          if (i === 2 && selectedType) void handleContinueFromProposal();
         }}
       />
 
@@ -509,32 +549,30 @@ const Apply = () => {
 
       {step === 1 && (
         <ProposalStep
-          fields={fields}
+          form={form}
           disabled={!isEditable}
-          onChange={setField}
           onBack={() => setStep(0)}
           onSaveDraft={handleSaveDraft}
           onContinue={handleContinueFromProposal}
           isSaving={updateMut.isPending || createMut.isPending}
-          canContinue={proposalReady}
           showDiscard={!!activeId && isEditable}
           onDiscard={handleDiscard}
           isDiscarding={deleteMut.isPending}
-          dupLinkIndices={dupLinkIndices}
           onGithubBlur={handleGithubBlur}
-          githubWarning={githubWarning}
+          githubStatus={githubStatus}
+          githubRequired={githubRequired}
         />
       )}
 
       {step === 2 && selectedType && (
         <ReviewStep
           track={TRACK_BY_VALUE[selectedType]}
-          fields={fields}
+          fields={values}
           reviewerRemarks={isResubmit ? currentApp?.reviewerRemarks ?? null : null}
           onBack={() => setStep(1)}
           onSubmit={handleSubmit}
           isSubmitting={submitMut.isPending || updateMut.isPending}
-          canSubmit={isEditable && proposalReady && !submitMut.isPending}
+          isSubmitDisabled={!isEditable || submitMut.isPending}
           submitLabel={isResubmit ? 'Resubmit application' : 'Submit application'}
         />
       )}
@@ -574,7 +612,7 @@ const SubmissionSuccess = () => (
     <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
       <CircularProgress size={16} sx={{ color: '#4ade80' }} />
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        You are being redirected to My Fellowships.
+        You are being redirected to My Applications.
       </Typography>
     </Stack>
   </Box>
@@ -810,37 +848,90 @@ const RUBRIC_ITEMS: { label: string; hint: string; emphasis?: boolean }[] = [
   { label: 'Clarity', hint: 'readable plan', emphasis: true },
 ];
 
+// Fields bound directly to a single string value in the form.
+type TextFieldName =
+  | 'title'
+  | 'problemStatement'
+  | 'plan'
+  | 'mentorName'
+  | 'mentorContact'
+  | 'mentorTestimonial';
+
+// A react-hook-form Controller wrapped around an MUI TextField. Shows the
+// field's validation error, or a character counter / fallback helper text.
+const ControlledTextField = ({
+  control,
+  name,
+  counter,
+  counterLimit = LONG_TEXT_LIMIT,
+  helperText,
+  ...textFieldProps
+}: {
+  control: Control<ProposalFields>;
+  name: TextFieldName;
+  counter?: boolean;
+  counterLimit?: number;
+} & Omit<TextFieldProps, 'name' | 'value' | 'error' | 'onChange' | 'onBlur'>) => (
+  <Controller
+    control={control}
+    name={name}
+    render={({ field, fieldState }) => (
+      <TextField
+        {...textFieldProps}
+        name={field.name}
+        value={field.value ?? ''}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+        inputRef={field.ref}
+        error={!!fieldState.error}
+        helperText={
+          fieldState.error?.message ??
+          (counter ? <CharCount value={String(field.value ?? '')} limit={counterLimit} /> : helperText ?? ' ')
+        }
+      />
+    )}
+  />
+);
+
 const ProposalStep = ({
-  fields,
+  form,
   disabled,
-  onChange,
   onBack,
   onSaveDraft,
   onContinue,
   isSaving,
-  canContinue,
   showDiscard,
   onDiscard,
   isDiscarding,
-  dupLinkIndices,
   onGithubBlur,
-  githubWarning,
+  githubStatus,
+  githubRequired,
 }: {
-  fields: ProposalFields;
+  form: UseFormReturn<ProposalFields>;
   disabled: boolean;
-  onChange: <K extends keyof ProposalFields>(k: K, v: ProposalFields[K]) => void;
   onBack: () => void;
   onSaveDraft: () => void;
   onContinue: () => void;
   isSaving: boolean;
-  canContinue: boolean;
   showDiscard: boolean;
   onDiscard: () => void;
   isDiscarding: boolean;
-  dupLinkIndices: Set<number>;
   onGithubBlur: () => void;
-  githubWarning: string | null;
+  githubStatus: GithubCheckStatus | null;
+  githubRequired: boolean;
 }) => {
+  const { control, getValues, setValue, formState } = form;
+  const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
+  const linksArrayError =
+    typeof formState.errors.links?.message === 'string' ? formState.errors.links.message : null;
+
+  const addLink = () =>
+    setValue('links', [...getValues('links'), ''], { shouldDirty: true });
+  const removeLink = (idx: number) => {
+    const next = getValues('links').filter((_, i) => i !== idx);
+    setValue('links', next.length ? next : [''], { shouldDirty: true, shouldValidate: true });
+  };
+
   return (
     <Box
       sx={{
@@ -871,136 +962,138 @@ const ProposalStep = ({
         </Typography>
 
         <FieldLabel>Project title</FieldLabel>
-        <TextField
+        <ControlledTextField
+          control={control}
+          name="title"
+          counter
+          counterLimit={TITLE_LIMIT}
           fullWidth
-          value={fields.title}
-          onChange={(e) => onChange('title', e.target.value)}
           disabled={disabled}
           placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
           slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-          helperText={<CharCount value={fields.title} limit={TITLE_LIMIT} />}
           sx={{ mb: 2.5 }}
         />
 
         <FieldLabel>Problem statement</FieldLabel>
-        <TextField
+        <ControlledTextField
+          control={control}
+          name="problemStatement"
+          counter
           fullWidth
           multiline
           minRows={4}
-          value={fields.problemStatement}
-          onChange={(e) => onChange('problemStatement', e.target.value)}
           disabled={disabled}
           placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
           slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          helperText={<CharCount value={fields.problemStatement} />}
           sx={{ mb: 2.5 }}
         />
 
         <FieldLabel>6-month plan & milestones</FieldLabel>
-        <TextField
+        <ControlledTextField
+          control={control}
+          name="plan"
+          counter
           fullWidth
           multiline
           minRows={6}
-          value={fields.plan}
-          onChange={(e) => onChange('plan', e.target.value)}
           disabled={disabled}
           placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
           slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          helperText={<CharCount value={fields.plan} />}
           sx={{ mb: 2.5 }}
         />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
           <Box sx={{ flex: 1 }}>
             <FieldLabel>Mentor name</FieldLabel>
-            <TextField
+            <ControlledTextField
+              control={control}
+              name="mentorName"
               fullWidth
-              value={fields.mentorName}
-              onChange={(e) => onChange('mentorName', e.target.value)}
               disabled={disabled}
               placeholder="Satoshi Rao"
               slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-              helperText=" "
             />
           </Box>
           <Box sx={{ flex: 1 }}>
             <FieldLabel>Mentor contact</FieldLabel>
-            <TextField
+            <ControlledTextField
+              control={control}
+              name="mentorContact"
               fullWidth
-              value={fields.mentorContact}
-              onChange={(e) => onChange('mentorContact', e.target.value)}
               disabled={disabled}
               placeholder="Email, Telegram or Discord"
               slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-              helperText=" "
             />
           </Box>
         </Stack>
 
         <FieldLabel>Mentor testimonial</FieldLabel>
-        <TextField
+        <ControlledTextField
+          control={control}
+          name="mentorTestimonial"
+          counter
           fullWidth
           multiline
           minRows={3}
-          value={fields.mentorTestimonial}
-          onChange={(e) => onChange('mentorTestimonial', e.target.value)}
           disabled={disabled}
           placeholder="A short note from your mentor on your work and why they back this proposal."
           slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          helperText={<CharCount value={fields.mentorTestimonial} />}
           sx={{ mb: 2.5 }}
         />
 
-        <FieldLabel>GitHub username</FieldLabel>
-        <TextField
-          fullWidth
-          value={fields.github}
-          onChange={(e) => onChange('github', e.target.value)}
-          onBlur={onGithubBlur}
-          disabled={disabled}
-          placeholder="aarav-m or https://github.com/aarav-m"
-          error={!!validateGithub(fields.github)}
-          helperText={validateGithub(fields.github) ?? ' '}
-          sx={{ mb: githubWarning ? 0 : 2 }}
+        <FieldLabel>GitHub username{githubRequired ? '' : ' (optional)'}</FieldLabel>
+        <Controller
+          control={control}
+          name="github"
+          render={({ field, fieldState }) => (
+            <TextField
+              fullWidth
+              name={field.name}
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              onBlur={() => {
+                field.onBlur();
+                onGithubBlur();
+              }}
+              inputRef={field.ref}
+              disabled={disabled}
+              placeholder="aarav-m or https://github.com/aarav-m"
+              error={!!fieldState.error}
+              helperText={fieldState.error?.message ?? ' '}
+              sx={{ mb: githubStatus ? 0 : 2 }}
+            />
+          )}
         />
-        {githubWarning && (
-          <Typography
-            variant="caption"
-            sx={{ color: 'warning.main', display: 'block', mb: 2 }}
-          >
-            {githubWarning}
-          </Typography>
-        )}
+        <GithubCheckHint status={githubStatus} />
 
         <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
         <Stack spacing={1.25} sx={{ mb: 1 }}>
-          {fields.links.map((link, idx) => {
-            const error =
-              validateLink(link) ??
-              (dupLinkIndices.has(idx) ? 'Duplicate link — already added above.' : null);
-            const showRemove = fields.links.length > 1;
+          {links.map((_, idx) => {
+            const showRemove = links.length > 1;
             return (
               <Stack key={idx} direction="row" spacing={1} alignItems="flex-start">
-                <TextField
-                  fullWidth
-                  value={link}
-                  onChange={(e) => {
-                    const next = [...fields.links];
-                    next[idx] = e.target.value;
-                    onChange('links', next);
-                  }}
-                  disabled={disabled}
-                  placeholder="https://linkedin.com/in/aarav-m"
-                  error={!!error}
-                  helperText={error ?? ' '}
+                <Controller
+                  control={control}
+                  name={`links.${idx}`}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      fullWidth
+                      name={field.name}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      inputRef={field.ref}
+                      disabled={disabled}
+                      placeholder="https://linkedin.com/in/aarav-m"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message ?? ' '}
+                    />
+                  )}
                 />
                 {showRemove && !disabled && (
                   <IconButton
                     aria-label="Remove link"
-                    onClick={() => {
-                      const next = fields.links.filter((_, i) => i !== idx);
-                      onChange('links', next.length ? next : ['']);
-                    }}
+                    onClick={() => removeLink(idx)}
                     sx={{ mt: 0.5, color: 'text.secondary' }}
                   >
                     <X size={16} />
@@ -1010,12 +1103,17 @@ const ProposalStep = ({
             );
           })}
         </Stack>
+        {linksArrayError && (
+          <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mb: 1 }}>
+            {linksArrayError}
+          </Typography>
+        )}
         <Button
           size="small"
           variant="text"
           startIcon={<Plus size={14} />}
-          disabled={disabled}
-          onClick={() => onChange('links', [...fields.links, ''])}
+          disabled={disabled || links.length >= MAX_LINKS}
+          onClick={addLink}
           sx={{ mb: 2, alignSelf: 'flex-start' }}
         >
           Add another link
@@ -1053,7 +1151,7 @@ const ProposalStep = ({
             <Button
               variant="contained"
               onClick={onContinue}
-              disabled={!canContinue || disabled || isSaving}
+              disabled={disabled || isSaving}
               endIcon={<ArrowRight size={16} />}
             >
               {isSaving ? 'Saving…' : 'Continue'}
@@ -1145,6 +1243,43 @@ const CharCount = ({ value, limit = LONG_TEXT_LIMIT }: { value: string; limit?: 
   </Box>
 );
 
+// Advisory GitHub indicator — purely informational, shown under the username
+// field. Renders nothing until the field has been checked. A missing/unknown
+// result is a gentle nudge, never a blocker on submission.
+const GithubCheckHint = ({ status }: { status: GithubCheckStatus | null }) => {
+  if (!status) return null;
+  const common = { display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 } as const;
+  if (status === 'checking') {
+    return (
+      <Box sx={{ ...common, color: 'text.secondary' }}>
+        <CircularProgress size={12} sx={{ color: 'text.secondary' }} />
+        <Typography variant="caption">Checking GitHub…</Typography>
+      </Box>
+    );
+  }
+  if (status === 'exists') {
+    return (
+      <Box sx={{ ...common, color: 'success.main' }}>
+        <CheckCircle2 size={13} />
+        <Typography variant="caption">GitHub account found.</Typography>
+      </Box>
+    );
+  }
+  if (status === 'missing') {
+    return (
+      <Typography variant="caption" sx={{ ...common, color: 'warning.main' }}>
+        We couldn't find this GitHub account — double-check the username.
+      </Typography>
+    );
+  }
+  // unknown — the check couldn't run (rate limit / network). Stay neutral.
+  return (
+    <Typography variant="caption" sx={{ ...common, color: 'text.secondary' }}>
+      Couldn't verify GitHub right now — you can still submit.
+    </Typography>
+  );
+};
+
 const FieldLabel = ({ children }: { children: React.ReactNode }) => (
   <Typography
     variant="caption"
@@ -1170,7 +1305,7 @@ const ReviewStep = ({
   onBack,
   onSubmit,
   isSubmitting,
-  canSubmit,
+  isSubmitDisabled,
   submitLabel,
 }: {
   track: TrackOption;
@@ -1179,10 +1314,9 @@ const ReviewStep = ({
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
-  canSubmit: boolean;
+  isSubmitDisabled: boolean;
   submitLabel: string;
 }) => {
-  const Icon = track.icon;
   return (
     <Box
       sx={{
@@ -1212,28 +1346,12 @@ const ReviewStep = ({
       <Stack spacing={2.5}>
         <Box>
           <FieldLabel>Track</FieldLabel>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box
-              sx={{
-                width: 32,
-                height: 32,
-                borderRadius: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: 'rgba(249,115,22,0.12)',
-                border: '1px solid rgba(249,115,22,0.25)',
-              }}
-            >
-              <Icon size={16} color="#fb923c" />
-            </Box>
-            <Box>
-              <Typography sx={{ fontWeight: 600 }}>{track.title}</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {track.description}
-              </Typography>
-            </Box>
-          </Stack>
+          <Box>
+            <Typography sx={{ fontWeight: 600 }}>{track.title}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {track.description}
+            </Typography>
+          </Box>
         </Box>
 
         {fields.title.trim() && (
@@ -1343,7 +1461,7 @@ const ReviewStep = ({
         >
           Back
         </Button>
-        <Button variant="contained" onClick={onSubmit} disabled={!canSubmit}>
+        <Button variant="contained" onClick={onSubmit} disabled={isSubmitDisabled}>
           {isSubmitting ? 'Submitting…' : submitLabel}
         </Button>
       </Stack>

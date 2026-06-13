@@ -127,7 +127,7 @@ const ApplicationsAdmin = () => {
             ? FellowshipApplicationStatus.ACCEPTED
             : FellowshipApplicationStatus.REJECTED;
 
-  const { data, isLoading } = useApplications({
+  const { data, isLoading, isError, error } = useApplications({
     page: 0,
     pageSize: PAGE_SIZE,
     ...(apiStatus ? { status: apiStatus } : {}),
@@ -241,6 +241,12 @@ const ApplicationsAdmin = () => {
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
+        </Alert>
+      )}
+
+      {isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Couldn't load applications: {extractErrorMessage(error)}
         </Alert>
       )}
 

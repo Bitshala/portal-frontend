@@ -22,11 +22,14 @@ export const ProposalDialog = ({
   applicationId,
   title,
   onClose,
+  actions,
 }: {
   applicationId: string | null;
   /** Fallback dialog title while the proposal loads or has no title. */
   title?: string;
   onClose: () => void;
+  /** Optional extra footer action(s), e.g. an admin "Start contract" button. */
+  actions?: React.ReactNode;
 }) => {
   const proposalQuery = useApplicationProposal(applicationId ?? '', {
     enabled: !!applicationId,
@@ -69,6 +72,7 @@ export const ProposalDialog = ({
           </Button>
         )}
         <Button onClick={onClose}>Close</Button>
+        {actions}
       </DialogActions>
     </Dialog>
   );

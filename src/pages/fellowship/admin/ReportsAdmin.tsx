@@ -78,9 +78,6 @@ const AVATAR_TINTS = [
 ];
 const tintFor = (seed: string) => AVATAR_TINTS[hash(seed) % AVATAR_TINTS.length];
 
-const wordsFor = (id: string): number => 400 + (hash(id) % 800);
-const prsFor = (id: string): number => hash(id + 'pr') % 8;
-
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
 
@@ -102,7 +99,7 @@ const ReportsAdmin = () => {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const { data, isLoading } = useReports({ page: 0, pageSize: PAGE_SIZE });
-  const fellowshipsQuery = useFellowships({ page: 0, pageSize: 200 });
+  const fellowshipsQuery = useFellowships({ page: 0, pageSize: 100 });
   const reviewMut = useReviewReport();
 
   const allRecords = useMemo(() => data?.records ?? [], [data?.records]);
@@ -193,7 +190,7 @@ const ReportsAdmin = () => {
   };
 
   const handleExport = () => {
-    const header = ['fellow', 'track', 'project', 'month', 'submitted', 'words', 'prs', 'status'];
+    const header = ['fellow', 'track', 'project', 'month', 'submitted', 'status'];
     const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = sorted.map((r) => {
       const f = fellowshipById.get(r.fellowshipId);
@@ -203,8 +200,6 @@ const ReportsAdmin = () => {
         csvCell(f?.projectName ?? ''),
         formatMonthYear(r.month, r.year),
         r.updatedAt ?? '',
-        wordsFor(r.id),
-        prsFor(r.id),
         r.status,
       ].join(',');
     });
@@ -411,7 +406,7 @@ const FilterPill = ({
 // ---- table ----
 
 const COLS =
-  'minmax(200px, 1.8fr) minmax(150px, 1.4fr) minmax(100px, 0.9fr) minmax(100px, 0.9fr) minmax(70px, 0.6fr) minmax(55px, 0.5fr) minmax(120px, 1fr)';
+  'minmax(200px, 1.8fr) minmax(150px, 1.4fr) minmax(100px, 0.9fr) minmax(100px, 0.9fr) minmax(120px, 1fr)';
 const COL_GAP = 3;
 
 const HeaderRow = () => (
@@ -435,8 +430,6 @@ const HeaderRow = () => (
     <Box>Project</Box>
     <Box>Month</Box>
     <Box>Submitted</Box>
-    <Box>Words</Box>
-    <Box>PRs</Box>
     <Box>Status</Box>
   </Box>
 );
@@ -540,14 +533,6 @@ const ReportRow = ({
         {formatShortDate(report.updatedAt)}
       </Typography>
 
-      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem' }}>
-        {wordsFor(report.id)}
-      </Typography>
-
-      <Typography sx={{ fontFamily: fontFamilyMono, fontSize: '0.82rem' }}>
-        {prsFor(report.id)}
-      </Typography>
-
       <Box>
         <StatusChip status={report.status} />
       </Box>
@@ -599,8 +584,7 @@ const ReportDetail = ({
             </Typography>
           )}
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Submitted {formatShortDate(report.updatedAt)} · {wordsFor(report.id)} words ·{' '}
-            {prsFor(report.id)} PRs
+            Submitted {formatShortDate(report.updatedAt)}
           </Typography>
         </Box>
         <StatusChip status={report.status} size="medium" />
