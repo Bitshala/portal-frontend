@@ -216,6 +216,10 @@ export interface GetFellowshipReportResponseDto {
   reviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
+  // The full fellowship this report belongs to — same shape as a GET /fellowships
+  // list item. Never null (a report references its fellowship via a non-nullable
+  // FK). `fellowshipId`/`fellowName` are kept for backward compatibility.
+  fellowship: GetFellowshipResponseDto;
 }
 
 export interface GetFellowshipReportContentResponseDto {

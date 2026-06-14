@@ -22,7 +22,6 @@ import MarkdownView from '../../../components/fellowship/MarkdownView';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import {
-  useFellowships,
   useReportContent,
   useReports,
   useReviewReport,
@@ -151,25 +150,13 @@ const ReportsAdmin = () => {
     },
     { placeholderData: (prev) => prev },
   );
-  // Reports carry only fellowName; project/track are joined from fellowships.
-  // NOTE: this lookup assumes ≤100 fellowships — revisit if that grows.
-  const fellowshipsQuery = useFellowships({ page: 0, pageSize: 100 });
   const reviewMut = useReviewReport();
 
-  // The server returns the page already filtered/searched/sorted.
+  // The server returns the page already filtered/searched/sorted. Each report
+  // embeds its full fellowship, so project/track read straight off the row.
   const records = useMemo(() => data?.records ?? [], [data?.records]);
   const totalRecords = data?.totalRecords ?? 0;
   const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
-
-  const fellowships = useMemo(
-    () => fellowshipsQuery.data?.records ?? [],
-    [fellowshipsQuery.data?.records],
-  );
-  const fellowshipById = useMemo(() => {
-    const m = new Map<string, GetFellowshipResponseDto>();
-    for (const f of fellowships) m.set(f.id, f);
-    return m;
-  }, [fellowships]);
 
   const handleApprove = async (report: GetFellowshipReportResponseDto) => {
     try {
@@ -208,22 +195,17 @@ const ReportsAdmin = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const [allReports, allFellowships] = await Promise.all([
-        fellowshipService.fetchAllReports({
-          ...(statusParam ? { status: statusParam } : {}),
-          ...(debouncedSearch ? { search: debouncedSearch } : {}),
-          sortBy: sort.sortBy,
-          sortOrder: sort.sortOrder,
-        }),
-        fellowshipService.fetchAllFellowships({}),
-      ]);
-      const byId = new Map<string, GetFellowshipResponseDto>();
-      for (const f of allFellowships) byId.set(f.id, f);
+      const allReports = await fellowshipService.fetchAllReports({
+        ...(statusParam ? { status: statusParam } : {}),
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        sortBy: sort.sortBy,
+        sortOrder: sort.sortOrder,
+      });
 
       const header = ['fellow', 'track', 'project', 'month', 'submitted', 'status'];
       const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
       const rows = allReports.map((r) => {
-        const f = byId.get(r.fellowshipId);
+        const f = r.fellowship;
         return [
           csvCell(r.fellowName ?? ''),
           f?.type ?? '',
@@ -350,7 +332,7 @@ const ReportsAdmin = () => {
               <ReportRow
                 key={r.id}
                 report={r}
-                fellowship={fellowshipById.get(r.fellowshipId)}
+                fellowship={r.fellowship}
                 onOpen={() => setSelected(r)}
               />
             ))}
@@ -379,7 +361,7 @@ const ReportsAdmin = () => {
         {selected && (
           <ReportDetail
             report={selected}
-            fellowship={fellowshipById.get(selected.fellowshipId)}
+            fellowship={selected.fellowship}
             onClose={() => setSelected(null)}
             onApprove={() => handleApprove(selected)}
             onReject={() => setRejectOpen(true)}

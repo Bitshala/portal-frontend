@@ -239,12 +239,6 @@ const MyReports = () => {
     return [...records].sort((a, b) => b.year - a.year || b.month - a.month);
   }, [reportsQuery.data?.records]);
 
-  const fellowshipById = useMemo(() => {
-    const m = new Map<string, GetFellowshipResponseDto>();
-    for (const f of fellowshipsQuery.data?.records ?? []) m.set(f.id, f);
-    return m;
-  }, [fellowshipsQuery.data?.records]);
-
   // New reports can only be filed against an active fellowship.
   const reportableFellowship = useMemo(() => {
     const fellowships = fellowshipsQuery.data?.records ?? [];
@@ -313,7 +307,7 @@ const MyReports = () => {
                   <ReportRow
                     key={report.id}
                     report={report}
-                    fellowship={fellowshipById.get(report.fellowshipId)}
+                    fellowship={report.fellowship}
                     onOpen={() => {
                       // Drafts open the editor page; submitted reports preview in a modal.
                       if (report.status === FellowshipReportStatus.DRAFT) {
@@ -335,7 +329,7 @@ const MyReports = () => {
       {viewing && (
         <ReportViewDialog
           report={viewing}
-          fellowship={fellowshipById.get(viewing.fellowshipId)}
+          fellowship={viewing.fellowship}
           onClose={() => setViewing(null)}
         />
       )}
