@@ -123,7 +123,8 @@ export type UpdateFellowshipOnboardingRequestDto = Partial<FellowshipOnboardingD
 
 export interface StartFellowshipContractRequestDto {
   startDate: string;
-  endDate: string;
+  // The backend derives the end date from the start date + duration.
+  periodMonths: number;
   amountUsd: number;
 }
 

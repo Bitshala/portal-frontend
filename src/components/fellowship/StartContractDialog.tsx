@@ -61,6 +61,8 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
   const startDateError =
     startDate && !startDate.isValid() ? 'Enter a valid date.' : null;
 
+  // Display-only preview of when the contract ends. The backend derives the
+  // real end date from startDate + periodMonths, so this is never submitted.
   const endDate = useMemo(() => {
     if (!startDate || !startDate.isValid() || monthsError || !months.trim()) return null;
     return startDate.add(Number(months), 'month');
@@ -88,7 +90,7 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
         id: fellowship.id,
         body: {
           startDate: startDate!.format('YYYY-MM-DD'),
-          endDate: endDate.format('YYYY-MM-DD'),
+          periodMonths: Number(months),
           amountUsd: Number(amountUsd),
         },
       });
