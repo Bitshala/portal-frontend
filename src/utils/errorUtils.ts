@@ -12,6 +12,12 @@ export const { isAxiosError } = axios;
 export const isNetworkError = (error: AxiosError) =>
   error.message?.includes('Network Error') || !error.response;
 
+// The list endpoints return 400 for invalid filter/search/sort/pagination
+// input (bad enum, pageSize > 100, search too long, …). Callers should treat
+// these as "bad filter input" feedback rather than a generic server failure.
+export const isBadFilterError = (error: unknown): boolean =>
+  isAxiosError(error) && error.response?.status === 400;
+
 export const extractErrorMessage = (error: unknown): string => {
   let errorMessage = 'An error occurred';
 

@@ -1,4 +1,5 @@
 import type { PaginatedQueryDto } from './api.ts';
+import type { SortOrder } from './api.ts';
 
 export enum FellowshipType {
   DEVELOPER = 'DEVELOPER',
@@ -68,9 +69,17 @@ export interface ReviewFellowshipApplicationRequestDto {
   driveFolderUrl?: string;
 }
 
+// Sort fields are per-endpoint whitelists — sending anything outside the set
+// returns a 400. Search is a single free-text term matched server-side across
+// several columns (see the handoff doc), trimmed and capped at 100 chars.
+export type FellowshipApplicationsSortBy = 'createdAt' | 'updatedAt';
+
 export interface ListFellowshipApplicationsQueryDto extends PaginatedQueryDto {
   status?: FellowshipApplicationStatus;
   type?: FellowshipType;
+  search?: string;
+  sortBy?: FellowshipApplicationsSortBy;
+  sortOrder?: SortOrder;
 }
 
 export interface GithubUserCheckResponseDto {
@@ -117,6 +126,18 @@ export interface GetFellowshipResponseDto extends FellowshipOnboardingDto {
   amountUsd: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// `startDate`, `endDate`, `amountUsd` are null for not-yet-contracted
+// fellowships — the server sorts those nulls last in both directions.
+export type FellowshipsSortBy = 'createdAt' | 'startDate' | 'endDate' | 'amountUsd';
+
+export interface ListFellowshipsQueryDto extends PaginatedQueryDto {
+  status?: FellowshipStatus;
+  type?: FellowshipType;
+  search?: string;
+  sortBy?: FellowshipsSortBy;
+  sortOrder?: SortOrder;
 }
 
 export type UpdateFellowshipOnboardingRequestDto = Partial<FellowshipOnboardingDto>;
@@ -166,8 +187,16 @@ export interface ReviewFellowshipReportRequestDto {
   reviewerRemarks?: string;
 }
 
+// `period` sorts by reporting period (year then month) in the chosen order.
+export type FellowshipReportsSortBy = 'createdAt' | 'updatedAt' | 'period';
+
 export interface ListFellowshipReportsQueryDto extends PaginatedQueryDto {
   status?: FellowshipReportStatus;
+  type?: FellowshipType;
+  fellowshipId?: string;
   month?: number;
   year?: number;
+  search?: string;
+  sortBy?: FellowshipReportsSortBy;
+  sortOrder?: SortOrder;
 }

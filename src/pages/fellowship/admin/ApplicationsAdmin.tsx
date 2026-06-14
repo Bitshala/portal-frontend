@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -10,6 +10,7 @@ import {
   DialogTitle,
   IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -19,6 +20,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronRight,
   FileDown,
   MessageSquare,
   Search,
@@ -27,20 +30,25 @@ import {
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalView from '../../../components/fellowship/ProposalView';
 import StatusChip from '../../../components/fellowship/StatusChip';
+import { fontFamilyMono } from '../../../components/fellowship/theme';
 import {
   useApplications,
   useApplicationProposal,
   useReviewApplication,
 } from '../../../hooks/fellowshipHooks';
+import { useDebounce } from '../../../hooks/useDebounce';
 import {
   FellowshipApplicationStatus,
+  type FellowshipApplicationsSortBy,
   type GetFellowshipApplicationResponseDto,
 } from '../../../types/fellowship';
-import { extractErrorMessage } from '../../../utils/errorUtils';
+import { SortOrder } from '../../../types/api';
+import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 import { normalizeGithub, parseProposal } from '../../../utils/proposalFormat';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
 
 type FilterValue =
   | 'SUBMITTED'
@@ -59,7 +67,20 @@ const FILTERS: { label: string; value: FilterValue }[] = [
   { label: 'All', value: 'ALL' },
 ];
 
-type SortKey = 'recent' | 'name';
+// The server only sorts applications by createdAt/updatedAt, so the old
+// "by name" sort is gone — these map onto the supported fields.
+type SortKey = 'newest' | 'oldest' | 'updated';
+
+const SORT_OPTIONS: {
+  label: string;
+  value: SortKey;
+  sortBy: FellowshipApplicationsSortBy;
+  sortOrder: SortOrder;
+}[] = [
+  { label: 'Newest', value: 'newest', sortBy: 'createdAt', sortOrder: SortOrder.DESC },
+  { label: 'Oldest', value: 'oldest', sortBy: 'createdAt', sortOrder: SortOrder.ASC },
+  { label: 'Recently updated', value: 'updated', sortBy: 'updatedAt', sortOrder: SortOrder.DESC },
+];
 
 // ---- helpers ----
 
@@ -106,8 +127,10 @@ const relativeDays = (iso: string | null): string => {
 const ApplicationsAdmin = () => {
   const [filter, setFilter] = useState<FilterValue>('SUBMITTED');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('recent');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
@@ -115,6 +138,8 @@ const ApplicationsAdmin = () => {
   const [driveUrl, setDriveUrl] = useState('');
   const [remarks, setRemarks] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const debouncedSearch = useDebounce(search.trim(), 300);
 
   const apiStatus =
     filter === 'ALL'
@@ -127,42 +152,37 @@ const ApplicationsAdmin = () => {
             ? FellowshipApplicationStatus.ACCEPTED
             : FellowshipApplicationStatus.REJECTED;
 
-  const { data, isLoading, isError, error } = useApplications({
-    page: 0,
-    pageSize: PAGE_SIZE,
-    ...(apiStatus ? { status: apiStatus } : {}),
-  });
+  const sort = SORT_OPTIONS.find((o) => o.value === sortKey) ?? SORT_OPTIONS[0];
+
+  // Reset to the first page whenever the query changes, otherwise we can land
+  // on an out-of-range page and get an empty result set back.
+  useEffect(() => {
+    setPage(0);
+  }, [filter, debouncedSearch, sortKey, pageSize]);
+
+  const { data, isLoading, isError, error } = useApplications(
+    {
+      page,
+      pageSize,
+      ...(apiStatus ? { status: apiStatus } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      sortBy: sort.sortBy,
+      sortOrder: sort.sortOrder,
+    },
+    // Keep the previous page visible while the next one loads to avoid a
+    // full-list spinner flash when paging.
+    { placeholderData: (prev) => prev },
+  );
   const reviewMut = useReviewApplication();
 
-  const allRecords = useMemo(() => data?.records ?? [], [data?.records]);
+  // The server returns exactly the page to render, already filtered/sorted.
+  const records = useMemo(() => data?.records ?? [], [data?.records]);
+  const totalRecords = data?.totalRecords ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
 
-  // Client-side free-text search on top of the API status filter.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return allRecords;
-    return allRecords.filter((r) =>
-      (r.applicantName ?? '').toLowerCase().includes(q),
-    );
-  }, [allRecords, search]);
-
-  const sorted = useMemo(() => {
-    const arr = [...filtered];
-    if (sortKey === 'name') {
-      arr.sort((a, b) =>
-        (a.applicantName ?? '').localeCompare(b.applicantName ?? ''),
-      );
-    } else {
-      arr.sort((a, b) => {
-        const ta = new Date(a.createdAt).getTime();
-        const tb = new Date(b.createdAt).getTime();
-        return tb - ta;
-      });
-    }
-    return arr;
-  }, [filtered, sortKey]);
-
-  const selectedIdx = sorted.findIndex((r) => r.id === selectedId);
-  const selected = selectedIdx >= 0 ? sorted[selectedIdx] : sorted[0] ?? null;
+  // Detail-pane navigation traverses the current page only.
+  const selectedIdx = records.findIndex((r) => r.id === selectedId);
+  const selected = selectedIdx >= 0 ? records[selectedIdx] : records[0] ?? null;
   const effectiveSelectedId = selected?.id ?? null;
 
   const proposalQuery = useApplicationProposal(effectiveSelectedId ?? '', {
@@ -224,11 +244,11 @@ const ApplicationsAdmin = () => {
   };
 
   const goPrev = () => {
-    if (selectedIdx > 0) setSelectedId(sorted[selectedIdx - 1].id);
+    if (selectedIdx > 0) setSelectedId(records[selectedIdx - 1].id);
   };
   const goNext = () => {
-    if (selectedIdx >= 0 && selectedIdx < sorted.length - 1) {
-      setSelectedId(sorted[selectedIdx + 1].id);
+    if (selectedIdx >= 0 && selectedIdx < records.length - 1) {
+      setSelectedId(records[selectedIdx + 1].id);
     }
   };
 
@@ -245,8 +265,10 @@ const ApplicationsAdmin = () => {
       )}
 
       {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Couldn't load applications: {extractErrorMessage(error)}
+        <Alert severity={isBadFilterError(error) ? 'warning' : 'error'} sx={{ mb: 2 }}>
+          {isBadFilterError(error)
+            ? `Invalid filter or search — please adjust and try again. (${extractErrorMessage(error)})`
+            : `Couldn't load applications: ${extractErrorMessage(error)}`}
         </Alert>
       )}
 
@@ -269,13 +291,26 @@ const ApplicationsAdmin = () => {
           mt: 2,
         }}
       >
-        <ApplicantList
-          isLoading={isLoading}
-          records={sorted}
-          selectedId={effectiveSelectedId}
-          onSelect={setSelectedId}
-          sortKey={sortKey}
-        />
+        <Box>
+          <ApplicantList
+            isLoading={isLoading}
+            records={records}
+            selectedId={effectiveSelectedId}
+            onSelect={setSelectedId}
+            sortLabel={sort.label}
+            totalRecords={totalRecords}
+          />
+          {totalRecords > 0 && (
+            <ListPager
+              page={page}
+              pageCount={pageCount}
+              total={totalRecords}
+              pageSize={pageSize}
+              onChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
+        </Box>
 
         {selected ? (
           <DetailPane
@@ -283,11 +318,11 @@ const ApplicationsAdmin = () => {
             proposal={proposalQuery.data?.proposal ?? ''}
             isLoadingProposal={proposalQuery.isLoading}
             position={selectedIdx >= 0 ? selectedIdx + 1 : 1}
-            total={sorted.length}
+            total={records.length}
             onPrev={goPrev}
             onNext={goNext}
             canPrev={selectedIdx > 0}
-            canNext={selectedIdx >= 0 && selectedIdx < sorted.length - 1}
+            canNext={selectedIdx >= 0 && selectedIdx < records.length - 1}
             onAccept={() => {
               setDriveUrl('');
               setAcceptOpen(true);
@@ -419,7 +454,7 @@ const Toolbar = ({
         size="small"
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        placeholder="Search name, project…"
+        placeholder="Search name, Discord, email…"
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
@@ -427,6 +462,7 @@ const Toolbar = ({
             </InputAdornment>
           ),
         }}
+        inputProps={{ maxLength: 100 }}
         sx={{ flexGrow: 1, minWidth: 240 }}
       />
       <Box sx={{ position: 'relative' }}>
@@ -438,11 +474,12 @@ const Toolbar = ({
             color: 'text.primary',
             borderColor: 'divider',
             fontWeight: 600,
-            textTransform: 'capitalize',
+            textTransform: 'none',
             fontSize: '0.82rem',
+            whiteSpace: 'nowrap',
           }}
         >
-          {sortKey === 'recent' ? 'Recent' : 'Name'}
+          {SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Sort'}
         </Button>
         {sortMenuOpen && (
           <Box
@@ -456,14 +493,14 @@ const Toolbar = ({
               borderRadius: 0.6,
               p: 0.5,
               zIndex: 5,
-              minWidth: 140,
+              minWidth: 180,
             }}
           >
-            {(['recent', 'name'] as SortKey[]).map((k) => (
+            {SORT_OPTIONS.map((o) => (
               <Box
-                key={k}
+                key={o.value}
                 onClick={() => {
-                  onSort(k);
+                  onSort(o.value);
                   setSortMenuOpen(false);
                 }}
                 sx={{
@@ -471,14 +508,13 @@ const Toolbar = ({
                   py: 0.75,
                   borderRadius: 0.4,
                   fontSize: '0.85rem',
-                  textTransform: 'capitalize',
                   cursor: 'pointer',
-                  bgcolor: sortKey === k ? 'rgba(249,115,22,0.08)' : 'transparent',
-                  color: sortKey === k ? 'primary.light' : 'text.primary',
+                  bgcolor: sortKey === o.value ? 'rgba(249,115,22,0.08)' : 'transparent',
+                  color: sortKey === o.value ? 'primary.light' : 'text.primary',
                   '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
                 }}
               >
-                Sort by {k}
+                {o.label}
               </Box>
             ))}
           </Box>
@@ -495,13 +531,15 @@ const ApplicantList = ({
   records,
   selectedId,
   onSelect,
-  sortKey,
+  sortLabel,
+  totalRecords,
 }: {
   isLoading: boolean;
   records: GetFellowshipApplicationResponseDto[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  sortKey: SortKey;
+  sortLabel: string;
+  totalRecords: number;
 }) => (
   <Box
     sx={{
@@ -527,7 +565,7 @@ const ApplicantList = ({
     >
       {isLoading
         ? 'Loading…'
-        : `${records.length} result${records.length === 1 ? '' : 's'} · sort by ${sortKey}`}
+        : `${totalRecords} result${totalRecords === 1 ? '' : 's'} · ${sortLabel}`}
     </Typography>
 
     {isLoading && (
@@ -611,6 +649,91 @@ const ApplicantList = ({
       })}
     </Stack>
   </Box>
+);
+
+// ---- list pager ----
+
+const ListPager = ({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) => {
+  const from = total === 0 ? 0 : page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ mt: 1, px: 0.5 }}
+    >
+      <RowsPerPageSelect value={pageSize} onChange={onPageSizeChange} />
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.72rem', color: 'text.secondary' }}
+        >
+          {from}–{to} of {total}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label="Previous page"
+          disabled={page === 0}
+          onClick={() => onChange(page - 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronLeft size={16} />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Next page"
+          disabled={page >= pageCount - 1}
+          onClick={() => onChange(page + 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronRight size={16} />
+        </IconButton>
+      </Stack>
+    </Stack>
+  );
+};
+
+// Compact "rows per page" picker shared by the pagers.
+const RowsPerPageSelect = ({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (size: number) => void;
+}) => (
+  <Stack direction="row" spacing={0.75} alignItems="center">
+    <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>Rows</Typography>
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      slotProps={{ htmlInput: { 'aria-label': 'Rows per page' } }}
+      sx={{
+        '& .MuiSelect-select': { py: 0.25, pl: 1, fontSize: '0.74rem' },
+      }}
+    >
+      {PAGE_SIZE_OPTIONS.map((n) => (
+        <MenuItem key={n} value={n} sx={{ fontSize: '0.8rem' }}>
+          {n}
+        </MenuItem>
+      ))}
+    </TextField>
+  </Stack>
 );
 
 // ---- detail pane ----

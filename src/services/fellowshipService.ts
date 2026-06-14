@@ -12,6 +12,7 @@ import type {
   GithubUserCheckResponseDto,
   ListFellowshipApplicationsQueryDto,
   ListFellowshipReportsQueryDto,
+  ListFellowshipsQueryDto,
   ReviewFellowshipApplicationRequestDto,
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
@@ -47,6 +48,26 @@ class FellowshipService {
     const token = getAuthTokenFromStorage();
     if (token) headers.setAuthorization(`Bearer ${token}`);
     return headers;
+  }
+
+  // Walk every page of a paginated list endpoint and return all matching rows.
+  // Used by the admin CSV exports, which must cover the full filtered result
+  // set rather than just the page currently on screen.
+  private async fetchAllPages<TQuery extends PaginatedQueryDto, TRecord>(
+    list: (query: TQuery) => Promise<PaginatedDataDto<TRecord>>,
+    query: Omit<TQuery, 'page' | 'pageSize'>,
+  ): Promise<TRecord[]> {
+    const PAGE_SIZE = 100; // backend hard-caps pageSize at 100
+    const records: TRecord[] = [];
+    let page = 0;
+    // Guard against an unbounded loop if totalRecords and records ever disagree.
+    for (;;) {
+      const data = await list({ ...query, page, pageSize: PAGE_SIZE } as TQuery);
+      records.push(...data.records);
+      if (records.length >= data.totalRecords || data.records.length === 0) break;
+      page += 1;
+    }
+    return records;
   }
 
   // =========================
@@ -174,7 +195,7 @@ class FellowshipService {
   };
 
   public listFellowships = async (
-    query: PaginatedQueryDto,
+    query: ListFellowshipsQueryDto,
   ): Promise<PaginatedDataDto<GetFellowshipResponseDto>> => {
     const { data } = await this.request<PaginatedDataDto<GetFellowshipResponseDto>>({
       headers: this.getRequestHeaders(),
@@ -184,6 +205,11 @@ class FellowshipService {
     });
     return data;
   };
+
+  public fetchAllFellowships = (
+    query: Omit<ListFellowshipsQueryDto, 'page' | 'pageSize'>,
+  ): Promise<GetFellowshipResponseDto[]> =>
+    this.fetchAllPages(this.listFellowships, query);
 
   public getFellowship = async (id: string): Promise<GetFellowshipResponseDto> => {
     const { data } = await this.request<GetFellowshipResponseDto>({
@@ -245,6 +271,11 @@ class FellowshipService {
     });
     return data;
   };
+
+  public fetchAllReports = (
+    query: Omit<ListFellowshipReportsQueryDto, 'page' | 'pageSize'>,
+  ): Promise<GetFellowshipReportResponseDto[]> =>
+    this.fetchAllPages(this.listReports, query);
 
   public getReport = async (id: string): Promise<GetFellowshipReportResponseDto> => {
     const { data } = await this.request<GetFellowshipReportResponseDto>({

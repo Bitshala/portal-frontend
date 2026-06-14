@@ -26,33 +26,51 @@ import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StartContractDialog from '../../../components/fellowship/StartContractDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import { useFellowships, useReports } from '../../../hooks/fellowshipHooks';
+import { useFellowships } from '../../../hooks/fellowshipHooks';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
+import fellowshipService from '../../../services/fellowshipService';
 import {
+  type FellowshipsSortBy,
   FellowshipStatus,
   FellowshipType,
-  type GetFellowshipResponseDto,
   type GetFellowshipReportResponseDto,
+  type GetFellowshipResponseDto,
 } from '../../../types/fellowship';
+import { SortOrder } from '../../../types/api';
+import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 
-// Filtering/search/sort happen client-side, so fetch a full page from the API
-// and paginate the table locally. Capped at 100 — the backend rejects larger
-// pageSize values with a 400.
-const FETCH_PAGE_SIZE = 100;
-const ROWS_PER_PAGE = 25;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
 
 type StatusFilter = 'ALL' | FellowshipStatus;
-type SortKey = 'name' | 'project';
-type SortDir = 'asc' | 'desc';
+// Sort columns are restricted to the server's whitelist — the old name/project
+// sorts aren't supported server-side, so sorting now lives on the date/payout
+// columns instead.
+type SortKey = FellowshipsSortBy;
 
 const ALL_VALUE = '__ALL__';
+
+const STATUS_PARAM: Record<StatusFilter, FellowshipStatus | undefined> = {
+  ALL: undefined,
+  [FellowshipStatus.PENDING]: FellowshipStatus.PENDING,
+  [FellowshipStatus.ACTIVE]: FellowshipStatus.ACTIVE,
+  [FellowshipStatus.COMPLETED]: FellowshipStatus.COMPLETED,
+};
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'ALL' },
   { label: 'Pending', value: FellowshipStatus.PENDING },
   { label: 'Active', value: FellowshipStatus.ACTIVE },
   { label: 'Completed', value: FellowshipStatus.COMPLETED },
+];
+
+// Fixed track options — no longer derived from the loaded page.
+const TRACK_OPTIONS: FellowshipType[] = [
+  FellowshipType.DEVELOPER,
+  FellowshipType.DESIGNER,
+  FellowshipType.EDUCATOR,
 ];
 
 const TRACK_COLORS: Record<FellowshipType, string> = {
@@ -122,9 +140,11 @@ const FellowshipsAdmin = () => {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [trackFilter, setTrackFilter] = useState<string>(ALL_VALUE);
-  const [sortKey, setSortKey] = useState<SortKey>('name');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
+  const [sortDir, setSortDir] = useState<SortOrder>(SortOrder.DESC);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [exporting, setExporting] = useState(false);
   // Fellowship whose proposal is open in the viewer dialog (Start contract is
   // offered from inside that dialog for PENDING fellowships).
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
@@ -132,135 +152,104 @@ const FellowshipsAdmin = () => {
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  const { data, isLoading } = useFellowships({ page: 0, pageSize: FETCH_PAGE_SIZE });
-  const reportsQuery = useReports({ page: 0, pageSize: 100 });
-
-  const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
-  const reports = useMemo(() => reportsQuery.data?.records ?? [], [reportsQuery.data?.records]);
-
-  const counts = useMemo(() => {
-    const c: Record<StatusFilter, number> = {
-      ALL: fellowships.length,
-      [FellowshipStatus.PENDING]: 0,
-      [FellowshipStatus.ACTIVE]: 0,
-      [FellowshipStatus.COMPLETED]: 0,
-    };
-    for (const f of fellowships) c[f.status] += 1;
-    return c;
-  }, [fellowships]);
-
-  const trackOptions = useMemo(() => {
-    const s = new Set<FellowshipType>();
-    for (const f of fellowships) s.add(f.type);
-    return Array.from(s).sort((a, b) =>
-      formatFellowshipType(a).localeCompare(formatFellowshipType(b)),
-    );
-  }, [fellowships]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return fellowships.filter((f) => {
-      if (filter !== 'ALL' && f.status !== filter) return false;
-      if (trackFilter !== ALL_VALUE && f.type !== trackFilter) return false;
-      if (q) {
-        const haystack = [
-          f.userName ?? '',
-          f.projectName ?? '',
-          f.projectMaintainerName ?? '',
-          handleFor(f) ?? '',
-        ]
-          .join(' ')
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [fellowships, filter, search, trackFilter]);
-
-  const sorted = useMemo(() => {
-    const dir = sortDir === 'asc' ? 1 : -1;
-    const keyOf = (f: GetFellowshipResponseDto) =>
-      (sortKey === 'name' ? f.userName : f.projectName)?.toLowerCase() ?? '';
-    return [...filtered].sort((a, b) => {
-      const ka = keyOf(a);
-      const kb = keyOf(b);
-      // push blanks to the bottom regardless of direction
-      if (!ka && kb) return 1;
-      if (ka && !kb) return -1;
-      return ka.localeCompare(kb) * dir;
-    });
-  }, [filtered, sortKey, sortDir]);
+  const debouncedSearch = useDebounce(search.trim(), 300);
+  const statusParam = STATUS_PARAM[filter];
+  const typeParam = trackFilter === ALL_VALUE ? undefined : (trackFilter as FellowshipType);
 
   useEffect(() => {
     setPage(0);
-  }, [filter, search, trackFilter]);
+  }, [filter, debouncedSearch, trackFilter, sortKey, sortDir, pageSize]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / ROWS_PER_PAGE));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageRows = useMemo(
-    () => sorted.slice(safePage * ROWS_PER_PAGE, (safePage + 1) * ROWS_PER_PAGE),
-    [sorted, safePage],
+  const { data, isLoading, isError, error } = useFellowships(
+    {
+      page,
+      pageSize,
+      ...(statusParam ? { status: statusParam } : {}),
+      ...(typeParam ? { type: typeParam } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      sortBy: sortKey,
+      sortOrder: sortDir,
+    },
+    { placeholderData: (prev) => prev },
   );
+
+  // The server returns the page already filtered/searched/sorted (nulls last).
+  const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
+  const totalRecords = data?.totalRecords ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      setSortDir((d) => (d === SortOrder.ASC ? SortOrder.DESC : SortOrder.ASC));
     } else {
       setSortKey(key);
-      setSortDir('asc');
+      setSortDir(SortOrder.DESC);
     }
   };
 
-  const handleExport = () => {
-    const header = [
-      'fellow',
-      'track',
-      'project',
-      'maintainer',
-      'end_date',
-      'payout',
-      'last_report',
-      'status',
-    ];
-    const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const rows = sorted.map((f) => {
-      const last = lastReportByFellowship.get(f.id);
-      return [
-        csvCell(f.userName ?? ''),
-        f.type,
-        csvCell(f.projectName ?? ''),
-        csvCell(f.projectMaintainerName ?? ''),
-        f.endDate ?? '',
-        formatPayoutPerMonth(f.amountUsd),
-        last ? `${monthShort(last.month)} ${last.year}` : '',
-        f.status,
-      ].join(',');
-    });
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fellowships-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // Export covers the full filtered result set. The "last report" column needs
+  // every fellow's reports, so we pull all reports too and index them locally.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const [allFellowships, allReports] = await Promise.all([
+        fellowshipService.fetchAllFellowships({
+          ...(statusParam ? { status: statusParam } : {}),
+          ...(typeParam ? { type: typeParam } : {}),
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          sortBy: sortKey,
+          sortOrder: sortDir,
+        }),
+        fellowshipService.fetchAllReports({}),
+      ]);
 
-  const lastReportByFellowship = useMemo(() => {
-    const map = new Map<string, GetFellowshipReportResponseDto>();
-    for (const r of reports) {
-      const cur = map.get(r.fellowshipId);
-      if (!cur) {
-        map.set(r.fellowshipId, r);
-        continue;
+      const lastReportByFellowship = new Map<string, GetFellowshipReportResponseDto>();
+      for (const r of allReports) {
+        const cur = lastReportByFellowship.get(r.fellowshipId);
+        // most recent year/month wins
+        if (!cur || r.year > cur.year || (r.year === cur.year && r.month > cur.month)) {
+          lastReportByFellowship.set(r.fellowshipId, r);
+        }
       }
-      // most recent year/month wins
-      if (r.year > cur.year || (r.year === cur.year && r.month > cur.month)) {
-        map.set(r.fellowshipId, r);
-      }
+
+      const header = [
+        'fellow',
+        'track',
+        'project',
+        'maintainer',
+        'end_date',
+        'payout',
+        'last_report',
+        'status',
+      ];
+      const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+      const rows = allFellowships.map((f) => {
+        const last = lastReportByFellowship.get(f.id);
+        return [
+          csvCell(f.userName ?? ''),
+          f.type,
+          csvCell(f.projectName ?? ''),
+          csvCell(f.projectMaintainerName ?? ''),
+          f.endDate ?? '',
+          formatPayoutPerMonth(f.amountUsd),
+          last ? `${monthShort(last.month)} ${last.year}` : '',
+          f.status,
+        ].join(',');
+      });
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fellowships-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    } finally {
+      setExporting(false);
     }
-    return map;
-  }, [reports]);
+  };
 
   return (
     <FellowshipPageLayout
@@ -272,6 +261,14 @@ const FellowshipsAdmin = () => {
       {toast && (
         <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
           {toast.msg}
+        </Alert>
+      )}
+
+      {isError && (
+        <Alert severity={isBadFilterError(error) ? 'warning' : 'error'} sx={{ mb: 2 }}>
+          {isBadFilterError(error)
+            ? `Invalid filter or search — please adjust and try again. (${extractErrorMessage(error)})`
+            : `Couldn't load fellowships: ${extractErrorMessage(error)}`}
         </Alert>
       )}
 
@@ -287,7 +284,6 @@ const FellowshipsAdmin = () => {
             <FilterPill
               key={f.value}
               label={f.label}
-              count={counts[f.value]}
               active={filter === f.value}
               onClick={() => setFilter(f.value)}
             />
@@ -312,6 +308,7 @@ const FellowshipsAdmin = () => {
                   </InputAdornment>
                 ),
               },
+              htmlInput: { maxLength: 100 },
             }}
             sx={{ flexGrow: 1, minWidth: 220 }}
           />
@@ -324,7 +321,7 @@ const FellowshipsAdmin = () => {
             sx={{ minWidth: 180 }}
           >
             <MenuItem value={ALL_VALUE}>All tracks</MenuItem>
-            {trackOptions.map((t) => (
+            {TRACK_OPTIONS.map((t) => (
               <MenuItem key={t} value={t}>
                 {formatFellowshipType(t)}
               </MenuItem>
@@ -334,10 +331,10 @@ const FellowshipsAdmin = () => {
             variant="outlined"
             startIcon={<Download size={14} />}
             onClick={handleExport}
-            disabled={sorted.length === 0}
+            disabled={exporting || totalRecords === 0}
             sx={{ color: 'text.primary', borderColor: 'divider' }}
           >
-            Export
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
         </Stack>
       </Stack>
@@ -356,7 +353,7 @@ const FellowshipsAdmin = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={22} />
           </Box>
-        ) : sorted.length === 0 ? (
+        ) : fellowships.length === 0 ? (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               No fellowships match these filters.
@@ -364,7 +361,7 @@ const FellowshipsAdmin = () => {
           </Box>
         ) : (
           <>
-            {pageRows.map((f) => (
+            {fellowships.map((f) => (
               <FellowshipRow
                 key={f.id}
                 fellowship={f}
@@ -372,12 +369,14 @@ const FellowshipsAdmin = () => {
                 onViewProposal={() => setProposalFellowship(f)}
               />
             ))}
-            {sorted.length > ROWS_PER_PAGE && (
+            {totalRecords > 0 && (
               <PaginationFooter
-                page={safePage}
+                page={page}
                 pageCount={pageCount}
-                total={sorted.length}
+                total={totalRecords}
+                pageSize={pageSize}
                 onChange={setPage}
+                onPageSizeChange={setPageSize}
               />
             )}
           </>
@@ -420,12 +419,10 @@ const FellowshipsAdmin = () => {
 
 const FilterPill = ({
   label,
-  count,
   active,
   onClick,
 }: {
   label: string;
-  count: number;
   active: boolean;
   onClick: () => void;
 }) => (
@@ -434,7 +431,6 @@ const FilterPill = ({
     sx={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: 0.75,
       px: 1.75,
       py: 0.6,
       borderRadius: 999,
@@ -450,17 +446,6 @@ const FilterPill = ({
     }}
   >
     {label}
-    <Box
-      component="span"
-      sx={{
-        fontFamily: fontFamilyMono,
-        fontSize: '0.72rem',
-        color: active ? 'primary.light' : 'text.secondary',
-        opacity: active ? 1 : 0.75,
-      }}
-    >
-      {count}
-    </Box>
   </Box>
 );
 
@@ -480,7 +465,7 @@ const SortableHeader = ({
 }: {
   label: string;
   active: boolean;
-  dir: SortDir;
+  dir: SortOrder;
   onClick: () => void;
 }) => (
   <Box
@@ -497,7 +482,7 @@ const SortableHeader = ({
   >
     {label}
     {active &&
-      (dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+      (dir === SortOrder.ASC ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
   </Box>
 );
 
@@ -507,7 +492,7 @@ const HeaderRow = ({
   onSort,
 }: {
   sortKey: SortKey;
-  sortDir: SortDir;
+  sortDir: SortOrder;
   onSort: (key: SortKey) => void;
 }) => (
   <Box
@@ -526,21 +511,23 @@ const HeaderRow = ({
       textTransform: 'uppercase',
     }}
   >
-    <SortableHeader
-      label="Fellow"
-      active={sortKey === 'name'}
-      dir={sortDir}
-      onClick={() => onSort('name')}
-    />
+    {/* Fellow and Project aren't in the server sort whitelist, so they're plain
+        headers now — sorting lives on the End date and Payout columns. */}
+    <Box>Fellow</Box>
     <Box>Track</Box>
+    <Box>Project</Box>
     <SortableHeader
-      label="Project"
-      active={sortKey === 'project'}
+      label="End date"
+      active={sortKey === 'endDate'}
       dir={sortDir}
-      onClick={() => onSort('project')}
+      onClick={() => onSort('endDate')}
     />
-    <Box>End date</Box>
-    <Box>Payout</Box>
+    <SortableHeader
+      label="Payout"
+      active={sortKey === 'amountUsd'}
+      dir={sortDir}
+      onClick={() => onSort('amountUsd')}
+    />
     <Box>Status</Box>
     <Box>Actions</Box>
   </Box>
@@ -552,15 +539,19 @@ const PaginationFooter = ({
   page,
   pageCount,
   total,
+  pageSize,
   onChange,
+  onPageSizeChange,
 }: {
   page: number;
   pageCount: number;
   total: number;
+  pageSize: number;
   onChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
 }) => {
-  const from = page * ROWS_PER_PAGE + 1;
-  const to = Math.min((page + 1) * ROWS_PER_PAGE, total);
+  const from = total === 0 ? 0 : page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
 
   return (
     <Stack
@@ -569,12 +560,13 @@ const PaginationFooter = ({
       justifyContent="space-between"
       sx={{ px: 2, py: 1 }}
     >
-      <Typography
-        sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
-      >
-        {from}–{to} of {total}
-      </Typography>
-      <Stack direction="row" spacing={0.5} alignItems="center">
+      <RowsPerPageSelect value={pageSize} onChange={onPageSizeChange} />
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
+        >
+          {from}–{to} of {total}
+        </Typography>
         <IconButton
           size="small"
           aria-label="Previous page"
@@ -602,6 +594,33 @@ const PaginationFooter = ({
     </Stack>
   );
 };
+
+// Compact "rows per page" picker for the table footer.
+const RowsPerPageSelect = ({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (size: number) => void;
+}) => (
+  <Stack direction="row" spacing={0.75} alignItems="center">
+    <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>Rows</Typography>
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      slotProps={{ htmlInput: { 'aria-label': 'Rows per page' } }}
+      sx={{ '& .MuiSelect-select': { py: 0.25, pl: 1, fontSize: '0.74rem' } }}
+    >
+      {PAGE_SIZE_OPTIONS.map((n) => (
+        <MenuItem key={n} value={n} sx={{ fontSize: '0.8rem' }}>
+          {n}
+        </MenuItem>
+      ))}
+    </TextField>
+  </Stack>
+);
 
 // ---- row ----
 

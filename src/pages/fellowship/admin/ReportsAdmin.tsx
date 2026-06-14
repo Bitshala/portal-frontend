@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -9,12 +9,14 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
+  IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { Check, Download, Search } from 'lucide-react';
+import { ArrowDownUp, Check, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
 import StatusChip from '../../../components/fellowship/StatusChip';
@@ -25,17 +27,22 @@ import {
   useReports,
   useReviewReport,
 } from '../../../hooks/fellowshipHooks';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
+import fellowshipService from '../../../services/fellowshipService';
 import {
   FellowshipReportStatus,
+  type FellowshipReportsSortBy,
   FellowshipType,
   type GetFellowshipReportResponseDto,
   type GetFellowshipResponseDto,
 } from '../../../types/fellowship';
-import { extractErrorMessage } from '../../../utils/errorUtils';
+import { SortOrder } from '../../../types/api';
+import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
 
 type StatusFilter = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'ALL';
 
@@ -45,6 +52,28 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'Approved', value: 'APPROVED' },
   { label: 'Rejected', value: 'REJECTED' },
   { label: 'All', value: 'ALL' },
+];
+
+const STATUS_PARAM: Record<StatusFilter, FellowshipReportStatus | undefined> = {
+  SUBMITTED: FellowshipReportStatus.SUBMITTED,
+  APPROVED: FellowshipReportStatus.APPROVED,
+  REJECTED: FellowshipReportStatus.REJECTED,
+  ALL: undefined,
+};
+
+// The server sorts reports by createdAt/updatedAt/period (year then month).
+type SortKey = 'newest' | 'oldest' | 'period' | 'updated';
+
+const SORT_OPTIONS: {
+  label: string;
+  value: SortKey;
+  sortBy: FellowshipReportsSortBy;
+  sortOrder: SortOrder;
+}[] = [
+  { label: 'Newest', value: 'newest', sortBy: 'createdAt', sortOrder: SortOrder.DESC },
+  { label: 'Oldest', value: 'oldest', sortBy: 'createdAt', sortOrder: SortOrder.ASC },
+  { label: 'Recent period', value: 'period', sortBy: 'period', sortOrder: SortOrder.DESC },
+  { label: 'Recently updated', value: 'updated', sortBy: 'updatedAt', sortOrder: SortOrder.DESC },
 ];
 
 const TRACK_COLORS: Record<FellowshipType, string> = {
@@ -93,16 +122,45 @@ const formatShortDate = (iso: string | null): string => {
 const ReportsAdmin = () => {
   const [filter, setFilter] = useState<StatusFilter>('SUBMITTED');
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selected, setSelected] = useState<GetFellowshipReportResponseDto | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  const { data, isLoading } = useReports({ page: 0, pageSize: PAGE_SIZE });
+  const debouncedSearch = useDebounce(search.trim(), 300);
+  const statusParam = STATUS_PARAM[filter];
+  const sort = SORT_OPTIONS.find((o) => o.value === sortKey) ?? SORT_OPTIONS[0];
+
+  useEffect(() => {
+    setPage(0);
+  }, [filter, debouncedSearch, sortKey, pageSize]);
+
+  const { data, isLoading, isError, error } = useReports(
+    {
+      page,
+      pageSize,
+      ...(statusParam ? { status: statusParam } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      sortBy: sort.sortBy,
+      sortOrder: sort.sortOrder,
+    },
+    { placeholderData: (prev) => prev },
+  );
+  // Reports carry only fellowName; project/track are joined from fellowships.
+  // NOTE: this lookup assumes ≤100 fellowships — revisit if that grows.
   const fellowshipsQuery = useFellowships({ page: 0, pageSize: 100 });
   const reviewMut = useReviewReport();
 
-  const allRecords = useMemo(() => data?.records ?? [], [data?.records]);
+  // The server returns the page already filtered/searched/sorted.
+  const records = useMemo(() => data?.records ?? [], [data?.records]);
+  const totalRecords = data?.totalRecords ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
+
   const fellowships = useMemo(
     () => fellowshipsQuery.data?.records ?? [],
     [fellowshipsQuery.data?.records],
@@ -112,50 +170,6 @@ const ReportsAdmin = () => {
     for (const f of fellowships) m.set(f.id, f);
     return m;
   }, [fellowships]);
-
-  const counts = useMemo(() => {
-    const c: Record<StatusFilter, number> = {
-      SUBMITTED: 0,
-      APPROVED: 0,
-      REJECTED: 0,
-      ALL: allRecords.length,
-    };
-    for (const r of allRecords) {
-      if (r.status === FellowshipReportStatus.SUBMITTED) c.SUBMITTED += 1;
-      else if (r.status === FellowshipReportStatus.APPROVED) c.APPROVED += 1;
-      else if (r.status === FellowshipReportStatus.REJECTED) c.REJECTED += 1;
-    }
-    return c;
-  }, [allRecords]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return allRecords.filter((r) => {
-      if (filter !== 'ALL') {
-        const map: Record<StatusFilter, FellowshipReportStatus | null> = {
-          SUBMITTED: FellowshipReportStatus.SUBMITTED,
-          APPROVED: FellowshipReportStatus.APPROVED,
-          REJECTED: FellowshipReportStatus.REJECTED,
-          ALL: null,
-        };
-        if (map[filter] && r.status !== map[filter]) return false;
-      }
-      if (q) {
-        const name = (r.fellowName ?? '').toLowerCase();
-        const mo = formatMonthYear(r.month, r.year).toLowerCase();
-        if (!name.includes(q) && !mo.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [allRecords, filter, search]);
-
-  const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const ta = new Date(a.updatedAt).getTime();
-      const tb = new Date(b.updatedAt).getTime();
-      return tb - ta;
-    });
-  }, [filtered]);
 
   const handleApprove = async (report: GetFellowshipReportResponseDto) => {
     try {
@@ -189,28 +203,49 @@ const ReportsAdmin = () => {
     }
   };
 
-  const handleExport = () => {
-    const header = ['fellow', 'track', 'project', 'month', 'submitted', 'status'];
-    const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const rows = sorted.map((r) => {
-      const f = fellowshipById.get(r.fellowshipId);
-      return [
-        csvCell(r.fellowName ?? ''),
-        f?.type ?? '',
-        csvCell(f?.projectName ?? ''),
-        formatMonthYear(r.month, r.year),
-        r.updatedAt ?? '',
-        r.status,
-      ].join(',');
-    });
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fellowship-reports-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Export covers the full filtered/searched result set, not just the page on
+  // screen — so we walk every page from the server before building the CSV.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const [allReports, allFellowships] = await Promise.all([
+        fellowshipService.fetchAllReports({
+          ...(statusParam ? { status: statusParam } : {}),
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          sortBy: sort.sortBy,
+          sortOrder: sort.sortOrder,
+        }),
+        fellowshipService.fetchAllFellowships({}),
+      ]);
+      const byId = new Map<string, GetFellowshipResponseDto>();
+      for (const f of allFellowships) byId.set(f.id, f);
+
+      const header = ['fellow', 'track', 'project', 'month', 'submitted', 'status'];
+      const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+      const rows = allReports.map((r) => {
+        const f = byId.get(r.fellowshipId);
+        return [
+          csvCell(r.fellowName ?? ''),
+          f?.type ?? '',
+          csvCell(f?.projectName ?? ''),
+          formatMonthYear(r.month, r.year),
+          r.updatedAt ?? '',
+          r.status,
+        ].join(',');
+      });
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fellowship-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -226,6 +261,14 @@ const ReportsAdmin = () => {
         </Alert>
       )}
 
+      {isError && (
+        <Alert severity={isBadFilterError(error) ? 'warning' : 'error'} sx={{ mb: 2 }}>
+          {isBadFilterError(error)
+            ? `Invalid filter or search — please adjust and try again. (${extractErrorMessage(error)})`
+            : `Couldn't load reports: ${extractErrorMessage(error)}`}
+        </Alert>
+      )}
+
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={1.5}
@@ -238,7 +281,6 @@ const ReportsAdmin = () => {
             <FilterPill
               key={f.value}
               label={f.label}
-              count={counts[f.value]}
               active={filter === f.value}
               onClick={() => setFilter(f.value)}
             />
@@ -253,7 +295,7 @@ const ReportsAdmin = () => {
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search fellow or month…"
+            placeholder="Search fellow, project…"
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -261,16 +303,23 @@ const ReportsAdmin = () => {
                 </InputAdornment>
               ),
             }}
+            inputProps={{ maxLength: 100 }}
             sx={{ flexGrow: 1, minWidth: 240 }}
+          />
+          <SortMenu
+            sortKey={sortKey}
+            onSort={setSortKey}
+            open={sortMenuOpen}
+            setOpen={setSortMenuOpen}
           />
           <Button
             variant="outlined"
             startIcon={<Download size={14} />}
             onClick={handleExport}
-            disabled={sorted.length === 0}
+            disabled={exporting || totalRecords === 0}
             sx={{ color: 'text.primary', borderColor: 'divider' }}
           >
-            Export
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
         </Stack>
       </Stack>
@@ -289,21 +338,33 @@ const ReportsAdmin = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={22} />
           </Box>
-        ) : sorted.length === 0 ? (
+        ) : records.length === 0 ? (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               No reports match these filters.
             </Typography>
           </Box>
         ) : (
-          sorted.map((r) => (
-            <ReportRow
-              key={r.id}
-              report={r}
-              fellowship={fellowshipById.get(r.fellowshipId)}
-              onOpen={() => setSelected(r)}
-            />
-          ))
+          <>
+            {records.map((r) => (
+              <ReportRow
+                key={r.id}
+                report={r}
+                fellowship={fellowshipById.get(r.fellowshipId)}
+                onOpen={() => setSelected(r)}
+              />
+            ))}
+            {totalRecords > 0 && (
+              <PaginationFooter
+                page={page}
+                pageCount={pageCount}
+                total={totalRecords}
+                pageSize={pageSize}
+                onChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
+            )}
+          </>
         )}
       </Box>
 
@@ -363,12 +424,10 @@ const ReportsAdmin = () => {
 
 const FilterPill = ({
   label,
-  count,
   active,
   onClick,
 }: {
   label: string;
-  count: number;
   active: boolean;
   onClick: () => void;
 }) => (
@@ -377,7 +436,6 @@ const FilterPill = ({
     sx={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: 0.75,
       px: 1.75,
       py: 0.6,
       borderRadius: 999,
@@ -393,18 +451,165 @@ const FilterPill = ({
     }}
   >
     {label}
-    <Box
-      component="span"
+  </Box>
+);
+
+// ---- sort menu ----
+
+const SortMenu = ({
+  sortKey,
+  onSort,
+  open,
+  setOpen,
+}: {
+  sortKey: SortKey;
+  onSort: (k: SortKey) => void;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) => (
+  <Box sx={{ position: 'relative' }}>
+    <Button
+      onClick={() => setOpen(!open)}
+      startIcon={<ArrowDownUp size={14} />}
+      variant="outlined"
       sx={{
-        fontFamily: fontFamilyMono,
-        fontSize: '0.72rem',
-        color: active ? 'primary.light' : 'text.secondary',
-        opacity: active ? 1 : 0.75,
+        color: 'text.primary',
+        borderColor: 'divider',
+        fontWeight: 600,
+        textTransform: 'none',
+        fontSize: '0.82rem',
+        whiteSpace: 'nowrap',
       }}
     >
-      {count}
-    </Box>
+      {SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Sort'}
+    </Button>
+    {open && (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          right: 0,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          borderRadius: 0.6,
+          p: 0.5,
+          zIndex: 5,
+          minWidth: 180,
+        }}
+      >
+        {SORT_OPTIONS.map((o) => (
+          <Box
+            key={o.value}
+            onClick={() => {
+              onSort(o.value);
+              setOpen(false);
+            }}
+            sx={{
+              px: 1.25,
+              py: 0.75,
+              borderRadius: 0.4,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              bgcolor: sortKey === o.value ? 'rgba(249,115,22,0.08)' : 'transparent',
+              color: sortKey === o.value ? 'primary.light' : 'text.primary',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+            }}
+          >
+            {o.label}
+          </Box>
+        ))}
+      </Box>
+    )}
   </Box>
+);
+
+// ---- pagination footer ----
+
+const PaginationFooter = ({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) => {
+  const from = total === 0 ? 0 : page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ px: 3, py: 1.25, borderTop: '1px solid', borderColor: 'divider' }}
+    >
+      <RowsPerPageSelect value={pageSize} onChange={onPageSizeChange} />
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
+        >
+          {from}–{to} of {total}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label="Previous page"
+          disabled={page === 0}
+          onClick={() => onChange(page - 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronLeft size={16} />
+        </IconButton>
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.74rem', color: 'text.secondary' }}
+        >
+          {page + 1} / {pageCount}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label="Next page"
+          disabled={page >= pageCount - 1}
+          onClick={() => onChange(page + 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronRight size={16} />
+        </IconButton>
+      </Stack>
+    </Stack>
+  );
+};
+
+// Compact "rows per page" picker for the table footer.
+const RowsPerPageSelect = ({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (size: number) => void;
+}) => (
+  <Stack direction="row" spacing={0.75} alignItems="center">
+    <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>Rows</Typography>
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      slotProps={{ htmlInput: { 'aria-label': 'Rows per page' } }}
+      sx={{ '& .MuiSelect-select': { py: 0.25, pl: 1, fontSize: '0.74rem' } }}
+    >
+      {PAGE_SIZE_OPTIONS.map((n) => (
+        <MenuItem key={n} value={n} sx={{ fontSize: '0.8rem' }}>
+          {n}
+        </MenuItem>
+      ))}
+    </TextField>
+  </Stack>
 );
 
 // ---- table ----

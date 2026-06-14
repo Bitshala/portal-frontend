@@ -11,6 +11,7 @@ import type {
   GetFellowshipResponseDto,
   ListFellowshipApplicationsQueryDto,
   ListFellowshipReportsQueryDto,
+  ListFellowshipsQueryDto,
   ReviewFellowshipApplicationRequestDto,
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
@@ -126,7 +127,7 @@ export const useMyFellowships = createUseQuery<
 
 export const useFellowships = createUseQuery<
   PaginatedDataDto<GetFellowshipResponseDto>,
-  PaginatedQueryDto
+  ListFellowshipsQueryDto
 >(
   (query) => ['fellowships', 'list', query],
   (query) => () => fellowshipService.listFellowships(query),
