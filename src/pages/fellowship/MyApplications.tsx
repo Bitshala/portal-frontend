@@ -21,11 +21,11 @@ import {
 } from '../../hooks/fellowshipHooks';
 import {
   FellowshipApplicationStatus,
+  type FellowshipApplicationProposalDto,
   type GetFellowshipApplicationResponseDto,
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
-import { parseProposal } from '../../utils/proposalFormat';
 
 type StatusFilter = 'ALL' | FellowshipApplicationStatus;
 
@@ -193,7 +193,7 @@ const MyApplications = () => {
             {selected ? (
               <ApplicationDetail
                 app={selected}
-                proposal={proposalQuery.data?.proposal ?? ''}
+                proposal={proposalQuery.data}
                 isLoadingProposal={proposalQuery.isLoading}
                 onContinue={() => navigate(`/fellowship/apply?appId=${selected.id}`)}
                 onDiscard={() => handleDiscard(selected.id)}
@@ -323,11 +323,7 @@ const ApplicationListItem = ({
   onSelect: () => void;
 }) => {
   const proposalQuery = useApplicationProposal(app.id);
-  const title = useMemo(
-    () =>
-      proposalQuery.data?.proposal ? parseProposal(proposalQuery.data.proposal).title : '',
-    [proposalQuery.data?.proposal],
-  );
+  const title = proposalQuery.data?.title ?? '';
 
   return (
     <Box
@@ -410,7 +406,7 @@ const ApplicationDetail = ({
   isResubmitting,
 }: {
   app: GetFellowshipApplicationResponseDto;
-  proposal: string;
+  proposal: FellowshipApplicationProposalDto | undefined;
   isLoadingProposal: boolean;
   onContinue: () => void;
   onDiscard: () => void;
@@ -418,8 +414,7 @@ const ApplicationDetail = ({
   isDiscarding: boolean;
   isResubmitting: boolean;
 }) => {
-  const fields = useMemo(() => parseProposal(proposal), [proposal]);
-  const title = fields.title || `${formatFellowshipType(app.type)} fellowship`;
+  const title = proposal?.title || `${formatFellowshipType(app.type)} fellowship`;
   const isDraft = app.status === FellowshipApplicationStatus.DRAFT;
   const needsChanges = app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
   const hasActions = isDraft || needsChanges;

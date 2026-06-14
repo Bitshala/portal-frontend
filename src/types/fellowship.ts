@@ -45,18 +45,38 @@ export interface GetFellowshipApplicationResponseDto {
   updatedAt: string;
 }
 
-export interface GetFellowshipApplicationProposalResponseDto {
-  proposal: string;
+// Structured proposal as returned by GET /fellowship-applications/:id/proposal.
+// Each field is stored and validated server-side; `links` is always an array.
+export interface FellowshipApplicationProposalDto {
+  title: string | null;
+  problemStatement: string | null;
+  plan: string | null;
+  mentorName: string | null;
+  mentorContact: string | null;
+  mentorTestimonial: string | null;
+  github: string | null;
+  links: string[];
 }
 
-export interface CreateFellowshipApplicationRequestDto {
+// Writable proposal shape for create/update. All fields optional — drafts may be
+// partial. Sending a field as "" clears it; omitting a key leaves it untouched.
+export interface FellowshipApplicationProposalWriteDto {
+  title?: string;
+  problemStatement?: string;
+  plan?: string;
+  mentorName?: string;
+  mentorContact?: string;
+  mentorTestimonial?: string;
+  github?: string;
+  links?: string[];
+}
+
+export interface CreateFellowshipApplicationRequestDto
+  extends FellowshipApplicationProposalWriteDto {
   type: FellowshipType;
-  proposal: string;
 }
 
-export interface UpdateFellowshipApplicationRequestDto {
-  proposal: string;
-}
+export type UpdateFellowshipApplicationRequestDto = FellowshipApplicationProposalWriteDto;
 
 export interface ReviewFellowshipApplicationRequestDto {
   status:

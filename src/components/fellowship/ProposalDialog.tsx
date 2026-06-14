@@ -8,9 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FileDown } from 'lucide-react';
-import { useMemo } from 'react';
 import { useApplicationProposal } from '../../hooks/fellowshipHooks';
-import { parseProposal } from '../../utils/proposalFormat';
 import ProposalView from './ProposalView';
 
 /**
@@ -34,16 +32,12 @@ export const ProposalDialog = ({
   const proposalQuery = useApplicationProposal(applicationId ?? '', {
     enabled: !!applicationId,
   });
-  const proposal = proposalQuery.data?.proposal ?? '';
-  const proposalTitle = useMemo(
-    () => (proposal ? parseProposal(proposal).title : ''),
-    [proposal],
-  );
+  const proposal = proposalQuery.data;
 
   return (
     <Dialog open={!!applicationId} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle sx={{ fontWeight: 700 }}>
-        {proposalTitle || title || 'Proposal'}
+        {proposal?.title || title || 'Proposal'}
       </DialogTitle>
       <DialogContent dividers>
         {proposalQuery.isLoading ? (

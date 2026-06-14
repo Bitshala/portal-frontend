@@ -39,13 +39,14 @@ import {
 import { useDebounce } from '../../../hooks/useDebounce';
 import {
   FellowshipApplicationStatus,
+  type FellowshipApplicationProposalDto,
   type FellowshipApplicationsSortBy,
   type GetFellowshipApplicationResponseDto,
 } from '../../../types/fellowship';
 import { SortOrder } from '../../../types/api';
 import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
-import { normalizeGithub, parseProposal } from '../../../utils/proposalFormat';
+import { normalizeGithub } from '../../../utils/proposalFormat';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_PAGE_SIZE = 25;
@@ -315,7 +316,7 @@ const ApplicationsAdmin = () => {
         {selected ? (
           <DetailPane
             app={selected}
-            proposal={proposalQuery.data?.proposal ?? ''}
+            proposal={proposalQuery.data}
             isLoadingProposal={proposalQuery.isLoading}
             position={selectedIdx >= 0 ? selectedIdx + 1 : 1}
             total={records.length}
@@ -771,7 +772,7 @@ const DetailPane = ({
   isReviewing,
 }: {
   app: GetFellowshipApplicationResponseDto;
-  proposal: string;
+  proposal: FellowshipApplicationProposalDto | undefined;
   isLoadingProposal: boolean;
   position: number;
   total: number;
@@ -784,8 +785,7 @@ const DetailPane = ({
   onRequestChanges: () => void;
   isReviewing: boolean;
 }) => {
-  const fields = useMemo(() => parseProposal(proposal), [proposal]);
-  const handle = fields.github ? `@${normalizeGithub(fields.github)}` : '';
+  const handle = proposal?.github ? `@${normalizeGithub(proposal.github)}` : '';
   const isFinal =
     app.status === FellowshipApplicationStatus.ACCEPTED ||
     app.status === FellowshipApplicationStatus.REJECTED;
@@ -808,7 +808,7 @@ const DetailPane = ({
           <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {fields.title || `${formatFellowshipType(app.type)} fellowship`}
+                {proposal?.title || `${formatFellowshipType(app.type)} fellowship`}
               </Typography>
               <StatusChip status={app.status} />
             </Stack>

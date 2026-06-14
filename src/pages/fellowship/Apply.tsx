@@ -44,16 +44,17 @@ import {
 import {
   FellowshipApplicationStatus,
   FellowshipType,
+  type FellowshipApplicationProposalWriteDto,
 } from '../../types/fellowship';
 import fellowshipService from '../../services/fellowshipService';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
   EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
+  buildProposalBody,
   duplicateLinkIndices,
   githubProfileUrl,
   normalizeGithub,
-  parseProposal,
-  serializeProposal,
+  proposalDtoToFields,
   validateGithub,
   validateLink,
   type ProposalFields,
@@ -77,7 +78,11 @@ const MAX_LINKS = 20;
 const makeProposalSchema = (githubRequired: boolean) =>
   z
     .object({
-      title: z.string().max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
+      title: z
+        .string()
+        .trim()
+        .min(1, { message: 'Project title is required.' })
+        .max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
       problemStatement: z
         .string()
         .trim()
@@ -195,7 +200,8 @@ const Apply = () => {
 
   // Live values drive autosave, the GitHub check and the review preview.
   const values = useWatch({ control }) as ProposalFields;
-  const serializedProposal = useMemo(() => serializeProposal(values), [values]);
+  // Stable serialization of the request body — drives autosave change detection.
+  const draftBodyKey = useMemo(() => JSON.stringify(buildProposalBody(values)), [values]);
 
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
@@ -222,7 +228,7 @@ const Apply = () => {
   // on every refetch (e.g. after a save) would clobber the user's in-progress edits.
   const hydratedFor = useRef<string | null>(null);
   const openedEditorFor = useRef<string | null>(null);
-  const lastSavedRef = useRef<{ id: string; proposal: string } | null>(null);
+  const lastSavedRef = useRef<{ id: string; key: string } | null>(null);
   useEffect(() => {
     if (!activeId) {
       hydratedFor.current = null;
@@ -230,14 +236,14 @@ const Apply = () => {
       return;
     }
     if (hydratedFor.current === activeId) return;
-    if (loadedProposal.data?.proposal !== undefined) {
-      const parsed = parseProposal(loadedProposal.data.proposal);
+    if (loadedProposal.data) {
+      const parsed = proposalDtoToFields(loadedProposal.data);
       reset(parsed);
       hydratedFor.current = activeId;
       // Seed the autosave baseline so hydration doesn't trigger a redundant save.
-      lastSavedRef.current = { id: activeId, proposal: serializeProposal(parsed) };
+      lastSavedRef.current = { id: activeId, key: JSON.stringify(buildProposalBody(parsed)) };
     }
-  }, [activeId, loadedProposal.data?.proposal, reset]);
+  }, [activeId, loadedProposal.data, reset]);
 
   useEffect(() => {
     if (!activeId || !loadedApp.data?.type) return;
@@ -304,28 +310,24 @@ const Apply = () => {
     if (!activeId && existingSameTypeApp) return;
     if (activeId && !currentApp) return;
     if (autoSaveInFlight.current) return;
-    if (lastSavedRef.current?.id === activeId && lastSavedRef.current.proposal === serializedProposal) return;
+    if (lastSavedRef.current?.id === activeId && lastSavedRef.current.key === draftBodyKey) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       void (async () => {
         autoSaveInFlight.current = true;
+        const body = buildProposalBody(getValues());
+        const key = JSON.stringify(body);
         try {
           if (activeId) {
-            await updateMut.mutateAsync({
-              id: activeId,
-              body: { proposal: serializedProposal },
-            });
-            lastSavedRef.current = { id: activeId, proposal: serializedProposal };
+            await updateMut.mutateAsync({ id: activeId, body });
+            lastSavedRef.current = { id: activeId, key };
           } else {
-            const created = await createMut.mutateAsync({
-              type: selectedType,
-              proposal: serializedProposal,
-            });
+            const created = await createMut.mutateAsync({ type: selectedType, ...body });
             setActiveId(created.id);
             searchParams.set('appId', created.id);
             setSearchParams(searchParams, { replace: true });
-            lastSavedRef.current = { id: created.id, proposal: serializedProposal };
+            lastSavedRef.current = { id: created.id, key };
           }
         } catch (e) {
           setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -346,7 +348,8 @@ const Apply = () => {
     submitted,
     searchParams,
     selectedType,
-    serializedProposal,
+    draftBodyKey,
+    getValues,
     setSearchParams,
     createMut,
     updateMut,
@@ -408,10 +411,13 @@ const Apply = () => {
 
   // Create the draft if it doesn't exist yet, otherwise update it. Returns the
   // application id, or null if creation failed / is blocked.
-  const persistDraft = async (proposal: string): Promise<string | null> => {
+  const persistDraft = async (
+    body: FellowshipApplicationProposalWriteDto,
+  ): Promise<string | null> => {
+    const key = JSON.stringify(body);
     if (activeId) {
-      await updateMut.mutateAsync({ id: activeId, body: { proposal } });
-      lastSavedRef.current = { id: activeId, proposal };
+      await updateMut.mutateAsync({ id: activeId, body });
+      lastSavedRef.current = { id: activeId, key };
       return activeId;
     }
     if (!selectedType) return null;
@@ -422,16 +428,16 @@ const Apply = () => {
       setActiveId(existingSameTypeApp.id);
       searchParams.set('appId', existingSameTypeApp.id);
       setSearchParams(searchParams, { replace: true });
-      await updateMut.mutateAsync({ id: existingSameTypeApp.id, body: { proposal } });
-      lastSavedRef.current = { id: existingSameTypeApp.id, proposal };
+      await updateMut.mutateAsync({ id: existingSameTypeApp.id, body });
+      lastSavedRef.current = { id: existingSameTypeApp.id, key };
       return existingSameTypeApp.id;
     }
     if (existingSameTypeApp?.status === FellowshipApplicationStatus.SUBMITTED) {
       navigate('/fellowship/applications', { replace: true });
       return null;
     }
-    const created = await createMut.mutateAsync({ type: selectedType, proposal });
-    lastSavedRef.current = { id: created.id, proposal };
+    const created = await createMut.mutateAsync({ type: selectedType, ...body });
+    lastSavedRef.current = { id: created.id, key };
     setActiveId(created.id);
     // Reflect the draft in the URL so a refresh resumes this draft instead of
     // starting a fresh editor (which would collide with the one-draft-per-type rule).
@@ -444,7 +450,7 @@ const Apply = () => {
   const handleSaveDraft = async () => {
     if (!selectedType) return;
     try {
-      const id = await persistDraft(serializeProposal(getValues()));
+      const id = await persistDraft(buildProposalBody(getValues()));
       if (id) setToast({ kind: 'success', msg: 'Draft saved.' });
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -466,7 +472,7 @@ const Apply = () => {
   const handleContinueFromProposal = form.handleSubmit(async (data) => {
     if (isEditable && selectedType) {
       try {
-        const id = await persistDraft(serializeProposal(data));
+        const id = await persistDraft(buildProposalBody(data));
         if (!id) return; // creation failed / blocked — toast already shown
       } catch (e) {
         setToast({ kind: 'error', msg: extractErrorMessage(e) });
@@ -480,7 +486,7 @@ const Apply = () => {
   const handleSubmit = form.handleSubmit(async (data) => {
     if (!selectedType) return;
     try {
-      const id = await persistDraft(serializeProposal(data));
+      const id = await persistDraft(buildProposalBody(data));
       if (!id) return;
       await submitMut.mutateAsync({ id });
       resetEditor();

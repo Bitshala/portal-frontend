@@ -4,7 +4,7 @@ import type { PaginatedDataDto, PaginatedQueryDto } from '../types/api.ts';
 import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
-  GetFellowshipApplicationProposalResponseDto,
+  FellowshipApplicationProposalDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -46,7 +46,7 @@ export const useApplication = createUseQuery<GetFellowshipApplicationResponseDto
 );
 
 export const useApplicationProposal = createUseQuery<
-  GetFellowshipApplicationProposalResponseDto,
+  FellowshipApplicationProposalDto,
   string
 >(
   (id) => ['fellowship-applications', 'proposal', id],

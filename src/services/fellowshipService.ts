@@ -4,7 +4,7 @@ import type { PaginatedDataDto } from '../types/api.ts';
 import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
-  GetFellowshipApplicationProposalResponseDto,
+  FellowshipApplicationProposalDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -107,8 +107,8 @@ class FellowshipService {
     return data;
   };
 
-  public getApplicationProposal = async (id: string): Promise<GetFellowshipApplicationProposalResponseDto> => {
-    const { data } = await this.request<GetFellowshipApplicationProposalResponseDto>({
+  public getApplicationProposal = async (id: string): Promise<FellowshipApplicationProposalDto> => {
+    const { data } = await this.request<FellowshipApplicationProposalDto>({
       headers: this.getRequestHeaders(),
       method: 'GET',
       url: `/fellowship-applications/${id}/proposal`,

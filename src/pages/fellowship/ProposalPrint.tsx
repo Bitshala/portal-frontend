@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -14,11 +13,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { fellowshipLightTheme } from '../../components/fellowship/theme';
 import { useApplication, useApplicationProposal } from '../../hooks/fellowshipHooks';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
-import {
-  githubProfileUrl,
-  normalizeGithub,
-  parseProposal,
-} from '../../utils/proposalFormat';
+import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
 
 const PrintSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <Box sx={{ mt: 3, breakInside: 'avoid-page' }}>
@@ -52,9 +47,8 @@ const ProposalPrint = () => {
   const proposalQuery = useApplicationProposal(id ?? '', { enabled: !!id });
 
   const app = appQuery.data;
-  const proposal = proposalQuery.data?.proposal ?? '';
-  const fields = useMemo(() => parseProposal(proposal), [proposal]);
-  const links = fields.links.map((l) => l.trim()).filter(Boolean);
+  const fields = proposalQuery.data;
+  const links = (fields?.links ?? []).map((l) => l.trim()).filter(Boolean);
   const isLoading = appQuery.isLoading || proposalQuery.isLoading;
 
   return (
@@ -81,7 +75,7 @@ const ProposalPrint = () => {
             variant="contained"
             startIcon={<Printer size={15} />}
             onClick={() => window.print()}
-            disabled={isLoading || !proposal}
+            disabled={isLoading || !fields}
           >
             Print / Save as PDF
           </Button>
@@ -93,7 +87,7 @@ const ProposalPrint = () => {
           {!isLoading && app && (
             <>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                {fields.title || `${formatFellowshipType(app.type)} fellowship proposal`}
+                {fields?.title || `${formatFellowshipType(app.type)} fellowship proposal`}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.75 }}>
                 {app.applicantName ?? 'Unknown applicant'} ·{' '}
@@ -108,20 +102,20 @@ const ProposalPrint = () => {
 
               <PrintSection title="Problem statement">
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
-                  {fields.problemStatement || '—'}
+                  {fields?.problemStatement || '—'}
                 </Typography>
               </PrintSection>
 
               <PrintSection title="6-month plan & milestones">
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
-                  {fields.plan || '—'}
+                  {fields?.plan || '—'}
                 </Typography>
               </PrintSection>
 
-              {(fields.github || links.length > 0) && (
+              {(fields?.github || links.length > 0) && (
                 <PrintSection title="Links">
                   <Stack spacing={0.5}>
-                    {fields.github && (
+                    {fields?.github && (
                       <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
                         GitHub:{' '}
                         <Box

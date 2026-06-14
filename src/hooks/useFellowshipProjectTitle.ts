@@ -1,22 +1,15 @@
-import { useMemo } from 'react';
 import type { GetFellowshipResponseDto } from '../types/fellowship';
-import { parseProposal } from '../utils/proposalFormat';
 import { useApplicationProposal } from './fellowshipHooks';
 
 // Fellowships often have no onboarding projectName — the project title lives
-// in the application proposal's markdown heading. Fall back to parsing it out.
+// in the application proposal. Fall back to the proposal's title field.
 export const useFellowshipProjectTitle = (
   fellowship: GetFellowshipResponseDto | null | undefined,
 ): string => {
   const proposalQuery = useApplicationProposal(fellowship?.applicationId ?? '', {
     enabled: Boolean(fellowship?.applicationId) && !fellowship?.projectName,
   });
-  const proposalTitle = useMemo(
-    () =>
-      proposalQuery.data?.proposal ? parseProposal(proposalQuery.data.proposal).title : '',
-    [proposalQuery.data?.proposal],
-  );
-  return fellowship?.projectName || proposalTitle;
+  return fellowship?.projectName || proposalQuery.data?.title || '';
 };
 
 export default useFellowshipProjectTitle;
