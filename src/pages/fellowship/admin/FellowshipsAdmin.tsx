@@ -484,7 +484,10 @@ const FilterPill = ({
 
 // ---- table header ----
 
-const COLS = '200px 100px minmax(0, 1.6fr) 120px 100px 110px 64px';
+// Proportional columns so the row fills the width evenly instead of dumping all
+// slack into Project. Order: Fellow, Track, Project, End date, Payout, Status, Actions.
+const COLS =
+  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 56px';
 const COL_GAP = 2;
 
 const SortableHeader = ({

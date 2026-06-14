@@ -97,7 +97,7 @@ const renderMarkdown = (md: string): ReactNode[] => {
           key={key++}
           component={`h${level}` as 'h1'}
           sx={{
-            fontFamily: '"Source Serif 4", "Source Serif Pro", Georgia, serif',
+            fontFamily: 'Inter, sans-serif',
             fontWeight: level <= 2 ? 700 : 600,
             fontSize: sizes[level - 1],
             lineHeight: 1.25,
@@ -132,7 +132,7 @@ const renderMarkdown = (md: string): ReactNode[] => {
               component="li"
               key={idx}
               sx={{
-                fontFamily: '"Source Serif 4", "Source Serif Pro", Georgia, serif',
+                fontFamily: 'Inter, sans-serif',
                 fontSize: '1.02rem',
                 lineHeight: 1.75,
                 color: 'text.primary',
@@ -166,7 +166,7 @@ const renderMarkdown = (md: string): ReactNode[] => {
         >
           <Typography
             sx={{
-              fontFamily: '"Source Serif 4", "Source Serif Pro", Georgia, serif',
+              fontFamily: 'Inter, sans-serif',
               fontSize: '1.02rem',
               lineHeight: 1.75,
             }}
@@ -194,7 +194,7 @@ const renderMarkdown = (md: string): ReactNode[] => {
         key={key++}
         component="p"
         sx={{
-          fontFamily: '"Source Serif 4", "Source Serif Pro", Georgia, serif',
+          fontFamily: 'Inter, sans-serif',
           fontSize: '1.05rem',
           lineHeight: 1.75,
           color: 'text.primary',
