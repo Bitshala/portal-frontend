@@ -7,30 +7,41 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Divider,
-  Grid,
+  IconButton,
+  Link,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
+import MarkdownView from '../../components/fellowship/MarkdownView';
 import StatusChip from '../../components/fellowship/StatusChip';
 import {
   useCreateReport,
   useDeleteReport,
   useFellowship,
   useMyFellowships,
-  useMyReports,
   useReport,
   useReportContent,
   useSubmitReport,
   useUpdateReport,
 } from '../../hooks/fellowshipHooks';
-import { FellowshipReportStatus, type GetFellowshipResponseDto } from '../../types/fellowship';
+import {
+  FellowshipReportStatus,
+  FellowshipStatus,
+  type GetFellowshipResponseDto,
+} from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
+import {
+  WORD_LIMIT,
+  composeReportContent,
+  countWords,
+  isValidGithubLink,
+  parseReportContent,
+} from '../../utils/reportContent';
 import { useFellowshipProjectTitle } from '../../hooks/useFellowshipProjectTitle';
 
 // Label for a fellowship in the picker: project name (from the proposal) with
@@ -70,11 +81,16 @@ const Report = () => {
   const initialMonth = Number(searchParams.get('month')) || currentMonth;
   const [month, setMonth] = useState<number>(initialMonth);
   const [content, setContent] = useState('');
+  const [prLinks, setPrLinks] = useState<string[]>(['']);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 50 });
+  // Reports can only be filed against an active fellowship.
   const fellowshipOptions = useMemo(
-    () => fellowshipsQuery.data?.records ?? [],
+    () =>
+      (fellowshipsQuery.data?.records ?? []).filter(
+        (f) => f.status === FellowshipStatus.ACTIVE,
+      ),
     [fellowshipsQuery.data?.records],
   );
 
@@ -82,17 +98,19 @@ const Report = () => {
   const fellowshipTitle = useFellowshipProjectTitle(fellowship);
   const report = useReport(reportId ?? '', { enabled: !!reportId });
   const reportContent = useReportContent(reportId ?? '', {
-    enabled: !!reportId && report.data?.status === FellowshipReportStatus.DRAFT,
+    enabled: !!reportId,
   });
-  const myReports = useMyReports({ page: 0, pageSize: 24 });
-
   const createMut = useCreateReport();
   const updateMut = useUpdateReport();
   const submitMut = useSubmitReport();
   const deleteMut = useDeleteReport();
 
   useEffect(() => {
-    if (reportContent.data?.content !== undefined) setContent(reportContent.data.content);
+    if (reportContent.data?.content !== undefined) {
+      const { links, body } = parseReportContent(reportContent.data.content);
+      setPrLinks(links);
+      setContent(body);
+    }
   }, [reportContent.data?.content]);
 
   useEffect(() => {
@@ -119,24 +137,55 @@ const Report = () => {
     }
   }, [monthOptions, creatingNew, month]);
 
-  const pastReports = useMemo(
-    () => (myReports.data?.records ?? []).filter((r) => r.fellowshipId === fellowshipId),
-    [myReports.data?.records, fellowshipId],
-  );
-
   const current = reportId ? report.data : null;
   const isEditable = !reportId || current?.status === FellowshipReportStatus.DRAFT;
   // New reports always belong to the current year; existing ones keep their own.
   const year = current?.year ?? currentYear;
 
+  // Submission is only allowed while the fellowship is active.
+  const fellowshipActive = fellowship?.status === FellowshipStatus.ACTIVE;
+  const wordCount = useMemo(() => countWords(content), [content]);
+  const overWordLimit = wordCount > WORD_LIMIT;
+  // Every non-empty link must be valid; submission needs at least one.
+  const allLinksValid = prLinks.every((l) => !l.trim() || isValidGithubLink(l));
+  const validLinks = prLinks.filter((l) => isValidGithubLink(l));
+  const hasValidLink = validLinks.length > 0 && allLinksValid;
+  const canSubmit =
+    isEditable &&
+    !!fellowshipId &&
+    fellowshipActive &&
+    !!content.trim() &&
+    !overWordLimit &&
+    hasValidLink;
+
+  const updateLink = (index: number, value: string) =>
+    setPrLinks((prev) => prev.map((l, i) => (i === index ? value : l)));
+  const addLink = () => setPrLinks((prev) => [...prev, '']);
+  const removeLink = (index: number) =>
+    setPrLinks((prev) => (prev.length <= 1 ? [''] : prev.filter((_, i) => i !== index)));
+
   const handleSaveDraft = async () => {
     if (!fellowshipId || !content.trim()) return;
+    if (!fellowshipActive) {
+      setToast({ kind: 'error', msg: 'Reports can only be filed for an active fellowship.' });
+      return;
+    }
+    if (overWordLimit) {
+      setToast({ kind: 'error', msg: `Reports are limited to ${WORD_LIMIT} words.` });
+      return;
+    }
+    // Links are optional while drafting, but any provided must be valid.
+    if (!allLinksValid) {
+      setToast({ kind: 'error', msg: 'Enter valid GitHub pull request or issue links.' });
+      return;
+    }
+    const composed = composeReportContent(prLinks, content);
     try {
       if (reportId) {
-        await updateMut.mutateAsync({ id: reportId, body: { content } });
+        await updateMut.mutateAsync({ id: reportId, body: { content: composed } });
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content });
+        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content: composed });
         setToast({ kind: 'success', msg: 'Draft created.' });
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${created.id}`, {
           replace: true,
@@ -149,14 +198,27 @@ const Report = () => {
 
   const handleSubmit = async () => {
     if (!content.trim() || !fellowshipId) return;
+    if (!fellowshipActive) {
+      setToast({ kind: 'error', msg: 'Reports can only be submitted for an active fellowship.' });
+      return;
+    }
+    if (overWordLimit) {
+      setToast({ kind: 'error', msg: `Reports are limited to ${WORD_LIMIT} words.` });
+      return;
+    }
+    if (!hasValidLink) {
+      setToast({ kind: 'error', msg: 'Add at least one valid GitHub pull request or issue link.' });
+      return;
+    }
+    const composed = composeReportContent(prLinks, content);
     try {
       let id = reportId;
       if (!id) {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content });
+        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content: composed });
         id = created.id;
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${id}`, { replace: true });
       } else {
-        await updateMut.mutateAsync({ id, body: { content } });
+        await updateMut.mutateAsync({ id, body: { content: composed } });
       }
       await submitMut.mutateAsync({ id });
       setToast({ kind: 'success', msg: 'Submitted for review.' });
@@ -189,9 +251,7 @@ const Report = () => {
         ← Back to reports
       </Button>
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+      <Card variant="outlined" sx={{ borderColor: 'divider' }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ sm: 'center' }} mb={2}>
                 <Box>
@@ -221,7 +281,7 @@ const Report = () => {
                   >
                     {fellowshipOptions.length === 0 && (
                       <MenuItem value="" disabled>
-                        No fellowships
+                        No active fellowships
                       </MenuItem>
                     )}
                     {fellowshipOptions.map((f) => (
@@ -253,93 +313,148 @@ const Report = () => {
                 </Alert>
               )}
 
-              <TextField
-                multiline
-                fullWidth
-                minRows={12}
-                maxRows={24}
-                placeholder="Progress this month — wins, blockers, code/docs links, next month's focus. Markdown supported."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                disabled={!isEditable || (!!reportId && reportContent.isLoading)}
-              />
-
-              <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  onClick={handleSaveDraft}
-                  disabled={
-                    !isEditable ||
-                    !fellowshipId ||
-                    !content.trim() ||
-                    createMut.isPending ||
-                    updateMut.isPending
-                  }
-                >
-                  {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSubmit}
-                  disabled={
-                    !isEditable ||
-                    !fellowshipId ||
-                    !content.trim() ||
-                    submitMut.isPending ||
-                    createMut.isPending ||
-                    updateMut.isPending
-                  }
-                >
-                  {submitMut.isPending ? 'Submitting…' : 'Submit'}
-                </Button>
-                {reportId && isEditable && (
-                  <Button variant="text" color="error" startIcon={<Trash2 size={16} />} onClick={handleDelete}>
-                    Delete draft
-                  </Button>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined" sx={{ borderColor: 'divider' }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                Past reports
-              </Typography>
-              {myReports.isLoading && <CircularProgress size={18} />}
-              {!myReports.isLoading && pastReports.length === 0 && (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  No past reports.
-                </Typography>
+              {isEditable && fellowship && !fellowshipActive && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  Reports can only be submitted while your fellowship is active.
+                </Alert>
               )}
-              <Stack spacing={1} divider={<Divider flexItem />}>
-                {pastReports.map((r) => (
-                  <Box
-                    key={r.id}
-                    onClick={() => navigate(`/fellowship/fellowships/${fellowshipId}/reports/${r.id}`)}
-                    sx={{
-                      p: 1.25,
-                      borderRadius: 1,
-                      cursor: 'pointer',
-                      bgcolor: r.id === reportId ? 'rgba(249,115,22,0.06)' : 'transparent',
-                      '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
-                    }}
-                  >
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {monthName(r.month)} {r.year}
-                      </Typography>
-                      <StatusChip status={r.status} />
+
+              {isEditable ? (
+                <>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                      Pull request / issue links
+                    </Typography>
+                    <Stack spacing={1.5}>
+                      {prLinks.map((link, i) => {
+                        const invalid = !!link.trim() && !isValidGithubLink(link);
+                        return (
+                          <Stack key={i} direction="row" spacing={1} alignItems="flex-start">
+                            <TextField
+                              fullWidth
+                              placeholder="https://github.com/owner/repo/pull/123"
+                              value={link}
+                              onChange={(e) => updateLink(i, e.target.value)}
+                              disabled={!!reportId && reportContent.isLoading}
+                              error={invalid}
+                              helperText={
+                                invalid ? 'Enter a valid GitHub pull request or issue link.' : ' '
+                              }
+                            />
+                            <IconButton
+                              aria-label="Remove link"
+                              onClick={() => removeLink(i)}
+                              disabled={prLinks.length <= 1 && !link.trim()}
+                              sx={{ mt: 0.5 }}
+                            >
+                              <X size={16} />
+                            </IconButton>
+                          </Stack>
+                        );
+                      })}
                     </Stack>
+                    <Button
+                      variant="text"
+                      size="small"
+                      startIcon={<Plus size={16} />}
+                      onClick={addLink}
+                      disabled={!prLinks.every((l) => isValidGithubLink(l))}
+                      sx={{ mt: 0.5 }}
+                    >
+                      Add another link
+                    </Button>
                   </Box>
-                ))}
-              </Stack>
+
+                  <TextField
+                    multiline
+                    fullWidth
+                    minRows={12}
+                    maxRows={24}
+                    placeholder="Progress this month — wins, blockers, code/docs links, next month's focus. Markdown supported."
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    disabled={!!reportId && reportContent.isLoading}
+                    error={overWordLimit}
+                    helperText={
+                      <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        {wordCount} / {WORD_LIMIT} words
+                      </Box>
+                    }
+                  />
+
+                  <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleSaveDraft}
+                      disabled={
+                        !fellowshipId ||
+                        !fellowshipActive ||
+                        !content.trim() ||
+                        overWordLimit ||
+                        createMut.isPending ||
+                        updateMut.isPending
+                      }
+                    >
+                      {createMut.isPending || updateMut.isPending ? 'Saving…' : 'Save draft'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleSubmit}
+                      disabled={
+                        !canSubmit ||
+                        submitMut.isPending ||
+                        createMut.isPending ||
+                        updateMut.isPending
+                      }
+                    >
+                      {submitMut.isPending ? 'Submitting…' : 'Submit'}
+                    </Button>
+                    {reportId && (
+                      <Button variant="text" color="error" startIcon={<Trash2 size={16} />} onClick={handleDelete}>
+                        Delete draft
+                      </Button>
+                    )}
+                  </Stack>
+                </>
+              ) : reportContent.isLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress size={22} />
+                </Box>
+              ) : (
+                <>
+                  {prLinks.filter((l) => l.trim()).length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                        Pull request / issue links
+                      </Typography>
+                      <Stack spacing={0.5}>
+                        {prLinks
+                          .filter((l) => l.trim())
+                          .map((link, i) => (
+                            <Link
+                              key={i}
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{ wordBreak: 'break-all', fontSize: '0.88rem' }}
+                            >
+                              {link}
+                            </Link>
+                          ))}
+                      </Stack>
+                    </Box>
+                  )}
+                  {content.trim() ? (
+                    <MarkdownView content={content} />
+                  ) : (
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      This report has no content.
+                    </Typography>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
     </FellowshipPageLayout>
   );
 };
