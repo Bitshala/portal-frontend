@@ -9,6 +9,7 @@ import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import RouteErrorPage from './components/RouteErrorPage.tsx';
 
 import '@fontsource/sora';
 import 'virtual:uno.css';
@@ -67,7 +68,7 @@ const withFellowshipFallback = (node: JSX.Element) => (
   <Suspense fallback={<FellowshipFallback />}>{node}</Suspense>
 );
 
-const router = createBrowserRouter([
+const routes = [
   {
     path: '/login',
     element: <Layout><Login /></Layout>,
@@ -259,7 +260,13 @@ const router = createBrowserRouter([
         </div>
       </div></Layout>,
     }
-]);
+];
+
+// Attach the friendly error page to every route so a render/loader throw shows
+// our themed fallback instead of React Router's default developer screen.
+const router = createBrowserRouter(
+  routes.map((route) => ({ ...route, errorElement: <RouteErrorPage /> })),
+);
 
 
 

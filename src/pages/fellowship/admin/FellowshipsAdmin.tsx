@@ -121,8 +121,7 @@ const formatPayoutPerMonth = (amountUsd: string | null): string => {
 const FellowshipsAdmin = () => {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
-  const [projectFilter, setProjectFilter] = useState<string>(ALL_VALUE);
-  const [maintainerFilter, setMaintainerFilter] = useState<string>(ALL_VALUE);
+  const [trackFilter, setTrackFilter] = useState<string>(ALL_VALUE);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page, setPage] = useState(0);
@@ -150,25 +149,19 @@ const FellowshipsAdmin = () => {
     return c;
   }, [fellowships]);
 
-  const projectOptions = useMemo(() => {
-    const s = new Set<string>();
-    for (const f of fellowships) if (f.projectName) s.add(f.projectName);
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [fellowships]);
-
-  const maintainerOptions = useMemo(() => {
-    const s = new Set<string>();
-    for (const f of fellowships) if (f.projectMaintainerName) s.add(f.projectMaintainerName);
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  const trackOptions = useMemo(() => {
+    const s = new Set<FellowshipType>();
+    for (const f of fellowships) s.add(f.type);
+    return Array.from(s).sort((a, b) =>
+      formatFellowshipType(a).localeCompare(formatFellowshipType(b)),
+    );
   }, [fellowships]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return fellowships.filter((f) => {
       if (filter !== 'ALL' && f.status !== filter) return false;
-      if (projectFilter !== ALL_VALUE && (f.projectName ?? '') !== projectFilter) return false;
-      if (maintainerFilter !== ALL_VALUE && (f.projectMaintainerName ?? '') !== maintainerFilter)
-        return false;
+      if (trackFilter !== ALL_VALUE && f.type !== trackFilter) return false;
       if (q) {
         const haystack = [
           f.userName ?? '',
@@ -182,7 +175,7 @@ const FellowshipsAdmin = () => {
       }
       return true;
     });
-  }, [fellowships, filter, search, projectFilter, maintainerFilter]);
+  }, [fellowships, filter, search, trackFilter]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -200,7 +193,7 @@ const FellowshipsAdmin = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [filter, search, projectFilter, maintainerFilter]);
+  }, [filter, search, trackFilter]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / ROWS_PER_PAGE));
   const safePage = Math.min(page, pageCount - 1);
@@ -321,30 +314,15 @@ const FellowshipsAdmin = () => {
           <TextField
             select
             size="small"
-            label="Project"
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
+            label="Track"
+            value={trackFilter}
+            onChange={(e) => setTrackFilter(e.target.value)}
             sx={{ minWidth: 180 }}
           >
-            <MenuItem value={ALL_VALUE}>All projects</MenuItem>
-            {projectOptions.map((p) => (
-              <MenuItem key={p} value={p}>
-                {p}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            size="small"
-            label="Maintainer"
-            value={maintainerFilter}
-            onChange={(e) => setMaintainerFilter(e.target.value)}
-            sx={{ minWidth: 180 }}
-          >
-            <MenuItem value={ALL_VALUE}>All maintainers</MenuItem>
-            {maintainerOptions.map((m) => (
-              <MenuItem key={m} value={m}>
-                {m}
+            <MenuItem value={ALL_VALUE}>All tracks</MenuItem>
+            {trackOptions.map((t) => (
+              <MenuItem key={t} value={t}>
+                {formatFellowshipType(t)}
               </MenuItem>
             ))}
           </TextField>
