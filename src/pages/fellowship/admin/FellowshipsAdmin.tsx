@@ -294,7 +294,11 @@ const FellowshipsAdmin = () => {
           ))}
         </Stack>
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ flexGrow: { md: 1 }, maxWidth: { md: 860 } }}
+        >
           <TextField
             size="small"
             value={search}
@@ -309,7 +313,7 @@ const FellowshipsAdmin = () => {
                 ),
               },
             }}
-            sx={{ minWidth: 220 }}
+            sx={{ flexGrow: 1, minWidth: 220 }}
           />
           <TextField
             select

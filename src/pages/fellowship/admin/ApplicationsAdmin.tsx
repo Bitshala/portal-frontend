@@ -409,7 +409,12 @@ const Toolbar = ({
       })}
     </Stack>
 
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      sx={{ flexGrow: { md: 1 }, maxWidth: { md: 860 } }}
+    >
       <TextField
         size="small"
         value={search}
@@ -422,7 +427,7 @@ const Toolbar = ({
             </InputAdornment>
           ),
         }}
-        sx={{ minWidth: 240 }}
+        sx={{ flexGrow: 1, minWidth: 240 }}
       />
       <Box sx={{ position: 'relative' }}>
         <Button
