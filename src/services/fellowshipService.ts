@@ -17,7 +17,6 @@ import type {
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
   UpdateFellowshipApplicationRequestDto,
-  UpdateFellowshipOnboardingRequestDto,
   UpdateFellowshipReportRequestDto,
 } from '../types/fellowship.ts';
 import type { PaginatedQueryDto } from '../types/api.ts';
@@ -218,18 +217,6 @@ class FellowshipService {
       url: `/fellowships/${id}`,
     });
     return data;
-  };
-
-  public updateFellowshipOnboarding = async (
-    id: string,
-    body: UpdateFellowshipOnboardingRequestDto,
-  ): Promise<void> => {
-    await this.request<void>({
-      headers: this.getRequestHeaders(),
-      method: 'PATCH',
-      url: `/fellowships/${id}/onboarding`,
-      data: body,
-    });
   };
 
   public startFellowshipContract = async (

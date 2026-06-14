@@ -16,7 +16,6 @@ import type {
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
   UpdateFellowshipApplicationRequestDto,
-  UpdateFellowshipOnboardingRequestDto,
   UpdateFellowshipReportRequestDto,
 } from '../types/fellowship.ts';
 
@@ -141,19 +140,6 @@ export const useFellowship = createUseQuery<GetFellowshipResponseDto, string>(
 // =========================
 // Fellowships — Mutations
 // =========================
-
-export const useUpdateFellowshipOnboarding = createUseMutation<
-  void,
-  { id: string; body: UpdateFellowshipOnboardingRequestDto }
->(
-  ({ id, body }) => fellowshipService.updateFellowshipOnboarding(id, body),
-  {
-    queryInvalidation: async ({ queryClient, variables }) => {
-      await queryClient.invalidateQueries({ queryKey: ['fellowships', 'one', variables.id] });
-      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
-    },
-  },
-);
 
 export const useStartFellowshipContract = createUseMutation<
   void,

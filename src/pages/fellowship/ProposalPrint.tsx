@@ -15,6 +15,16 @@ import { useApplication, useApplicationProposal } from '../../hooks/fellowshipHo
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
 import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
 
+// A long-text section, only rendered when there's content to show.
+const PrintTextSection = ({ title, text }: { title: string; text: string | null | undefined }) =>
+  text && text.trim() ? (
+    <PrintSection title={title}>
+      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+        {text}
+      </Typography>
+    </PrintSection>
+  ) : null;
+
 const PrintSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <Box sx={{ mt: 3, breakInside: 'avoid-page' }}>
     <Typography
@@ -49,6 +59,9 @@ const ProposalPrint = () => {
   const app = appQuery.data;
   const fields = proposalQuery.data;
   const links = (fields?.links ?? []).map((l) => l.trim()).filter(Boolean);
+  const domains = fields?.domains ?? [];
+  const codingLanguages = fields?.codingLanguages ?? [];
+  const educationInterests = fields?.educationInterests ?? [];
   const isLoading = appQuery.isLoading || proposalQuery.isLoading;
 
   return (
@@ -112,6 +125,23 @@ const ProposalPrint = () => {
                 </Typography>
               </PrintSection>
 
+              {(fields?.mentorName || fields?.mentorContact) && (
+                <PrintSection title="Mentor">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {fields?.mentorName || '—'}
+                    {fields?.mentorContact ? ` · ${fields.mentorContact}` : ''}
+                  </Typography>
+                  {fields?.mentorTestimonial && (
+                    <Typography
+                      variant="body2"
+                      sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65, mt: 1 }}
+                    >
+                      {fields.mentorTestimonial}
+                    </Typography>
+                  )}
+                </PrintSection>
+              )}
+
               {(fields?.github || links.length > 0) && (
                 <PrintSection title="Links">
                   <Stack spacing={0.5}>
@@ -137,6 +167,66 @@ const ProposalPrint = () => {
                   </Stack>
                 </PrintSection>
               )}
+
+              {(fields?.projectName || fields?.projectGithubLink) && (
+                <PrintSection title="Project">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {fields?.projectName || '—'}
+                  </Typography>
+                  {fields?.projectGithubLink && (
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all', mt: 0.5 }}>
+                      <Box component="a" href={fields.projectGithubLink} sx={{ color: 'inherit' }}>
+                        {fields.projectGithubLink}
+                      </Box>
+                    </Typography>
+                  )}
+                </PrintSection>
+              )}
+
+              <PrintTextSection title="Academic background" text={fields?.academicBackground} />
+
+              {fields?.graduationYear != null && (
+                <PrintSection title="Graduation year">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {fields.graduationYear}
+                  </Typography>
+                </PrintSection>
+              )}
+
+              <PrintTextSection
+                title="Professional experience"
+                text={fields?.professionalExperience}
+              />
+
+              {domains.length > 0 && (
+                <PrintSection title="Domains">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {domains.join(', ')}
+                  </Typography>
+                </PrintSection>
+              )}
+
+              {codingLanguages.length > 0 && (
+                <PrintSection title="Coding languages">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {codingLanguages.join(', ')}
+                  </Typography>
+                </PrintSection>
+              )}
+
+              {educationInterests.length > 0 && (
+                <PrintSection title="Education interests">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {educationInterests.join(', ')}
+                  </Typography>
+                </PrintSection>
+              )}
+
+              <PrintTextSection title="Bitcoin contributions" text={fields?.bitcoinContributions} />
+              <PrintTextSection title="Bitcoin motivation" text={fields?.bitcoinMotivation} />
+              <PrintTextSection title="Bitcoin OSS goal" text={fields?.bitcoinOssGoal} />
+              <PrintTextSection title="Additional info" text={fields?.additionalInfo} />
+              <PrintTextSection title="Questions for Bitshala" text={fields?.questionsForBitshala} />
             </>
           )}
 

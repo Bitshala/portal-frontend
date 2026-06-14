@@ -46,7 +46,10 @@ export interface GetFellowshipApplicationResponseDto {
 }
 
 // Structured proposal as returned by GET /fellowship-applications/:id/proposal.
-// Each field is stored and validated server-side; `links` is always an array.
+// Each field is stored and validated server-side; `links` and the multi-value
+// onboarding fields are always arrays. Onboarding details now live on the
+// application itself, so the proposal carries them too. `location` is the one
+// exception — it's a profile field, read from GET /users/me, not the proposal.
 export interface FellowshipApplicationProposalDto {
   title: string | null;
   problemStatement: string | null;
@@ -56,10 +59,26 @@ export interface FellowshipApplicationProposalDto {
   mentorTestimonial: string | null;
   github: string | null;
   links: string[];
+  projectName: string | null;
+  projectGithubLink: string | null;
+  academicBackground: string | null;
+  graduationYear: number | null;
+  professionalExperience: string | null;
+  domains: string[];
+  codingLanguages: string[];
+  educationInterests: string[];
+  bitcoinContributions: string | null;
+  bitcoinMotivation: string | null;
+  bitcoinOssGoal: string | null;
+  additionalInfo: string | null;
+  questionsForBitshala: string | null;
 }
 
 // Writable proposal shape for create/update. All fields optional — drafts may be
 // partial. Sending a field as "" clears it; omitting a key leaves it untouched.
+// `location` and `github` are written through to the user profile by the backend
+// (location → user.location, github → user.githubProfileUrl); github is also kept
+// on the application, but location is not returned by the proposal endpoint.
 export interface FellowshipApplicationProposalWriteDto {
   title?: string;
   problemStatement?: string;
@@ -69,6 +88,20 @@ export interface FellowshipApplicationProposalWriteDto {
   mentorTestimonial?: string;
   github?: string;
   links?: string[];
+  projectName?: string;
+  projectGithubLink?: string;
+  location?: string;
+  academicBackground?: string;
+  graduationYear?: number;
+  professionalExperience?: string;
+  domains?: string[];
+  codingLanguages?: string[];
+  educationInterests?: string[];
+  bitcoinContributions?: string;
+  bitcoinMotivation?: string;
+  bitcoinOssGoal?: string;
+  additionalInfo?: string;
+  questionsForBitshala?: string;
 }
 
 export interface CreateFellowshipApplicationRequestDto
@@ -159,8 +192,6 @@ export interface ListFellowshipsQueryDto extends PaginatedQueryDto {
   sortBy?: FellowshipsSortBy;
   sortOrder?: SortOrder;
 }
-
-export type UpdateFellowshipOnboardingRequestDto = Partial<FellowshipOnboardingDto>;
 
 export interface StartFellowshipContractRequestDto {
   startDate: string;

@@ -1,12 +1,21 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Controller, useForm, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
+import {
+  Controller,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldErrors,
+  type UseFormReturn,
+} from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Stack,
   TextField,
@@ -41,6 +50,7 @@ import {
   useSubmitApplication,
   useUpdateApplication,
 } from '../../hooks/fellowshipHooks';
+import { useUser } from '../../hooks/userHooks';
 import {
   FellowshipApplicationStatus,
   FellowshipType,
@@ -70,43 +80,45 @@ const TITLE_LIMIT = 120;
 // overall limit can't be tripped from the UI.
 const LINK_LIMIT = 500;
 const MAX_LINKS = 20;
+// Free-text location (profile field), per-entry cap and count cap for the
+// multi-value chip fields (domains, coding languages, education interests).
+const LOCATION_LIMIT = 255;
+const TAG_LIMIT = 100;
+const MAX_TAGS = 50;
+// Graduation year bounds — mirrored server-side.
+const YEAR_MIN = 1900;
+const YEAR_MAX = 2100;
 
 // ---- Validation schema (react-hook-form + zod) ----
 
-// GitHub is required on the Developer track and optional elsewhere, so the
-// schema is built per-track. Everything else is shared.
-const makeProposalSchema = (githubRequired: boolean) =>
+const longText = () =>
+  z
+    .string()
+    .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` });
+
+const requiredLongText = (label: string) => longText().refine((v) => v.trim().length > 0, { message: `${label} is required.` });
+
+// Multi-value tag field: each entry capped, total count capped. Required-ness is
+// branched per track in superRefine so non-empty checks can depend on the track.
+const tagArray = () =>
+  z
+    .array(z.string().max(TAG_LIMIT, { message: `Keep each entry under ${TAG_LIMIT} characters.` }))
+    .max(MAX_TAGS, { message: `Add at most ${MAX_TAGS} entries.` });
+
+// Several fields are required only on the Developer track (github, project
+// details, coding languages); everything else is shared. The schema is built
+// per-track so non-developer applicants aren't blocked on developer-only fields.
+const makeApplicationSchema = (isDeveloper: boolean) =>
   z
     .object({
+      // Proposal
       title: z
         .string()
         .trim()
         .min(1, { message: 'Project title is required.' })
         .max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
-      problemStatement: z
-        .string()
-        .trim()
-        .min(1, { message: 'Problem statement is required.' })
-        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
-      plan: z
-        .string()
-        .trim()
-        .min(1, { message: '6-month plan is required.' })
-        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
-      mentorName: z
-        .string()
-        .trim()
-        .min(1, { message: 'Mentor name is required.' })
-        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
-      mentorContact: z
-        .string()
-        .trim()
-        .min(1, { message: 'Mentor contact is required.' })
-        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
-      mentorTestimonial: z
-        .string()
-        .max(LONG_TEXT_LIMIT, { message: `Keep this under ${LONG_TEXT_LIMIT.toLocaleString('en-US')} characters.` }),
-      github: z.string(),
+      problemStatement: requiredLongText('Problem statement'),
+      plan: requiredLongText('6-month plan'),
       links: z
         .array(
           z
@@ -117,18 +129,102 @@ const makeProposalSchema = (githubRequired: boolean) =>
             }),
         )
         .max(MAX_LINKS, { message: `Add at most ${MAX_LINKS} links.` }),
+      // Mentor
+      mentorName: z
+        .string()
+        .trim()
+        .min(1, { message: 'Mentor name is required.' })
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      mentorContact: z
+        .string()
+        .trim()
+        .min(1, { message: 'Mentor contact is required.' })
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      mentorTestimonial: longText(),
+      // Project (developer track)
+      github: z.string(),
+      projectName: z
+        .string()
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      projectGithubLink: z
+        .string()
+        .max(LINK_LIMIT, { message: 'This link is too long.' }),
+      // About you
+      location: z
+        .string()
+        .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` }),
+      academicBackground: requiredLongText('Academic background'),
+      graduationYear: z.string(),
+      professionalExperience: requiredLongText('Professional experience'),
+      domains: tagArray(),
+      codingLanguages: tagArray(),
+      educationInterests: tagArray(),
+      // Bitcoin
+      bitcoinContributions: requiredLongText('Bitcoin contributions'),
+      bitcoinMotivation: requiredLongText('Bitcoin motivation'),
+      bitcoinOssGoal: requiredLongText('Bitcoin OSS goal'),
+      // Anything else
+      additionalInfo: longText(),
+      questionsForBitshala: longText(),
     })
     .superRefine((data, ctx) => {
       const gh = data.github.trim();
-      if (githubRequired && normalizeGithub(gh).length === 0) {
+      if (isDeveloper && normalizeGithub(gh).length === 0) {
         ctx.addIssue({ code: 'custom', path: ['github'], message: 'GitHub username is required.' });
       } else {
         const ghError = validateGithub(gh);
         if (ghError) ctx.addIssue({ code: 'custom', path: ['github'], message: ghError });
       }
+
       // Cross-field check: flag links that duplicate an earlier one.
       for (const i of duplicateLinkIndices(data.links)) {
         ctx.addIssue({ code: 'custom', path: ['links', i], message: 'Duplicate link — already added above.' });
+      }
+
+      // Graduation year — required for every track, must be a whole year in range.
+      const year = data.graduationYear.trim();
+      if (!year) {
+        ctx.addIssue({ code: 'custom', path: ['graduationYear'], message: 'Graduation year is required.' });
+      } else if (!/^\d{4}$/.test(year) || Number(year) < YEAR_MIN || Number(year) > YEAR_MAX) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['graduationYear'],
+          message: `Enter a year between ${YEAR_MIN} and ${YEAR_MAX}.`,
+        });
+      }
+
+      // Required-on-submit multi-value fields.
+      if (data.domains.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['domains'], message: 'Add at least one domain.' });
+      }
+      if (data.educationInterests.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['educationInterests'], message: 'Add at least one interest.' });
+      }
+
+      // Developer-only required fields.
+      if (isDeveloper) {
+        if (!data.projectName.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['projectName'], message: 'Project name is required.' });
+        }
+        if (!data.projectGithubLink.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['projectGithubLink'], message: 'Project GitHub link is required.' });
+        } else if (validateLink(data.projectGithubLink)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['projectGithubLink'],
+            message: 'Enter a full URL starting with http:// or https://',
+          });
+        }
+        if (data.codingLanguages.length === 0) {
+          ctx.addIssue({ code: 'custom', path: ['codingLanguages'], message: 'Add at least one language.' });
+        }
+      } else if (data.projectGithubLink.trim() && validateLink(data.projectGithubLink)) {
+        // Non-developer tracks: project link is optional but still format-checked.
+        ctx.addIssue({
+          code: 'custom',
+          path: ['projectGithubLink'],
+          message: 'Enter a full URL starting with http:// or https://',
+        });
       }
     });
 
@@ -165,13 +261,76 @@ const TRACK_BY_VALUE: Record<FellowshipType, TrackOption> = TRACK_OPTIONS.reduce
   {} as Record<FellowshipType, TrackOption>,
 );
 
-type StepIndex = 0 | 1 | 2;
+// 0 is the Track step, the middle indices are the editing steps (one per
+// EDIT_STEPS entry) and the last index is Review.
+type StepIndex = number;
 
 // Result of the advisory GitHub account check. 'checking' is in-flight;
 // 'unknown' is the null case (rate-limited / unreachable), distinct from 'missing'.
 type GithubCheckStatus = 'checking' | 'exists' | 'missing' | 'unknown';
 
-const STEP_LABELS = ['Track', 'Proposal', 'Review & submit'] as const;
+// A category card rendered inside an editing step.
+type SectionKey = 'proposal' | 'mentor' | 'project' | 'about' | 'bitcoin' | 'anythingElse';
+
+// The editing steps between Track and Review. Each owns a set of section cards
+// and the form fields validated when the applicant clicks Continue on it
+// (developer-only fields are folded in per track). Splitting the long combined
+// form across these keeps each step short and scannable.
+const EDIT_STEPS: {
+  label: string;
+  sections: SectionKey[];
+  fields: (isDeveloper: boolean) => (keyof ProposalFields)[];
+}[] = [
+  {
+    label: 'Proposal',
+    sections: ['proposal', 'mentor', 'project'],
+    fields: (isDeveloper) => {
+      const f: (keyof ProposalFields)[] = [
+        'title',
+        'problemStatement',
+        'plan',
+        'links',
+        'mentorName',
+        'mentorContact',
+        'mentorTestimonial',
+      ];
+      if (isDeveloper) f.push('projectName', 'projectGithubLink', 'github');
+      return f;
+    },
+  },
+  {
+    label: 'About you',
+    sections: ['about'],
+    fields: (isDeveloper) => {
+      const f: (keyof ProposalFields)[] = [
+        'location',
+        'graduationYear',
+        'academicBackground',
+        'professionalExperience',
+        'domains',
+        'educationInterests',
+      ];
+      // GitHub lives in the Project card on the Developer track, otherwise here.
+      f.push(isDeveloper ? 'codingLanguages' : 'github');
+      return f;
+    },
+  },
+  {
+    label: 'Bitcoin',
+    sections: ['bitcoin', 'anythingElse'],
+    fields: () => [
+      'bitcoinContributions',
+      'bitcoinMotivation',
+      'bitcoinOssGoal',
+      'additionalInfo',
+      'questionsForBitshala',
+    ],
+  },
+];
+
+const STEP_LABELS = ['Track', ...EDIT_STEPS.map((s) => s.label), 'Review & submit'];
+const TOTAL_STEPS = STEP_LABELS.length;
+const REVIEW_STEP = TOTAL_STEPS - 1;
 
 const Apply = () => {
   const navigate = useNavigate();
@@ -184,11 +343,12 @@ const Apply = () => {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  // GitHub matters most for the Developer track, so it's required there; for
-  // Designer/Educator it's optional (but still format-checked when provided).
-  const githubRequired = selectedType === FellowshipType.DEVELOPER;
+  // The Developer track requires GitHub, the project fields and coding
+  // languages; Designer/Educator leave those optional (GitHub is still
+  // format-checked when provided).
+  const isDeveloper = selectedType === FellowshipType.DEVELOPER;
 
-  const resolver = useMemo(() => zodResolver(makeProposalSchema(githubRequired)), [githubRequired]);
+  const resolver = useMemo(() => zodResolver(makeApplicationSchema(isDeveloper)), [isDeveloper]);
   const form = useForm<ProposalFields>({
     resolver,
     defaultValues: EMPTY_FIELDS,
@@ -206,6 +366,9 @@ const Apply = () => {
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
   const myApplicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
+  // `location` is a profile field, not stored on the application — prefill it
+  // from the fellow's profile and write it back through on submit.
+  const profileQuery = useUser();
 
   const createMut = useCreateApplication();
   const updateMut = useUpdateApplication();
@@ -229,6 +392,7 @@ const Apply = () => {
   const hydratedFor = useRef<string | null>(null);
   const openedEditorFor = useRef<string | null>(null);
   const lastSavedRef = useRef<{ id: string; key: string } | null>(null);
+  const locationSeededFor = useRef<string | null>(null);
   useEffect(() => {
     if (!activeId) {
       hydratedFor.current = null;
@@ -244,6 +408,20 @@ const Apply = () => {
       lastSavedRef.current = { id: activeId, key: JSON.stringify(buildProposalBody(parsed)) };
     }
   }, [activeId, loadedProposal.data, reset]);
+
+  // Prefill the location field from the fellow's profile once, when the profile
+  // loads and the user hasn't typed one. Keyed per editor so switching drafts
+  // re-seeds. Only fills a blank field, so it never clobbers an edit in progress.
+  useEffect(() => {
+    if (!profileQuery.data) return;
+    if (activeId && hydratedFor.current !== activeId) return; // wait for hydration
+    const key = activeId ?? 'new';
+    if (locationSeededFor.current === key) return;
+    locationSeededFor.current = key;
+    if (!getValues('location') && profileQuery.data.location) {
+      setValue('location', profileQuery.data.location);
+    }
+  }, [profileQuery.data, activeId, getValues, setValue]);
 
   useEffect(() => {
     if (!activeId || !loadedApp.data?.type) return;
@@ -399,6 +577,7 @@ const Apply = () => {
     lastSavedRef.current = null;
     openedEditorFor.current = null;
     hydratedFor.current = null;
+    locationSeededFor.current = null;
     setActiveId(null);
     reset(EMPTY_FIELDS);
     setSelectedType(null);
@@ -467,26 +646,50 @@ const Apply = () => {
     setStep(1);
   };
 
-  // Continue → validate the whole proposal via the resolver; only advance (and
-  // persist) when it passes. Invalid fields light up inline automatically.
-  const handleContinueFromProposal = form.handleSubmit(async (data) => {
+  // Persist the current draft (if editable) and move to the given step. Bails
+  // without advancing if the save fails or is blocked.
+  const persistThenGoTo = async (nextStep: number): Promise<void> => {
     if (isEditable && selectedType) {
       try {
-        const id = await persistDraft(buildProposalBody(data));
+        const id = await persistDraft(buildProposalBody(getValues()));
         if (!id) return; // creation failed / blocked — toast already shown
       } catch (e) {
         setToast({ kind: 'error', msg: extractErrorMessage(e) });
         return;
       }
     }
-    setStep(2);
-  });
+    setStep(nextStep);
+  };
 
-  // Final submit goes through the same validation, then submits for review.
-  const handleSubmit = form.handleSubmit(async (data) => {
+  // Continue on an intermediate editing step validates only that step's fields
+  // (full validation is deferred to the Review/submit transition), then advances.
+  const handleContinueEdit = (currentStep: number) => async () => {
+    const ok = await form.trigger(EDIT_STEPS[currentStep - 1].fields(isDeveloper));
+    if (!ok) return;
+    await persistThenGoTo(currentStep + 1);
+  };
+
+  // When validation fails on the way to Review or on submit, jump to the first
+  // editing step that owns an errored field so the applicant can see it.
+  const handleInvalid = (errors: FieldErrors<ProposalFields>) => {
+    const idx = EDIT_STEPS.findIndex((s) =>
+      s.fields(isDeveloper).some((f) => errors[f]),
+    );
+    setStep(idx >= 0 ? idx + 1 : 1);
+    setToast({ kind: 'error', msg: 'Please fix the highlighted fields before continuing.' });
+  };
+
+  // Leaving the last editing step (or jumping to Review) runs full validation.
+  const handleGoToReview = form.handleSubmit(
+    () => persistThenGoTo(REVIEW_STEP),
+    handleInvalid,
+  );
+
+  // Final submit goes through the same full validation, then submits for review.
+  const handleSubmit = form.handleSubmit(async () => {
     if (!selectedType) return;
     try {
-      const id = await persistDraft(buildProposalBody(data));
+      const id = await persistDraft(buildProposalBody(getValues()));
       if (!id) return;
       await submitMut.mutateAsync({ id });
       resetEditor();
@@ -494,7 +697,7 @@ const Apply = () => {
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
-  });
+  }, handleInvalid);
 
   const handleDiscard = async () => {
     if (!activeId) return;
@@ -536,10 +739,15 @@ const Apply = () => {
         step={step}
         trackLabel={selectedType ? TRACK_BY_VALUE[selectedType].title : null}
         onJump={(i) => {
-          if (i === 0) setStep(0);
-          if (i === 1 && selectedType) setStep(1);
-          // Jumping to review runs the same validate-then-advance path as Continue.
-          if (i === 2 && selectedType) void handleContinueFromProposal();
+          if (i === step) return;
+          if (i === 0) {
+            setStep(0);
+            return;
+          }
+          if (!selectedType) return;
+          // Editing steps are freely navigable; jumping to Review validates all.
+          if (i <= EDIT_STEPS.length) setStep(i);
+          else void handleGoToReview();
         }}
       />
 
@@ -553,29 +761,33 @@ const Apply = () => {
         />
       )}
 
-      {step === 1 && (
-        <ProposalStep
+      {step >= 1 && step <= EDIT_STEPS.length && selectedType && (
+        <ApplicationStep
           form={form}
           disabled={!isEditable}
-          onBack={() => setStep(0)}
+          sections={EDIT_STEPS[step - 1].sections}
+          stepNumber={step + 1}
+          isLastEditStep={step === EDIT_STEPS.length}
+          onBack={() => setStep(step - 1)}
           onSaveDraft={handleSaveDraft}
-          onContinue={handleContinueFromProposal}
+          onContinue={step === EDIT_STEPS.length ? handleGoToReview : handleContinueEdit(step)}
           isSaving={updateMut.isPending || createMut.isPending}
           showDiscard={!!activeId && isEditable}
           onDiscard={handleDiscard}
           isDiscarding={deleteMut.isPending}
           onGithubBlur={handleGithubBlur}
           githubStatus={githubStatus}
-          githubRequired={githubRequired}
+          isDeveloper={isDeveloper}
         />
       )}
 
-      {step === 2 && selectedType && (
+      {step === REVIEW_STEP && selectedType && (
         <ReviewStep
           track={TRACK_BY_VALUE[selectedType]}
           fields={values}
+          isDeveloper={isDeveloper}
           reviewerRemarks={isResubmit ? currentApp?.reviewerRemarks ?? null : null}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(EDIT_STEPS.length)}
           onSubmit={handleSubmit}
           isSubmitting={submitMut.isPending || updateMut.isPending}
           isSubmitDisabled={!isEditable || submitMut.isPending}
@@ -754,7 +966,7 @@ const TrackStep = ({
         variant="caption"
         sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
       >
-        STEP 1 OF 3
+        STEP 1 OF {TOTAL_STEPS}
       </Typography>
       <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
         Choose your fellowship track
@@ -861,7 +1073,21 @@ type TextFieldName =
   | 'plan'
   | 'mentorName'
   | 'mentorContact'
-  | 'mentorTestimonial';
+  | 'mentorTestimonial'
+  | 'projectName'
+  | 'projectGithubLink'
+  | 'location'
+  | 'academicBackground'
+  | 'graduationYear'
+  | 'professionalExperience'
+  | 'bitcoinContributions'
+  | 'bitcoinMotivation'
+  | 'bitcoinOssGoal'
+  | 'additionalInfo'
+  | 'questionsForBitshala';
+
+// Multi-value chip fields.
+type TagFieldName = 'domains' | 'codingLanguages' | 'educationInterests';
 
 // A react-hook-form Controller wrapped around an MUI TextField. Shows the
 // field's validation error, or a character counter / fallback helper text.
@@ -899,9 +1125,97 @@ const ControlledTextField = ({
   />
 );
 
-const ProposalStep = ({
+// A multi-value chip input (domains / coding languages / education interests).
+// Free-text entries are added on Enter, trimmed, de-blanked and count-capped.
+const ControlledChips = ({
+  control,
+  name,
+  disabled,
+  placeholder,
+}: {
+  control: Control<ProposalFields>;
+  name: TagFieldName;
+  disabled?: boolean;
+  placeholder?: string;
+}) => (
+  <Controller
+    control={control}
+    name={name}
+    render={({ field, fieldState }) => {
+      const values = (field.value as string[] | undefined) ?? [];
+      return (
+        <Autocomplete
+          multiple
+          freeSolo
+          disableClearable
+          options={[] as string[]}
+          value={values}
+          disabled={disabled}
+          onChange={(_, next) =>
+            field.onChange(
+              (next as string[]).map((s) => s.trim()).filter(Boolean).slice(0, MAX_TAGS),
+            )
+          }
+          onBlur={field.onBlur}
+          renderTags={(value, getTagProps) =>
+            value.map((option, index) => {
+              const { key, ...tagProps } = getTagProps({ index });
+              return <Chip key={key} label={option} size="small" {...tagProps} />;
+            })
+          }
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              inputRef={field.ref}
+              placeholder={values.length ? '' : placeholder}
+              error={!!fieldState.error}
+              helperText={fieldState.error?.message ?? ' '}
+            />
+          )}
+        />
+      );
+    }}
+  />
+);
+
+// A grouped section of the application form, rendered as its own card so the
+// combined form reads as clear categories rather than one long list.
+const SectionCard = ({
+  title,
+  caption,
+  children,
+}: {
+  title: string;
+  caption?: string;
+  children: React.ReactNode;
+}) => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.75,
+      bgcolor: 'background.paper',
+      p: { xs: 2.5, md: 3.5 },
+    }}
+  >
+    <Typography variant="h6" sx={{ fontWeight: 700, mb: caption ? 0.5 : 2.5 }}>
+      {title}
+    </Typography>
+    {caption && (
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2.5 }}>
+        {caption}
+      </Typography>
+    )}
+    {children}
+  </Box>
+);
+
+const ApplicationStep = ({
   form,
   disabled,
+  sections,
+  stepNumber,
+  isLastEditStep,
   onBack,
   onSaveDraft,
   onContinue,
@@ -911,10 +1225,16 @@ const ProposalStep = ({
   isDiscarding,
   onGithubBlur,
   githubStatus,
-  githubRequired,
+  isDeveloper,
 }: {
   form: UseFormReturn<ProposalFields>;
   disabled: boolean;
+  /** Which category cards this step renders. */
+  sections: SectionKey[];
+  /** 1-based position in the full stepper (Track is step 1). */
+  stepNumber: number;
+  /** The last editing step continues to Review rather than another edit step. */
+  isLastEditStep: boolean;
   onBack: () => void;
   onSaveDraft: () => void;
   onContinue: () => void;
@@ -924,7 +1244,7 @@ const ProposalStep = ({
   isDiscarding: boolean;
   onGithubBlur: () => void;
   githubStatus: GithubCheckStatus | null;
-  githubRequired: boolean;
+  isDeveloper: boolean;
 }) => {
   const { control, getValues, setValue, formState } = form;
   const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
@@ -938,199 +1258,419 @@ const ProposalStep = ({
     setValue('links', next.length ? next : [''], { shouldDirty: true, shouldValidate: true });
   };
 
+  const optionalSuffix = isDeveloper ? '' : ' (optional)';
+
   return (
     <Box
       sx={{
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' },
         gap: 2.5,
+        alignItems: 'start',
       }}
     >
-      <Box
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-          p: { xs: 2.5, md: 3.5 },
-        }}
-      >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
-          >
-            STEP 2 OF 3
-          </Typography>
-        </Stack>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-          Proposal
+      <Stack spacing={2.5}>
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
+        >
+          STEP {stepNumber} OF {TOTAL_STEPS}
         </Typography>
 
-        <FieldLabel>Project title</FieldLabel>
-        <ControlledTextField
-          control={control}
-          name="title"
-          counter
-          counterLimit={TITLE_LIMIT}
-          fullWidth
-          disabled={disabled}
-          placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
-          slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-          sx={{ mb: 2.5 }}
-        />
+        {/* ---- Proposal ---- */}
+        {sections.includes('proposal') && (
+        <SectionCard title="Proposal">
+          <FieldLabel>Project title</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="title"
+            counter
+            counterLimit={TITLE_LIMIT}
+            fullWidth
+            disabled={disabled}
+            placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
+            slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
 
-        <FieldLabel>Problem statement</FieldLabel>
-        <ControlledTextField
-          control={control}
-          name="problemStatement"
-          counter
-          fullWidth
-          multiline
-          minRows={4}
-          disabled={disabled}
-          placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
-          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          sx={{ mb: 2.5 }}
-        />
+          <FieldLabel>Problem statement</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="problemStatement"
+            counter
+            fullWidth
+            multiline
+            minRows={4}
+            disabled={disabled}
+            placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
 
-        <FieldLabel>6-month plan & milestones</FieldLabel>
-        <ControlledTextField
-          control={control}
-          name="plan"
-          counter
-          fullWidth
-          multiline
-          minRows={6}
-          disabled={disabled}
-          placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
-          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          sx={{ mb: 2.5 }}
-        />
+          <FieldLabel>6-month plan & milestones</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="plan"
+            counter
+            fullWidth
+            multiline
+            minRows={6}
+            disabled={disabled}
+            placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
-          <Box sx={{ flex: 1 }}>
-            <FieldLabel>Mentor name</FieldLabel>
-            <ControlledTextField
-              control={control}
-              name="mentorName"
-              fullWidth
-              disabled={disabled}
-              placeholder="Satoshi Rao"
-              slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-            />
-          </Box>
-          <Box sx={{ flex: 1 }}>
-            <FieldLabel>Mentor contact</FieldLabel>
-            <ControlledTextField
-              control={control}
-              name="mentorContact"
-              fullWidth
-              disabled={disabled}
-              placeholder="Email, Telegram or Discord"
-              slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-            />
-          </Box>
-        </Stack>
-
-        <FieldLabel>Mentor testimonial</FieldLabel>
-        <ControlledTextField
-          control={control}
-          name="mentorTestimonial"
-          counter
-          fullWidth
-          multiline
-          minRows={3}
-          disabled={disabled}
-          placeholder="A short note from your mentor on your work and why they back this proposal."
-          slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-          sx={{ mb: 2.5 }}
-        />
-
-        <FieldLabel>GitHub username{githubRequired ? '' : ' (optional)'}</FieldLabel>
-        <Controller
-          control={control}
-          name="github"
-          render={({ field, fieldState }) => (
-            <TextField
-              fullWidth
-              name={field.name}
-              value={field.value ?? ''}
-              onChange={field.onChange}
-              onBlur={() => {
-                field.onBlur();
-                onGithubBlur();
-              }}
-              inputRef={field.ref}
-              disabled={disabled}
-              placeholder="aarav-m or https://github.com/aarav-m"
-              error={!!fieldState.error}
-              helperText={fieldState.error?.message ?? ' '}
-              sx={{ mb: githubStatus ? 0 : 2 }}
-            />
-          )}
-        />
-        <GithubCheckHint status={githubStatus} />
-
-        <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
-        <Stack spacing={1.25} sx={{ mb: 1 }}>
-          {links.map((_, idx) => {
-            const showRemove = links.length > 1;
-            return (
-              <Stack key={idx} direction="row" spacing={1} alignItems="flex-start">
-                <Controller
-                  control={control}
-                  name={`links.${idx}`}
-                  render={({ field, fieldState }) => (
-                    <TextField
-                      fullWidth
-                      name={field.name}
-                      value={field.value ?? ''}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      inputRef={field.ref}
-                      disabled={disabled}
-                      placeholder="https://linkedin.com/in/aarav-m"
-                      error={!!fieldState.error}
-                      helperText={fieldState.error?.message ?? ' '}
-                    />
+          <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
+          <Stack spacing={1.25} sx={{ mb: 1 }}>
+            {links.map((_, idx) => {
+              const showRemove = links.length > 1;
+              return (
+                <Stack key={idx} direction="row" spacing={1} alignItems="flex-start">
+                  <Controller
+                    control={control}
+                    name={`links.${idx}`}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        fullWidth
+                        name={field.name}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        inputRef={field.ref}
+                        disabled={disabled}
+                        placeholder="https://linkedin.com/in/aarav-m"
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message ?? ' '}
+                      />
+                    )}
+                  />
+                  {showRemove && !disabled && (
+                    <IconButton
+                      aria-label="Remove link"
+                      onClick={() => removeLink(idx)}
+                      sx={{ mt: 0.5, color: 'text.secondary' }}
+                    >
+                      <X size={16} />
+                    </IconButton>
                   )}
-                />
-                {showRemove && !disabled && (
-                  <IconButton
-                    aria-label="Remove link"
-                    onClick={() => removeLink(idx)}
-                    sx={{ mt: 0.5, color: 'text.secondary' }}
-                  >
-                    <X size={16} />
-                  </IconButton>
-                )}
-              </Stack>
-            );
-          })}
-        </Stack>
-        {linksArrayError && (
-          <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mb: 1 }}>
-            {linksArrayError}
-          </Typography>
+                </Stack>
+              );
+            })}
+          </Stack>
+          {linksArrayError && (
+            <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mb: 1 }}>
+              {linksArrayError}
+            </Typography>
+          )}
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<Plus size={14} />}
+            disabled={disabled || links.length >= MAX_LINKS}
+            onClick={addLink}
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            Add another link
+          </Button>
+        </SectionCard>
         )}
-        <Button
-          size="small"
-          variant="text"
-          startIcon={<Plus size={14} />}
-          disabled={disabled || links.length >= MAX_LINKS}
-          onClick={addLink}
-          sx={{ mb: 2, alignSelf: 'flex-start' }}
-        >
-          Add another link
-        </Button>
 
+        {/* ---- Mentor ---- */}
+        {sections.includes('mentor') && (
+        <SectionCard title="Mentor">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
+            <Box sx={{ flex: 1 }}>
+              <FieldLabel>Mentor name</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="mentorName"
+                fullWidth
+                disabled={disabled}
+                placeholder="Satoshi Rao"
+                slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+              />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <FieldLabel>Mentor contact</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="mentorContact"
+                fullWidth
+                disabled={disabled}
+                placeholder="Email, Telegram or Discord"
+                slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+              />
+            </Box>
+          </Stack>
+
+          <FieldLabel>Mentor testimonial (optional)</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="mentorTestimonial"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="A short note from your mentor on your work and why they back this proposal."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          />
+        </SectionCard>
+        )}
+
+        {/* ---- Project (developer track) ---- */}
+        {sections.includes('project') && isDeveloper && (
+          <SectionCard title="Project" caption="Tell us about the open-source project you'll work on.">
+            <FieldLabel>Project name</FieldLabel>
+            <ControlledTextField
+              control={control}
+              name="projectName"
+              fullWidth
+              disabled={disabled}
+              placeholder="Bitcoin Core"
+              slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+              sx={{ mb: 2.5 }}
+            />
+
+            <FieldLabel>Project GitHub link</FieldLabel>
+            <ControlledTextField
+              control={control}
+              name="projectGithubLink"
+              fullWidth
+              disabled={disabled}
+              placeholder="https://github.com/bitcoin/bitcoin"
+              slotProps={{ htmlInput: { maxLength: LINK_LIMIT } }}
+              sx={{ mb: 2.5 }}
+            />
+
+            <FieldLabel>Your GitHub username</FieldLabel>
+            <Controller
+              control={control}
+              name="github"
+              render={({ field, fieldState }) => (
+                <TextField
+                  fullWidth
+                  name={field.name}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  onBlur={() => {
+                    field.onBlur();
+                    onGithubBlur();
+                  }}
+                  inputRef={field.ref}
+                  disabled={disabled}
+                  placeholder="aarav-m or https://github.com/aarav-m"
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message ?? ' '}
+                  sx={{ mb: githubStatus ? 0 : 0.5 }}
+                />
+              )}
+            />
+            <GithubCheckHint status={githubStatus} />
+          </SectionCard>
+        )}
+
+        {/* ---- About you ---- */}
+        {sections.includes('about') && (
+        <SectionCard title="About you">
+          {!isDeveloper && (
+            <>
+              <FieldLabel>GitHub username (optional)</FieldLabel>
+              <Controller
+                control={control}
+                name="github"
+                render={({ field, fieldState }) => (
+                  <TextField
+                    fullWidth
+                    name={field.name}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onBlur={() => {
+                      field.onBlur();
+                      onGithubBlur();
+                    }}
+                    inputRef={field.ref}
+                    disabled={disabled}
+                    placeholder="aarav-m or https://github.com/aarav-m"
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message ?? ' '}
+                    sx={{ mb: githubStatus ? 0 : 0.5 }}
+                  />
+                )}
+              />
+              <GithubCheckHint status={githubStatus} />
+            </>
+          )}
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
+            <Box sx={{ flex: 2 }}>
+              <FieldLabel>Location (optional)</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="location"
+                fullWidth
+                disabled={disabled}
+                placeholder="Bengaluru, India"
+                helperText="Saved to your profile."
+                slotProps={{ htmlInput: { maxLength: LOCATION_LIMIT } }}
+              />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <FieldLabel>Graduation year</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="graduationYear"
+                fullWidth
+                disabled={disabled}
+                placeholder="2024"
+                slotProps={{ htmlInput: { maxLength: 4, inputMode: 'numeric' } }}
+              />
+            </Box>
+          </Stack>
+
+          <FieldLabel>Academic background</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="academicBackground"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="Degrees, institutions, relevant coursework."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
+
+          <FieldLabel>Professional experience</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="professionalExperience"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="Roles, companies, open-source work, notable projects."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
+
+          <FieldLabel>Domains</FieldLabel>
+          <ControlledChips
+            control={control}
+            name="domains"
+            disabled={disabled}
+            placeholder="Type a domain and press Enter (e.g. consensus, P2P)"
+          />
+
+          {isDeveloper && (
+            <>
+              <FieldLabel>Coding languages</FieldLabel>
+              <ControlledChips
+                control={control}
+                name="codingLanguages"
+                disabled={disabled}
+                placeholder="Type a language and press Enter (e.g. C++, Rust)"
+              />
+            </>
+          )}
+
+          <FieldLabel>Education interests</FieldLabel>
+          <ControlledChips
+            control={control}
+            name="educationInterests"
+            disabled={disabled}
+            placeholder="Type an interest and press Enter (e.g. mining, privacy)"
+          />
+        </SectionCard>
+        )}
+
+        {/* ---- Bitcoin ---- */}
+        {sections.includes('bitcoin') && (
+        <SectionCard title="Bitcoin">
+          <FieldLabel>Bitcoin contributions</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="bitcoinContributions"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="PRs, reviews, writing, events — what you've done in the Bitcoin space."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
+
+          <FieldLabel>Bitcoin motivation</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="bitcoinMotivation"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="Why Bitcoin, and why now?"
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
+
+          <FieldLabel>Bitcoin OSS goal</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="bitcoinOssGoal"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="What do you want to achieve in Bitcoin open-source over the fellowship and beyond?"
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          />
+        </SectionCard>
+        )}
+
+        {/* ---- Anything else ---- */}
+        {sections.includes('anythingElse') && (
+        <SectionCard title="Anything else">
+          <FieldLabel>Additional info{optionalSuffix}</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="additionalInfo"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="Anything else you'd like the reviewers to know."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+            sx={{ mb: 2.5 }}
+          />
+
+          <FieldLabel>Questions for Bitshala{optionalSuffix}</FieldLabel>
+          <ControlledTextField
+            control={control}
+            name="questionsForBitshala"
+            counter
+            fullWidth
+            multiline
+            minRows={3}
+            disabled={disabled}
+            placeholder="Anything you'd like to ask us."
+            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+          />
+        </SectionCard>
+        )}
+
+        {/* ---- Actions ---- */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1.25}
           justifyContent="space-between"
           alignItems={{ xs: 'stretch', sm: 'center' }}
-          sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider' }}
         >
           <Button
             onClick={onBack}
@@ -1160,13 +1700,13 @@ const ProposalStep = ({
               disabled={disabled || isSaving}
               endIcon={<ArrowRight size={16} />}
             >
-              {isSaving ? 'Saving…' : 'Continue'}
+              {isSaving ? 'Saving…' : isLastEditStep ? 'Review' : 'Continue'}
             </Button>
           </Stack>
         </Stack>
-      </Box>
+      </Stack>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, position: { md: 'sticky' }, top: { md: 16 } }}>
         <Box
           sx={{
             border: '1px solid',
@@ -1304,9 +1844,63 @@ const FieldLabel = ({ children }: { children: React.ReactNode }) => (
 
 // ---- Step 3: Review ----
 
+const Dash = () => (
+  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+    —
+  </Typography>
+);
+
+// A group heading separating one review category from the next.
+const ReviewGroupLabel = ({ children }: { children: React.ReactNode }) => (
+  <Typography
+    variant="caption"
+    sx={{
+      color: 'text.primary',
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      display: 'block',
+      pt: 1,
+      borderTop: '1px solid',
+      borderColor: 'divider',
+    }}
+  >
+    {children}
+  </Typography>
+);
+
+const ReviewText = ({ label, value }: { label: string; value: string }) => (
+  <Box>
+    <FieldLabel>{label}</FieldLabel>
+    {value.trim() ? <Typography>{value}</Typography> : <Dash />}
+  </Box>
+);
+
+const ReviewLong = ({ label, text }: { label: string; text: string }) => (
+  <Box>
+    <FieldLabel>{label}</FieldLabel>
+    {text.trim() ? <ExpandableText text={text} /> : <Dash />}
+  </Box>
+);
+
+const ReviewChips = ({ label, values }: { label: string; values: string[] }) => (
+  <Box>
+    <FieldLabel>{label}</FieldLabel>
+    {values.length === 0 ? (
+      <Dash />
+    ) : (
+      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ rowGap: 1 }}>
+        {values.map((v) => (
+          <Chip key={v} label={v} size="small" />
+        ))}
+      </Stack>
+    )}
+  </Box>
+);
+
 const ReviewStep = ({
   track,
   fields,
+  isDeveloper,
   reviewerRemarks,
   onBack,
   onSubmit,
@@ -1316,6 +1910,7 @@ const ReviewStep = ({
 }: {
   track: TrackOption;
   fields: ProposalFields;
+  isDeveloper: boolean;
   reviewerRemarks: string | null;
   onBack: () => void;
   onSubmit: () => void;
@@ -1323,6 +1918,7 @@ const ReviewStep = ({
   isSubmitDisabled: boolean;
   submitLabel: string;
 }) => {
+  const links = fields.links.map((l) => l.trim()).filter(Boolean);
   return (
     <Box
       sx={{
@@ -1337,7 +1933,7 @@ const ReviewStep = ({
         variant="caption"
         sx={{ color: 'text.secondary', letterSpacing: 1.2, fontWeight: 600 }}
       >
-        STEP 3 OF 3
+        STEP {TOTAL_STEPS} OF {TOTAL_STEPS}
       </Typography>
       <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, mb: 3 }}>
         Review & submit
@@ -1352,43 +1948,35 @@ const ReviewStep = ({
       <Stack spacing={2.5}>
         <Box>
           <FieldLabel>Track</FieldLabel>
-          <Box>
-            <Typography sx={{ fontWeight: 600 }}>{track.title}</Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {track.description}
-            </Typography>
-          </Box>
+          <Typography sx={{ fontWeight: 600 }}>{track.title}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {track.description}
+          </Typography>
         </Box>
 
-        {fields.title.trim() && (
-          <Box>
-            <FieldLabel>Project title</FieldLabel>
-            <Typography>{fields.title}</Typography>
-          </Box>
-        )}
-
+        <ReviewGroupLabel>Proposal</ReviewGroupLabel>
+        <ReviewText label="Project title" value={fields.title} />
+        <ReviewLong label="Problem statement" text={fields.problemStatement} />
+        <ReviewLong label="6-month plan & milestones" text={fields.plan} />
         <Box>
-          <FieldLabel>Problem statement</FieldLabel>
-          {fields.problemStatement ? (
-            <ExpandableText text={fields.problemStatement} />
+          <FieldLabel>Links</FieldLabel>
+          {links.length === 0 ? (
+            <Dash />
           ) : (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              —
-            </Typography>
+            <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
+              {links.map((l) => (
+                <LinkChip
+                  key={l}
+                  href={l.startsWith('http') ? l : `https://${l}`}
+                  icon={<ExternalLink size={13} />}
+                  label={l.replace(/^https?:\/\//, '')}
+                />
+              ))}
+            </Stack>
           )}
         </Box>
 
-        <Box>
-          <FieldLabel>6-month plan & milestones</FieldLabel>
-          {fields.plan ? (
-            <ExpandableText text={fields.plan} />
-          ) : (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              —
-            </Typography>
-          )}
-        </Box>
-
+        <ReviewGroupLabel>Mentor</ReviewGroupLabel>
         <Box>
           <FieldLabel>Mentor</FieldLabel>
           {fields.mentorName || fields.mentorContact ? (
@@ -1409,12 +1997,30 @@ const ReviewStep = ({
               )}
             </>
           ) : (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              —
-            </Typography>
+            <Dash />
           )}
         </Box>
 
+        {isDeveloper && (
+          <>
+            <ReviewGroupLabel>Project</ReviewGroupLabel>
+            <ReviewText label="Project name" value={fields.projectName} />
+            <Box>
+              <FieldLabel>Project GitHub link</FieldLabel>
+              {fields.projectGithubLink.trim() ? (
+                <LinkChip
+                  href={fields.projectGithubLink}
+                  icon={<Github size={13} />}
+                  label={fields.projectGithubLink.replace(/^https?:\/\//, '')}
+                />
+              ) : (
+                <Dash />
+              )}
+            </Box>
+          </>
+        )}
+
+        <ReviewGroupLabel>About you</ReviewGroupLabel>
         <Box>
           <FieldLabel>GitHub username</FieldLabel>
           {fields.github ? (
@@ -1424,33 +2030,33 @@ const ReviewStep = ({
               label={`@${normalizeGithub(fields.github)}`}
             />
           ) : (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              —
-            </Typography>
+            <Dash />
           )}
         </Box>
-        <Box>
-          <FieldLabel>Links</FieldLabel>
-          {fields.links.filter((l) => l.trim()).length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              —
-            </Typography>
-          ) : (
-            <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ rowGap: 1 }}>
-              {fields.links
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((l) => (
-                  <LinkChip
-                    key={l}
-                    href={l.startsWith('http') ? l : `https://${l}`}
-                    icon={<ExternalLink size={13} />}
-                    label={l.replace(/^https?:\/\//, '')}
-                  />
-                ))}
-            </Stack>
-          )}
-        </Box>
+        <ReviewText label="Location" value={fields.location} />
+        <ReviewText label="Graduation year" value={fields.graduationYear} />
+        <ReviewLong label="Academic background" text={fields.academicBackground} />
+        <ReviewLong label="Professional experience" text={fields.professionalExperience} />
+        <ReviewChips label="Domains" values={fields.domains} />
+        {isDeveloper && <ReviewChips label="Coding languages" values={fields.codingLanguages} />}
+        <ReviewChips label="Education interests" values={fields.educationInterests} />
+
+        <ReviewGroupLabel>Bitcoin</ReviewGroupLabel>
+        <ReviewLong label="Bitcoin contributions" text={fields.bitcoinContributions} />
+        <ReviewLong label="Bitcoin motivation" text={fields.bitcoinMotivation} />
+        <ReviewLong label="Bitcoin OSS goal" text={fields.bitcoinOssGoal} />
+
+        {(fields.additionalInfo.trim() || fields.questionsForBitshala.trim()) && (
+          <>
+            <ReviewGroupLabel>Anything else</ReviewGroupLabel>
+            {fields.additionalInfo.trim() && (
+              <ReviewLong label="Additional info" text={fields.additionalInfo} />
+            )}
+            {fields.questionsForBitshala.trim() && (
+              <ReviewLong label="Questions for Bitshala" text={fields.questionsForBitshala} />
+            )}
+          </>
+        )}
       </Stack>
 
       <Stack

@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Chip, Stack, Typography } from '@mui/material';
 import { ExternalLink, Github } from 'lucide-react';
 import ExpandableText from './ExpandableText';
 import LinkChip from './LinkChip';
@@ -48,6 +48,14 @@ const LongText = ({ text, expandable }: { text: string; expandable: boolean }) =
  * Used by the reviewer detail pane, the fellowships manage screen dialog and
  * the print/export view, so the proposal renders the same everywhere.
  */
+const ChipRow = ({ values }: { values: string[] }) => (
+  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ rowGap: 1 }}>
+    {values.map((v) => (
+      <Chip key={v} label={v} size="small" />
+    ))}
+  </Stack>
+);
+
 export const ProposalView = ({
   proposal,
   expandable = false,
@@ -58,6 +66,9 @@ export const ProposalView = ({
 }) => {
   const github = proposal?.github ?? '';
   const links = (proposal?.links ?? []).map((l) => l.trim()).filter(Boolean);
+  const domains = proposal?.domains ?? [];
+  const codingLanguages = proposal?.codingLanguages ?? [];
+  const educationInterests = proposal?.educationInterests ?? [];
 
   return (
     <>
@@ -107,6 +118,91 @@ export const ProposalView = ({
               />
             ))}
           </Stack>
+        </ProposalSection>
+      )}
+
+      {(proposal?.projectName || proposal?.projectGithubLink) && (
+        <ProposalSection title="Project">
+          <Typography variant="body2" sx={{ color: 'text.primary' }}>
+            {proposal.projectName || '—'}
+          </Typography>
+          {proposal.projectGithubLink && (
+            <Box sx={{ mt: 1 }}>
+              <LinkChip
+                href={proposal.projectGithubLink}
+                icon={<Github size={13} />}
+                label={proposal.projectGithubLink.replace(/^https?:\/\//, '')}
+              />
+            </Box>
+          )}
+        </ProposalSection>
+      )}
+
+      {proposal?.academicBackground && (
+        <ProposalSection title="Academic background">
+          <LongText text={proposal.academicBackground} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {proposal?.graduationYear != null && (
+        <ProposalSection title="Graduation year">
+          <Typography variant="body2" sx={{ color: 'text.primary' }}>
+            {proposal.graduationYear}
+          </Typography>
+        </ProposalSection>
+      )}
+
+      {proposal?.professionalExperience && (
+        <ProposalSection title="Professional experience">
+          <LongText text={proposal.professionalExperience} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {domains.length > 0 && (
+        <ProposalSection title="Domains">
+          <ChipRow values={domains} />
+        </ProposalSection>
+      )}
+
+      {codingLanguages.length > 0 && (
+        <ProposalSection title="Coding languages">
+          <ChipRow values={codingLanguages} />
+        </ProposalSection>
+      )}
+
+      {educationInterests.length > 0 && (
+        <ProposalSection title="Education interests">
+          <ChipRow values={educationInterests} />
+        </ProposalSection>
+      )}
+
+      {proposal?.bitcoinContributions && (
+        <ProposalSection title="Bitcoin contributions">
+          <LongText text={proposal.bitcoinContributions} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {proposal?.bitcoinMotivation && (
+        <ProposalSection title="Bitcoin motivation">
+          <LongText text={proposal.bitcoinMotivation} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {proposal?.bitcoinOssGoal && (
+        <ProposalSection title="Bitcoin OSS goal">
+          <LongText text={proposal.bitcoinOssGoal} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {proposal?.additionalInfo && (
+        <ProposalSection title="Additional info">
+          <LongText text={proposal.additionalInfo} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      {proposal?.questionsForBitshala && (
+        <ProposalSection title="Questions for Bitshala">
+          <LongText text={proposal.questionsForBitshala} expandable={expandable} />
         </ProposalSection>
       )}
     </>
