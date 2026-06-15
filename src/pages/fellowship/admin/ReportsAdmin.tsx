@@ -11,6 +11,7 @@ import {
   Drawer,
   IconButton,
   InputAdornment,
+  Link,
   MenuItem,
   Stack,
   TextField,
@@ -39,6 +40,7 @@ import {
 import { SortOrder } from '../../../types/api';
 import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
+import { parseReportContent } from '../../../utils/reportContent';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_PAGE_SIZE = 25;
@@ -750,6 +752,11 @@ const ReportDetail = ({
 }) => {
   const contentQuery = useReportContent(report.id);
   const project = useFellowshipProjectTitle(fellowship) || null;
+  const { links, body } = useMemo(
+    () => parseReportContent(contentQuery.data?.content ?? ''),
+    [contentQuery.data?.content],
+  );
+  const realLinks = links.filter((l) => l.trim());
   return (
     <Box sx={{ width: '100%', p: { xs: 3, md: 5 } }}>
       <Button
@@ -782,7 +789,37 @@ const ReportDetail = ({
       </Stack>
 
       {contentQuery.isLoading && <CircularProgress size={20} />}
-      {contentQuery.data && <MarkdownView content={contentQuery.data.content} />}
+      {contentQuery.data && (
+        <>
+          {body.trim() ? (
+            <MarkdownView content={body} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              This report has no content.
+            </Typography>
+          )}
+          {realLinks.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                Pull request / issue links
+              </Typography>
+              <Stack spacing={0.5}>
+                {realLinks.map((link, i) => (
+                  <Link
+                    key={i}
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{ wordBreak: 'break-all', fontSize: '0.88rem' }}
+                  >
+                    {link}
+                  </Link>
+                ))}
+              </Stack>
+            </Box>
+          )}
+        </>
+      )}
 
       {report.reviewedByName && report.reviewerRemarks && (
         <Alert severity="info" sx={{ mt: 3 }}>
