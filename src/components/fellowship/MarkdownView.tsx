@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 interface Props {
   content: string;
@@ -201,7 +201,14 @@ const renderMarkdown = (md: string): ReactNode[] => {
           my: 1.5,
         }}
       >
-        {renderInline(paraBuf.join(' '))}
+        {/* Preserve single newlines the author typed as line breaks rather
+            than collapsing the paragraph onto one line. */}
+        {paraBuf.map((ln, idx) => (
+          <Fragment key={idx}>
+            {idx > 0 && <br />}
+            {renderInline(ln)}
+          </Fragment>
+        ))}
       </Typography>,
     );
   }

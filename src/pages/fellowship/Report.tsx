@@ -7,6 +7,11 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Link,
   MenuItem,
@@ -39,6 +44,7 @@ import {
   WORD_LIMIT,
   composeReportContent,
   countWords,
+  findDuplicateLinkIndices,
   isValidGithubLink,
   parseReportContent,
 } from '../../utils/reportContent';
@@ -83,6 +89,8 @@ const Report = () => {
   const [content, setContent] = useState('');
   const [prLinks, setPrLinks] = useState<string[]>(['']);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  // Submitting is irreversible (locks the report for review), so confirm first.
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 50 });
   // Reports can only be filed against an active fellowship.
@@ -150,13 +158,17 @@ const Report = () => {
   const allLinksValid = prLinks.every((l) => !l.trim() || isValidGithubLink(l));
   const validLinks = prLinks.filter((l) => isValidGithubLink(l));
   const hasValidLink = validLinks.length > 0 && allLinksValid;
+  // The same PR/issue link must not be listed twice.
+  const duplicateLinkIndices = useMemo(() => findDuplicateLinkIndices(prLinks), [prLinks]);
+  const hasDuplicateLinks = duplicateLinkIndices.size > 0;
   const canSubmit =
     isEditable &&
     !!fellowshipId &&
     fellowshipActive &&
     !!content.trim() &&
     !overWordLimit &&
-    hasValidLink;
+    hasValidLink &&
+    !hasDuplicateLinks;
 
   const updateLink = (index: number, value: string) =>
     setPrLinks((prev) => prev.map((l, i) => (i === index ? value : l)));
@@ -177,6 +189,10 @@ const Report = () => {
     // Links are optional while drafting, but any provided must be valid.
     if (!allLinksValid) {
       setToast({ kind: 'error', msg: 'Enter valid GitHub pull request or issue links.' });
+      return;
+    }
+    if (hasDuplicateLinks) {
+      setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
       return;
     }
     const composed = composeReportContent(prLinks, content);
@@ -208,6 +224,10 @@ const Report = () => {
     }
     if (!hasValidLink) {
       setToast({ kind: 'error', msg: 'Add at least one valid GitHub pull request or issue link.' });
+      return;
+    }
+    if (hasDuplicateLinks) {
+      setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
       return;
     }
     const composed = composeReportContent(prLinks, content);
@@ -328,6 +348,7 @@ const Report = () => {
                     <Stack spacing={1.5}>
                       {prLinks.map((link, i) => {
                         const invalid = !!link.trim() && !isValidGithubLink(link);
+                        const duplicate = duplicateLinkIndices.has(i);
                         return (
                           <Stack key={i} direction="row" spacing={1} alignItems="flex-start">
                             <TextField
@@ -336,9 +357,13 @@ const Report = () => {
                               value={link}
                               onChange={(e) => updateLink(i, e.target.value)}
                               disabled={!!reportId && reportContent.isLoading}
-                              error={invalid}
+                              error={invalid || duplicate}
                               helperText={
-                                invalid ? 'Enter a valid GitHub pull request or issue link.' : ' '
+                                invalid
+                                  ? 'Enter a valid GitHub pull request or issue link.'
+                                  : duplicate
+                                    ? 'This link has already been added.'
+                                    : ' '
                               }
                             />
                             <IconButton
@@ -399,7 +424,7 @@ const Report = () => {
                     </Button>
                     <Button
                       variant="contained"
-                      onClick={handleSubmit}
+                      onClick={() => setConfirmSubmitOpen(true)}
                       disabled={
                         !canSubmit ||
                         submitMut.isPending ||
@@ -455,6 +480,36 @@ const Report = () => {
               )}
             </CardContent>
           </Card>
+
+      <Dialog
+        open={confirmSubmitOpen}
+        onClose={() => setConfirmSubmitOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Submit report for review?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Once submitted, this report is locked and sent for review — you won't be able to
+            edit it. Make sure your links and write-up are complete before continuing.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setConfirmSubmitOpen(false)} disabled={submitMut.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmSubmitOpen(false);
+              void handleSubmit();
+            }}
+            disabled={submitMut.isPending || createMut.isPending || updateMut.isPending}
+          >
+            {submitMut.isPending ? 'Submitting…' : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </FellowshipPageLayout>
   );
 };
