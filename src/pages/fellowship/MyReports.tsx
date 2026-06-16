@@ -21,6 +21,7 @@ import { useMyFellowships, useMyReports, useReportContent } from '../../hooks/fe
 import { useFellowshipProjectTitle } from '../../hooks/useFellowshipProjectTitle';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
 import { parseReportContent } from '../../utils/reportContent';
+import { extractErrorMessage } from '../../utils/errorUtils';
 import {
   FellowshipReportStatus,
   FellowshipStatus,
@@ -232,6 +233,7 @@ const MyReports = () => {
   const [viewing, setViewing] = useState<GetFellowshipReportResponseDto | null>(null);
   const reportsQuery = useMyReports({ page: 0, pageSize: 100 });
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 20 });
+  const loadError = reportsQuery.isError ? reportsQuery.error : null;
 
   const reports = useMemo(() => {
     const records = reportsQuery.data?.records ?? [];
@@ -253,6 +255,12 @@ const MyReports = () => {
       subtitle="Monthly progress reports for your fellowship."
       hideIcon
     >
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Couldn't load your reports: {extractErrorMessage(loadError)}
+        </Alert>
+      )}
+
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress size={22} />
