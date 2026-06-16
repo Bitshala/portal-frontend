@@ -5,6 +5,11 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Stack,
   Typography,
 } from '@mui/material';
@@ -50,6 +55,8 @@ const MyApplications = () => {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Id of the draft awaiting discard confirmation; null when the dialog is closed.
+  const [discardId, setDiscardId] = useState<string | null>(null);
 
   const applications = useMemo(() => {
     const records = data?.records ?? [];
@@ -86,14 +93,17 @@ const MyApplications = () => {
     enabled: !!effectiveSelectedId,
   });
 
-  const handleDiscard = async (id: string) => {
-    if (!confirm('Discard this draft? This cannot be undone.')) return;
+  const confirmDiscard = async () => {
+    if (!discardId) return;
+    const id = discardId;
     setActionError(null);
     try {
       await deleteMut.mutateAsync({ id });
       if (selectedId === id) setSelectedId(null);
+      setDiscardId(null);
     } catch (e) {
       setActionError(extractErrorMessage(e));
+      setDiscardId(null);
     }
   };
 
@@ -196,7 +206,7 @@ const MyApplications = () => {
                 proposal={proposalQuery.data}
                 isLoadingProposal={proposalQuery.isLoading}
                 onContinue={() => navigate(`/fellowship/apply?appId=${selected.id}`)}
-                onDiscard={() => handleDiscard(selected.id)}
+                onDiscard={() => setDiscardId(selected.id)}
                 onResubmit={() => handleResubmit(selected.id)}
                 isDiscarding={deleteMut.isPending}
                 isResubmitting={submitMut.isPending}
@@ -207,6 +217,33 @@ const MyApplications = () => {
           </Box>
         </>
       )}
+
+      <Dialog
+        open={!!discardId}
+        onClose={() => !deleteMut.isPending && setDiscardId(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Discard this draft?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will permanently delete the draft application. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setDiscardId(null)} disabled={deleteMut.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => void confirmDiscard()}
+            disabled={deleteMut.isPending}
+          >
+            {deleteMut.isPending ? 'Discarding…' : 'Discard'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </FellowshipPageLayout>
   );
 };

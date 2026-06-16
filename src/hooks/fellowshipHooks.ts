@@ -94,7 +94,11 @@ export const useDeleteApplication = createUseMutation<void, { id: string }>(
   ({ id }) => fellowshipService.deleteApplication(id),
   {
     queryInvalidation: async ({ queryClient }) => {
-      await queryClient.invalidateQueries({ queryKey: ['fellowship-applications'] });
+      // Refresh only the application lists. A broad ['fellowship-applications']
+      // invalidation also matches the proposal queries, refetching the
+      // just-deleted application's proposal (still mounted for a tick) → 404.
+      await queryClient.invalidateQueries({ queryKey: ['fellowship-applications', 'me'] });
+      await queryClient.invalidateQueries({ queryKey: ['fellowship-applications', 'list'] });
     },
   },
 );
