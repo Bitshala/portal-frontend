@@ -89,6 +89,51 @@ const MAX_TAGS = 50;
 const YEAR_MIN = 1900;
 const YEAR_MAX = 2100;
 
+// Fixed option lists for the multi-select dropdowns (domains, coding languages,
+// education interests). Sensible Bitcoin/Lightning defaults — edit freely. The
+// field values stay string[] so the schema and backend are unchanged.
+const DOMAIN_OPTIONS = [
+  'Consensus',
+  'P2P networking',
+  'Mining',
+  'Privacy',
+  'Wallets',
+  'Lightning Network',
+  'Scripting / Taproot',
+  'Cryptography',
+  'Mempool / fee estimation',
+  'Testing / fuzzing',
+  'Documentation',
+];
+
+const CODING_LANGUAGE_OPTIONS = [
+  'C++',
+  'C',
+  'Rust',
+  'Python',
+  'Go',
+  'JavaScript',
+  'TypeScript',
+  'Java',
+  'Kotlin',
+  'Swift',
+  'Haskell',
+  'Scala',
+];
+
+const EDUCATION_INTEREST_OPTIONS = [
+  'Protocol development',
+  'Mining',
+  'Privacy',
+  'Lightning Network',
+  'Wallet UX',
+  'Education / curriculum',
+  'Research',
+  'Security auditing',
+  'Design',
+  'Community building',
+];
+
 // ---- Validation schema (react-hook-form + zod) ----
 
 const longText = () =>
@@ -1125,16 +1170,19 @@ const ControlledTextField = ({
   />
 );
 
-// A multi-value chip input (domains / coding languages / education interests).
-// Free-text entries are added on Enter, trimmed, de-blanked and count-capped.
+// A multi-value dropdown (domains / coding languages / education interests).
+// Users pick one or more entries from a fixed list; selecting an option commits
+// it immediately (no "press Enter" step). Values stay a count-capped string[].
 const ControlledChips = ({
   control,
   name,
+  options,
   disabled,
   placeholder,
 }: {
   control: Control<ProposalFields>;
   name: TagFieldName;
+  options: string[];
   disabled?: boolean;
   placeholder?: string;
 }) => (
@@ -1146,16 +1194,11 @@ const ControlledChips = ({
       return (
         <Autocomplete
           multiple
-          freeSolo
           disableClearable
-          options={[] as string[]}
+          options={options}
           value={values}
           disabled={disabled}
-          onChange={(_, next) =>
-            field.onChange(
-              (next as string[]).map((s) => s.trim()).filter(Boolean).slice(0, MAX_TAGS),
-            )
-          }
+          onChange={(_, next) => field.onChange((next as string[]).slice(0, MAX_TAGS))}
           onBlur={field.onBlur}
           renderTags={(value, getTagProps) =>
             value.map((option, index) => {
@@ -1561,8 +1604,9 @@ const ApplicationStep = ({
           <ControlledChips
             control={control}
             name="domains"
+            options={DOMAIN_OPTIONS}
             disabled={disabled}
-            placeholder="Type a domain and press Enter (e.g. consensus, P2P)"
+            placeholder="Select one or more domains (e.g. Consensus, P2P networking)"
           />
 
           {isDeveloper && (
@@ -1571,8 +1615,9 @@ const ApplicationStep = ({
               <ControlledChips
                 control={control}
                 name="codingLanguages"
+                options={CODING_LANGUAGE_OPTIONS}
                 disabled={disabled}
-                placeholder="Type a language and press Enter (e.g. C++, Rust)"
+                placeholder="Select one or more languages (e.g. C++, Rust)"
               />
             </>
           )}
@@ -1581,8 +1626,9 @@ const ApplicationStep = ({
           <ControlledChips
             control={control}
             name="educationInterests"
+            options={EDUCATION_INTEREST_OPTIONS}
             disabled={disabled}
-            placeholder="Type an interest and press Enter (e.g. mining, privacy)"
+            placeholder="Select one or more interests (e.g. Mining, Privacy)"
           />
         </SectionCard>
         )}
