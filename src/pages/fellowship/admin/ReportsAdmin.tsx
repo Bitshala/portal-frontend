@@ -20,6 +20,7 @@ import {
 import { ArrowDownUp, Check, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
+import ReportReflections from '../../../components/fellowship/ReportReflections';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import {
@@ -40,7 +41,6 @@ import {
 import { SortOrder } from '../../../types/api';
 import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
 import { formatFellowshipType } from '../../../utils/fellowshipFormat';
-import { parseReportContent } from '../../../utils/reportContent';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_PAGE_SIZE = 25;
@@ -752,11 +752,11 @@ const ReportDetail = ({
 }) => {
   const contentQuery = useReportContent(report.id);
   const project = useFellowshipProjectTitle(fellowship) || null;
-  const { links, body } = useMemo(
-    () => parseReportContent(contentQuery.data?.content ?? ''),
-    [contentQuery.data?.content],
+  const content = contentQuery.data;
+  const realLinks = useMemo(
+    () => (content?.links ?? []).filter((l) => l.trim()),
+    [content?.links],
   );
-  const realLinks = links.filter((l) => l.trim());
   return (
     <Box sx={{ width: '100%', p: { xs: 3, md: 5 } }}>
       <Button
@@ -789,10 +789,10 @@ const ReportDetail = ({
       </Stack>
 
       {contentQuery.isLoading && <CircularProgress size={20} />}
-      {contentQuery.data && (
+      {content && (
         <>
-          {body.trim() ? (
-            <MarkdownView content={body} />
+          {content.summary.trim() ? (
+            <MarkdownView content={content.summary} />
           ) : (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               This report has no content.
@@ -818,6 +818,7 @@ const ReportDetail = ({
               </Stack>
             </Box>
           )}
+          <ReportReflections content={content} />
         </>
       )}
 

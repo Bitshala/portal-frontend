@@ -222,19 +222,39 @@ export interface GetFellowshipReportResponseDto {
   fellowship: GetFellowshipResponseDto;
 }
 
+// The report body is lazy-loaded per report. All text fields round-trip as ''
+// (never null) when unanswered; `links` is [] when none.
 export interface GetFellowshipReportContentResponseDto {
-  content: string;
+  summary: string;
+  links: string[];
+  challengingWork: string;
+  keyLearning: string;
+  reviewerFeedback: string;
+  growthGoal: string;
 }
 
 export interface CreateFellowshipReportRequestDto {
   fellowshipId: string;
   month: number;
   year: number;
-  content: string;
+  // Required key; may be empty on a draft. The four reflective fields and links
+  // are optional everywhere — they never block a draft save or a submit.
+  summary: string;
+  links?: string[];
+  challengingWork?: string;
+  keyLearning?: string;
+  reviewerFeedback?: string;
+  growthGoal?: string;
 }
 
+// Any field omitted on PATCH is left untouched.
 export interface UpdateFellowshipReportRequestDto {
-  content: string;
+  summary?: string;
+  links?: string[];
+  challengingWork?: string;
+  keyLearning?: string;
+  reviewerFeedback?: string;
+  growthGoal?: string;
 }
 
 export interface ReviewFellowshipReportRequestDto {

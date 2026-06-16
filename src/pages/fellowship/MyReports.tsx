@@ -15,12 +15,12 @@ import {
 import { Plus, X } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../components/fellowship/MarkdownView';
+import ReportReflections from '../../components/fellowship/ReportReflections';
 import StatusChip from '../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../components/fellowship/theme';
 import { useMyFellowships, useMyReports, useReportContent } from '../../hooks/fellowshipHooks';
 import { useFellowshipProjectTitle } from '../../hooks/useFellowshipProjectTitle';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
-import { parseReportContent } from '../../utils/reportContent';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
   FellowshipReportStatus,
@@ -152,11 +152,11 @@ const ReportViewDialog = ({
 }) => {
   const contentQuery = useReportContent(report.id);
   const project = useFellowshipProjectTitle(fellowship) || null;
-  const { links, body } = useMemo(
-    () => parseReportContent(contentQuery.data?.content ?? ''),
-    [contentQuery.data?.content],
+  const content = contentQuery.data;
+  const realLinks = useMemo(
+    () => (content?.links ?? []).filter((l) => l.trim()),
+    [content?.links],
   );
-  const realLinks = links.filter((l) => l.trim());
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
@@ -214,13 +214,14 @@ const ReportViewDialog = ({
                 </Stack>
               </Box>
             )}
-            {body.trim() ? (
-              <MarkdownView content={body} />
+            {content?.summary.trim() ? (
+              <MarkdownView content={content.summary} />
             ) : (
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 This report has no content.
               </Typography>
             )}
+            {content && <ReportReflections content={content} />}
           </>
         )}
       </DialogContent>

@@ -1,10 +1,9 @@
 // Reports are capped to keep them readable; the count is shown live in the editor.
-export const WORD_LIMIT = 3500;
+// The cap is a character count (not words) and applies to the summary and to each
+// reflective answer independently.
+export const CHAR_LIMIT = 3500;
 
-export const countWords = (text: string): number => {
-  const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
-};
+export const countChars = (text: string): number => text.length;
 
 // A valid pull-request or issue link, e.g.
 // https://github.com/owner/repo/pull/123 or .../issues/123
@@ -32,23 +31,9 @@ export const findDuplicateLinkIndices = (links: string[]): Set<number> => {
   return dupes;
 };
 
-// The PR/issue links are stored as the first line of the report content (a
-// comma-separated list) so they round-trip through the existing `content`-only
-// API. These helpers keep that encoding in one place.
-const LINK_LINE_RE = /^PR\/Issue:[ \t]*(.+?)[ \t]*(?:\r?\n)+/;
-
-export const parseReportContent = (raw: string): { links: string[]; body: string } => {
-  const match = raw.match(LINK_LINE_RE);
-  if (match) {
-    const links = match[1].split(',').map((s) => s.trim()).filter(Boolean);
-    return { links: links.length ? links : [''], body: raw.slice(match[0].length) };
-  }
-  return { links: [''], body: raw };
-};
-
-export const composeReportContent = (links: string[], body: string): string => {
-  // Drop blanks and any repeated link (case/trailing-slash insensitive),
-  // keeping the first occurrence's original form.
+// Prepare the editor's link inputs for the API: drop blanks and any repeated link
+// (case/trailing-slash insensitive), keeping the first occurrence's original form.
+export const cleanLinks = (links: string[]): string[] => {
   const seen = new Set<string>();
   const cleaned: string[] = [];
   for (const raw of links) {
@@ -59,5 +44,35 @@ export const composeReportContent = (links: string[], body: string): string => {
     seen.add(key);
     cleaned.push(link);
   }
-  return `PR/Issue: ${cleaned.join(', ')}\n\n${body}`;
+  return cleaned;
 };
+
+// The four optional reflective questions, in display order. The `field` matches
+// the API body/content key; the `prompt` is the exact copy shown to the fellow.
+// Single source of truth for the editor inputs and the read-only views.
+export type ReflectiveField =
+  | 'challengingWork'
+  | 'keyLearning'
+  | 'reviewerFeedback'
+  | 'growthGoal';
+
+export const REFLECTIVE_QUESTIONS: { field: ReflectiveField; prompt: string }[] = [
+  {
+    field: 'challengingWork',
+    prompt:
+      'Pick the single most challenging or interesting piece of work you did this month. Walk us through it: What was the problem? What approach did you first try, and what did you end up doing instead?',
+  },
+  {
+    field: 'keyLearning',
+    prompt:
+      "What's something you understand now that you didn't at the start of the month? (A tool, a part of the codebase, a concept, a way of working—anything.)",
+  },
+  {
+    field: 'reviewerFeedback',
+    prompt: 'Describe one piece of feedback you got from a maintainer or reviewer.',
+  },
+  {
+    field: 'growthGoal',
+    prompt: 'What do you want to get better at next month?',
+  },
+];

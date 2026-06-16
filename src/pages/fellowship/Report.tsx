@@ -22,6 +22,7 @@ import {
 import { Plus, Trash2, X } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../components/fellowship/MarkdownView';
+import ReportReflections from '../../components/fellowship/ReportReflections';
 import StatusChip from '../../components/fellowship/StatusChip';
 import {
   useCreateReport,
@@ -41,14 +42,24 @@ import {
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
 import {
-  WORD_LIMIT,
-  composeReportContent,
-  countWords,
+  CHAR_LIMIT,
+  REFLECTIVE_QUESTIONS,
+  type ReflectiveField,
+  cleanLinks,
+  countChars,
   findDuplicateLinkIndices,
   isValidGithubLink,
-  parseReportContent,
 } from '../../utils/reportContent';
 import { useFellowshipProjectTitle } from '../../hooks/useFellowshipProjectTitle';
+
+type ReflectiveAnswers = Record<ReflectiveField, string>;
+
+const EMPTY_REFLECTIVE: ReflectiveAnswers = {
+  challengingWork: '',
+  keyLearning: '',
+  reviewerFeedback: '',
+  growthGoal: '',
+};
 
 // Label for a fellowship in the picker: project name (from the proposal) with
 // the track in parens, falling back to just the track when there's no title.
@@ -86,7 +97,8 @@ const Report = () => {
 
   const initialMonth = Number(searchParams.get('month')) || currentMonth;
   const [month, setMonth] = useState<number>(initialMonth);
-  const [content, setContent] = useState('');
+  const [summary, setSummary] = useState('');
+  const [reflective, setReflective] = useState<ReflectiveAnswers>(EMPTY_REFLECTIVE);
   const [prLinks, setPrLinks] = useState<string[]>(['']);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
   // Submitting is irreversible (locks the report for review), so confirm first.
@@ -114,12 +126,17 @@ const Report = () => {
   const deleteMut = useDeleteReport();
 
   useEffect(() => {
-    if (reportContent.data?.content !== undefined) {
-      const { links, body } = parseReportContent(reportContent.data.content);
-      setPrLinks(links);
-      setContent(body);
-    }
-  }, [reportContent.data?.content]);
+    const data = reportContent.data;
+    if (!data) return;
+    setPrLinks(data.links.length ? data.links : ['']);
+    setSummary(data.summary);
+    setReflective({
+      challengingWork: data.challengingWork,
+      keyLearning: data.keyLearning,
+      reviewerFeedback: data.reviewerFeedback,
+      growthGoal: data.growthGoal,
+    });
+  }, [reportContent.data]);
 
   useEffect(() => {
     if (report.data) setMonth(report.data.month);
@@ -152,12 +169,16 @@ const Report = () => {
 
   // Submission is only allowed while the fellowship is active.
   const fellowshipActive = fellowship?.status === FellowshipStatus.ACTIVE;
-  const wordCount = useMemo(() => countWords(content), [content]);
-  const overWordLimit = wordCount > WORD_LIMIT;
-  // Every non-empty link must be valid; submission needs at least one.
+  // The cap is a character count and applies to the summary and each reflective
+  // answer independently.
+  const summaryChars = countChars(summary);
+  const summaryOverLimit = summaryChars > CHAR_LIMIT;
+  const reflectiveOverLimit = REFLECTIVE_QUESTIONS.some(
+    (q) => countChars(reflective[q.field]) > CHAR_LIMIT,
+  );
+  const anyOverLimit = summaryOverLimit || reflectiveOverLimit;
+  // Links are optional, but any provided must be a valid GitHub PR/issue URL.
   const allLinksValid = prLinks.every((l) => !l.trim() || isValidGithubLink(l));
-  const validLinks = prLinks.filter((l) => isValidGithubLink(l));
-  const hasValidLink = validLinks.length > 0 && allLinksValid;
   // The same PR/issue link must not be listed twice.
   const duplicateLinkIndices = useMemo(() => findDuplicateLinkIndices(prLinks), [prLinks]);
   const hasDuplicateLinks = duplicateLinkIndices.size > 0;
@@ -165,9 +186,9 @@ const Report = () => {
     isEditable &&
     !!fellowshipId &&
     fellowshipActive &&
-    !!content.trim() &&
-    !overWordLimit &&
-    hasValidLink &&
+    !!summary.trim() &&
+    !anyOverLimit &&
+    allLinksValid &&
     !hasDuplicateLinks;
 
   const updateLink = (index: number, value: string) =>
@@ -175,18 +196,31 @@ const Report = () => {
   const addLink = () => setPrLinks((prev) => [...prev, '']);
   const removeLink = (index: number) =>
     setPrLinks((prev) => (prev.length <= 1 ? [''] : prev.filter((_, i) => i !== index)));
+  const updateReflective = (field: ReflectiveField, value: string) =>
+    setReflective((prev) => ({ ...prev, [field]: value }));
+
+  // The structured body sent on create/update. Links are de-duped and stripped
+  // of blanks; the reflective answers round-trip as-is (empty when unanswered).
+  const buildBody = () => ({
+    summary,
+    links: cleanLinks(prLinks),
+    challengingWork: reflective.challengingWork,
+    keyLearning: reflective.keyLearning,
+    reviewerFeedback: reflective.reviewerFeedback,
+    growthGoal: reflective.growthGoal,
+  });
 
   const handleSaveDraft = async () => {
-    if (!fellowshipId || !content.trim()) return;
+    if (!fellowshipId || !summary.trim()) return;
     if (!fellowshipActive) {
       setToast({ kind: 'error', msg: 'Reports can only be filed for an active fellowship.' });
       return;
     }
-    if (overWordLimit) {
-      setToast({ kind: 'error', msg: `Reports are limited to ${WORD_LIMIT} words.` });
+    if (anyOverLimit) {
+      setToast({ kind: 'error', msg: `Each field is limited to ${CHAR_LIMIT} characters.` });
       return;
     }
-    // Links are optional while drafting, but any provided must be valid.
+    // Links are optional while drafting, but any provided must be valid and unique.
     if (!allLinksValid) {
       setToast({ kind: 'error', msg: 'Enter valid GitHub pull request or issue links.' });
       return;
@@ -195,13 +229,17 @@ const Report = () => {
       setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
       return;
     }
-    const composed = composeReportContent(prLinks, content);
     try {
       if (reportId) {
-        await updateMut.mutateAsync({ id: reportId, body: { content: composed } });
+        await updateMut.mutateAsync({ id: reportId, body: buildBody() });
         setToast({ kind: 'success', msg: 'Draft saved.' });
       } else {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content: composed });
+        const created = await createMut.mutateAsync({
+          fellowshipId,
+          month,
+          year: currentYear,
+          ...buildBody(),
+        });
         setToast({ kind: 'success', msg: 'Draft created.' });
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${created.id}`, {
           replace: true,
@@ -213,32 +251,37 @@ const Report = () => {
   };
 
   const handleSubmit = async () => {
-    if (!content.trim() || !fellowshipId) return;
+    if (!summary.trim() || !fellowshipId) return;
     if (!fellowshipActive) {
       setToast({ kind: 'error', msg: 'Reports can only be submitted for an active fellowship.' });
       return;
     }
-    if (overWordLimit) {
-      setToast({ kind: 'error', msg: `Reports are limited to ${WORD_LIMIT} words.` });
+    if (anyOverLimit) {
+      setToast({ kind: 'error', msg: `Each field is limited to ${CHAR_LIMIT} characters.` });
       return;
     }
-    if (!hasValidLink) {
-      setToast({ kind: 'error', msg: 'Add at least one valid GitHub pull request or issue link.' });
+    // Links aren't required to submit, but any provided must be valid and unique.
+    if (!allLinksValid) {
+      setToast({ kind: 'error', msg: 'Enter valid GitHub pull request or issue links.' });
       return;
     }
     if (hasDuplicateLinks) {
       setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
       return;
     }
-    const composed = composeReportContent(prLinks, content);
     try {
       let id = reportId;
       if (!id) {
-        const created = await createMut.mutateAsync({ fellowshipId, month, year: currentYear, content: composed });
+        const created = await createMut.mutateAsync({
+          fellowshipId,
+          month,
+          year: currentYear,
+          ...buildBody(),
+        });
         id = created.id;
         navigate(`/fellowship/fellowships/${fellowshipId}/reports/${id}`, { replace: true });
       } else {
-        await updateMut.mutateAsync({ id, body: { content: composed } });
+        await updateMut.mutateAsync({ id, body: buildBody() });
       }
       await submitMut.mutateAsync({ id });
       setToast({ kind: 'success', msg: 'Submitted for review.' });
@@ -390,22 +433,62 @@ const Report = () => {
                     </Button>
                   </Box>
 
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                    Monthly summary
+                  </Typography>
                   <TextField
                     multiline
                     fullWidth
                     minRows={12}
                     maxRows={24}
-                    placeholder="Progress this month — wins, blockers, code/docs links, next month's focus. Markdown supported."
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Please share a summary of everything you worked on this month — highlights, relevant features, code/documentation/blog links, etc. Markdown supported."
+                    value={summary}
+                    onChange={(e) => setSummary(e.target.value)}
                     disabled={!!reportId && reportContent.isLoading}
-                    error={overWordLimit}
+                    error={summaryOverLimit}
                     helperText={
                       <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        {wordCount} / {WORD_LIMIT} words
+                        {summaryChars} / {CHAR_LIMIT} characters
                       </Box>
                     }
                   />
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Reflections
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                      Optional — these won't block submitting, but they help us understand your month.
+                    </Typography>
+                    <Stack spacing={3}>
+                      {REFLECTIVE_QUESTIONS.map((q) => {
+                        const value = reflective[q.field];
+                        const chars = countChars(value);
+                        return (
+                          <Box key={q.field}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                              {q.prompt}
+                            </Typography>
+                            <TextField
+                              multiline
+                              fullWidth
+                              minRows={4}
+                              maxRows={16}
+                              value={value}
+                              onChange={(e) => updateReflective(q.field, e.target.value)}
+                              disabled={!!reportId && reportContent.isLoading}
+                              error={chars > CHAR_LIMIT}
+                              helperText={
+                                <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                  {chars} / {CHAR_LIMIT} characters
+                                </Box>
+                              }
+                            />
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
 
                   <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }}>
                     <Button
@@ -414,8 +497,8 @@ const Report = () => {
                       disabled={
                         !fellowshipId ||
                         !fellowshipActive ||
-                        !content.trim() ||
-                        overWordLimit ||
+                        !summary.trim() ||
+                        anyOverLimit ||
                         createMut.isPending ||
                         updateMut.isPending
                       }
@@ -469,13 +552,14 @@ const Report = () => {
                       </Stack>
                     </Box>
                   )}
-                  {content.trim() ? (
-                    <MarkdownView content={content} />
+                  {summary.trim() ? (
+                    <MarkdownView content={summary} />
                   ) : (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       This report has no content.
                     </Typography>
                   )}
+                  {reportContent.data && <ReportReflections content={reportContent.data} />}
                 </>
               )}
             </CardContent>
