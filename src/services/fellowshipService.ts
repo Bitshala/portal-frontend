@@ -5,6 +5,7 @@ import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
   FellowshipApplicationProposalDto,
+  FellowshipDocumentResponseDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -14,11 +15,13 @@ import type {
   ListFellowshipReportsQueryDto,
   ListFellowshipsQueryDto,
   ReviewFellowshipApplicationRequestDto,
+  ReviewFellowshipDocumentRequestDto,
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
   UpdateFellowshipApplicationRequestDto,
   UpdateFellowshipReportRequestDto,
 } from '../types/fellowship.ts';
+import { FellowshipApplicationStatus } from '../types/fellowship.ts';
 import type { PaginatedQueryDto } from '../types/api.ts';
 
 const COMMON_REQUEST_HEADERS = {
@@ -44,6 +47,17 @@ class FellowshipService {
 
   private getRequestHeaders(): AxiosHeaders {
     const headers = new AxiosHeaders(COMMON_REQUEST_HEADERS);
+    const token = getAuthTokenFromStorage();
+    if (token) headers.setAuthorization(`Bearer ${token}`);
+    return headers;
+  }
+
+  // Headers for multipart/form-data uploads. We deliberately do NOT spread
+  // COMMON_REQUEST_HEADERS here — its 'Content-Type: application/json' would
+  // stop axios/the browser from setting the multipart boundary and the upload
+  // would fail. Only the ngrok bypass + auth token carry over.
+  private getMultipartRequestHeaders(): AxiosHeaders {
+    const headers = new AxiosHeaders({ 'ngrok-skip-browser-warning': 'true' });
     const token = getAuthTokenFromStorage();
     if (token) headers.setAuthorization(`Bearer ${token}`);
     return headers;
@@ -155,6 +169,8 @@ class FellowshipService {
     });
   };
 
+  // REJECTED / CHANGES_REQUESTED only — JSON. ACCEPTED goes through
+  // acceptApplication (multipart, with the signed contract PDF).
   public reviewApplication = async (
     id: string,
     body: ReviewFellowshipApplicationRequestDto,
@@ -164,6 +180,21 @@ class FellowshipService {
       method: 'PATCH',
       url: `/fellowship-applications/${id}/review`,
       data: body,
+    });
+  };
+
+  // Accept an application. Multipart: the Bitshala-signed unsigned-contract PDF
+  // is required. On success the backend creates the fellowship (in
+  // AWAITING_DOCUMENTS) and its three document rows.
+  public acceptApplication = async (id: string, file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append('status', FellowshipApplicationStatus.ACCEPTED);
+    formData.append('file', file);
+    await this.request<void>({
+      headers: this.getMultipartRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowship-applications/${id}/review`,
+      data: formData,
     });
   };
 
@@ -229,6 +260,73 @@ class FellowshipService {
       url: `/fellowships/${id}/start-contract`,
       data: body,
     });
+  };
+
+  // =========================
+  // Fellowship Documents
+  // =========================
+
+  public listFellowshipDocuments = async (
+    fellowshipId: string,
+  ): Promise<FellowshipDocumentResponseDto[]> => {
+    const { data } = await this.request<FellowshipDocumentResponseDto[]>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/fellowships/${fellowshipId}/documents`,
+    });
+    return data;
+  };
+
+  // Authenticated proxied download. The route is auth-gated, so this must ride
+  // the Bearer token (a bare <a href> would 401) — caller turns the blob into
+  // an object URL and triggers the download.
+  public downloadFellowshipDocument = async (
+    fellowshipId: string,
+    documentId: string,
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const response = await this.request<Blob>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/fellowships/${fellowshipId}/documents/${documentId}/download`,
+      responseType: 'blob',
+    });
+    const disposition = (response.headers as Record<string, string>)['content-disposition'] ?? '';
+    const filename = disposition.match(/filename="(.+)"/)?.[1] ?? 'document.pdf';
+    return { blob: response.data, filename };
+  };
+
+  // Upload / re-upload a fellow document (SIGNED_CONTRACT, W8BEN, or any
+  // re-upload after a rejection). Multipart, PDF only. Sets the document to
+  // PENDING_REVIEW and returns its updated row.
+  public uploadFellowshipDocument = async (
+    fellowshipId: string,
+    documentId: string,
+    file: File,
+  ): Promise<FellowshipDocumentResponseDto> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await this.request<FellowshipDocumentResponseDto>({
+      headers: this.getMultipartRequestHeaders(),
+      method: 'POST',
+      url: `/fellowships/${fellowshipId}/documents/${documentId}`,
+      data: formData,
+    });
+    return data;
+  };
+
+  // Admin approve / reject of a single fellow document.
+  public reviewFellowshipDocument = async (
+    fellowshipId: string,
+    documentId: string,
+    body: ReviewFellowshipDocumentRequestDto,
+  ): Promise<FellowshipDocumentResponseDto> => {
+    const { data } = await this.request<FellowshipDocumentResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowships/${fellowshipId}/documents/${documentId}/review`,
+      data: body,
+    });
+    return data;
   };
 
   // =========================
