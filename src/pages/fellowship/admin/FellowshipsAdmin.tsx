@@ -4,6 +4,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -17,16 +21,18 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  FileCheck,
   FileText,
   PlayCircle,
   Search,
 } from 'lucide-react';
+import DocumentList from '../../../components/fellowship/DocumentList';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StartContractDialog from '../../../components/fellowship/StartContractDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import { useFellowships } from '../../../hooks/fellowshipHooks';
+import { useFellowshipDocuments, useFellowships } from '../../../hooks/fellowshipHooks';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
 import fellowshipService from '../../../services/fellowshipService';
@@ -55,6 +61,9 @@ const ALL_VALUE = '__ALL__';
 const STATUS_PARAM: Record<StatusFilter, FellowshipStatus | undefined> = {
   ALL: undefined,
   [FellowshipStatus.PENDING]: FellowshipStatus.PENDING,
+  [FellowshipStatus.AWAITING_DOCUMENTS]: FellowshipStatus.AWAITING_DOCUMENTS,
+  [FellowshipStatus.DOCUMENTS_IN_REVIEW]: FellowshipStatus.DOCUMENTS_IN_REVIEW,
+  [FellowshipStatus.DOCUMENTS_APPROVED]: FellowshipStatus.DOCUMENTS_APPROVED,
   [FellowshipStatus.ACTIVE]: FellowshipStatus.ACTIVE,
   [FellowshipStatus.COMPLETED]: FellowshipStatus.COMPLETED,
 };
@@ -62,6 +71,9 @@ const STATUS_PARAM: Record<StatusFilter, FellowshipStatus | undefined> = {
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'ALL' },
   { label: 'Pending', value: FellowshipStatus.PENDING },
+  { label: 'Awaiting docs', value: FellowshipStatus.AWAITING_DOCUMENTS },
+  { label: 'Docs in review', value: FellowshipStatus.DOCUMENTS_IN_REVIEW },
+  { label: 'Docs approved', value: FellowshipStatus.DOCUMENTS_APPROVED },
   { label: 'Active', value: FellowshipStatus.ACTIVE },
   { label: 'Completed', value: FellowshipStatus.COMPLETED },
 ];
@@ -146,10 +158,12 @@ const FellowshipsAdmin = () => {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [exporting, setExporting] = useState(false);
   // Fellowship whose proposal is open in the viewer dialog (Start contract is
-  // offered from inside that dialog for PENDING fellowships).
+  // offered from inside that dialog once documents are approved).
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose document-review dialog is open (download + approve/reject).
+  const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const debouncedSearch = useDebounce(search.trim(), 300);
@@ -367,6 +381,7 @@ const FellowshipsAdmin = () => {
                 fellowship={f}
                 onOpen={() => setProposalFellowship(f)}
                 onViewProposal={() => setProposalFellowship(f)}
+                onReviewDocuments={() => setDocumentsFellowship(f)}
               />
             ))}
             {totalRecords > 0 && (
@@ -387,7 +402,7 @@ const FellowshipsAdmin = () => {
         applicationId={proposalFellowship?.applicationId ?? null}
         onClose={() => setProposalFellowship(null)}
         actions={
-          proposalFellowship?.status === FellowshipStatus.PENDING ? (
+          proposalFellowship?.status === FellowshipStatus.DOCUMENTS_APPROVED ? (
             <Button
               variant="contained"
               startIcon={<PlayCircle size={15} />}
@@ -411,7 +426,68 @@ const FellowshipsAdmin = () => {
         }}
         onError={(msg) => setToast({ kind: 'error', msg })}
       />
+
+      <FellowshipDocumentsDialog
+        fellowship={documentsFellowship}
+        onClose={() => setDocumentsFellowship(null)}
+        onNotify={(kind, msg) => setToast({ kind, msg })}
+      />
     </FellowshipPageLayout>
+  );
+};
+
+// Admin document-review dialog: lists the fellowship's documents and lets the
+// reviewer download each and approve/reject the fellow-uploaded ones. Reuses
+// the shared DocumentList in admin mode.
+const FellowshipDocumentsDialog = ({
+  fellowship,
+  onClose,
+  onNotify,
+}: {
+  fellowship: GetFellowshipResponseDto | null;
+  onClose: () => void;
+  onNotify: (kind: 'success' | 'error', msg: string) => void;
+}) => {
+  const { data, isLoading, isError, error } = useFellowshipDocuments(
+    fellowship?.id ?? '',
+    { enabled: !!fellowship },
+  );
+
+  return (
+    <Dialog open={!!fellowship} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ fontWeight: 700 }}>
+        Documents — {fellowship?.userName ?? fellowship?.userEmail ?? 'Fellowship'}
+      </DialogTitle>
+      <DialogContent>
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={22} />
+          </Box>
+        ) : isError ? (
+          <Alert severity="error">
+            {`Couldn't load documents: ${extractErrorMessage(error)}`}
+          </Alert>
+        ) : fellowship && data ? (
+          data.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary', py: 2 }}>
+              No documents for this fellowship yet.
+            </Typography>
+          ) : (
+            <Box sx={{ pt: 1 }}>
+              <DocumentList
+                fellowshipId={fellowship.id}
+                documents={data}
+                mode="admin"
+                onNotify={onNotify}
+              />
+            </Box>
+          )
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
@@ -454,7 +530,7 @@ const FilterPill = ({
 // Proportional columns so the row fills the width evenly instead of dumping all
 // slack into Project. Order: Fellow, Track, Project, End date, Payout, Status, Actions.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 56px';
+  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 96px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -628,10 +704,12 @@ const FellowshipRow = ({
   fellowship,
   onOpen,
   onViewProposal,
+  onReviewDocuments,
 }: {
   fellowship: GetFellowshipResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
+  onReviewDocuments: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
@@ -754,23 +832,42 @@ const FellowshipRow = ({
       </Box>
 
       {/* Actions */}
-      <IconButton
-        size="small"
-        title="View proposal"
-        aria-label="View proposal"
-        onClick={(e) => {
-          e.stopPropagation();
-          onViewProposal();
-        }}
-        sx={{
-          color: 'text.secondary',
-          width: 28,
-          height: 28,
-          '&:hover': { color: 'text.primary' },
-        }}
-      >
-        <FileText size={14} />
-      </IconButton>
+      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+        <IconButton
+          size="small"
+          title="Review documents"
+          aria-label="Review documents"
+          onClick={(e) => {
+            e.stopPropagation();
+            onReviewDocuments();
+          }}
+          sx={{
+            color: 'text.secondary',
+            width: 28,
+            height: 28,
+            '&:hover': { color: 'text.primary' },
+          }}
+        >
+          <FileCheck size={14} />
+        </IconButton>
+        <IconButton
+          size="small"
+          title="View proposal"
+          aria-label="View proposal"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewProposal();
+          }}
+          sx={{
+            color: 'text.secondary',
+            width: 28,
+            height: 28,
+            '&:hover': { color: 'text.primary' },
+          }}
+        >
+          <FileText size={14} />
+        </IconButton>
+      </Stack>
     </Box>
   );
 };
