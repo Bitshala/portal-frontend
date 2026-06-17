@@ -16,7 +16,14 @@ export enum FellowshipApplicationStatus {
 }
 
 export enum FellowshipStatus {
+  // PENDING is legacy only — new fellowships are created in AWAITING_DOCUMENTS.
   PENDING = 'PENDING',
+  // Created on accept; some fellow document is still unuploaded or was rejected.
+  AWAITING_DOCUMENTS = 'AWAITING_DOCUMENTS',
+  // Both fellow documents uploaded, waiting on admin review.
+  DOCUMENTS_IN_REVIEW = 'DOCUMENTS_IN_REVIEW',
+  // Both fellow documents approved; start-contract becomes available.
+  DOCUMENTS_APPROVED = 'DOCUMENTS_APPROVED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
 }
@@ -24,6 +31,22 @@ export enum FellowshipStatus {
 export enum FellowshipReportStatus {
   DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export enum FellowshipDocumentType {
+  // Bitshala-provided; the fellow downloads and signs it (never uploads it).
+  UNSIGNED_CONTRACT = 'UNSIGNED_CONTRACT',
+  // Fellow uploads the signed copy.
+  SIGNED_CONTRACT = 'SIGNED_CONTRACT',
+  // Fellow uploads their W-8BEN.
+  W8BEN = 'W8BEN',
+}
+
+export enum FellowshipDocumentStatus {
+  AWAITING_UPLOAD = 'AWAITING_UPLOAD',
+  PENDING_REVIEW = 'PENDING_REVIEW',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
 }
@@ -111,15 +134,14 @@ export interface CreateFellowshipApplicationRequestDto
 
 export type UpdateFellowshipApplicationRequestDto = FellowshipApplicationProposalWriteDto;
 
+// The JSON review path now covers REJECTED / CHANGES_REQUESTED only. ACCEPTED
+// is sent as multipart/form-data (it must carry the Bitshala-signed unsigned
+// contract PDF) — see fellowshipService.acceptApplication.
 export interface ReviewFellowshipApplicationRequestDto {
   status:
-    | FellowshipApplicationStatus.ACCEPTED
     | FellowshipApplicationStatus.REJECTED
     | FellowshipApplicationStatus.CHANGES_REQUESTED;
   reviewerRemarks?: string;
-  // Required when status === ACCEPTED. Must be a Google Drive folder URL —
-  // hosts the unsigned contract and is where the fellow uploads their W-8BEN.
-  driveFolderUrl?: string;
 }
 
 // Sort fields are per-endpoint whitelists — sending anything outside the set
@@ -199,6 +221,29 @@ export interface StartFellowshipContractRequestDto {
   periodMonths: number;
   amountUsd: number;
 }
+
+// =========================
+// Fellowship Documents
+// =========================
+
+// One row per document the backend tracks for a fellowship. Key UI off `type`,
+// never array order. The backend addresses everything by `documentId` — there
+// are no Drive IDs or URLs anywhere on the wire.
+export interface FellowshipDocumentResponseDto {
+  documentId: string;
+  type: FellowshipDocumentType;
+  status: FellowshipDocumentStatus;
+  // null until the first upload (UNSIGNED_CONTRACT always has one).
+  fileName: string | null;
+  // Set only when status === REJECTED.
+  rejectionReason: string | null;
+}
+
+// Admin approve/reject of a single fellow document. rejectionReason is required
+// (and surfaced to the fellow) on REJECT.
+export type ReviewFellowshipDocumentRequestDto =
+  | { action: 'APPROVE' }
+  | { action: 'REJECT'; rejectionReason: string };
 
 // =========================
 // Fellowship Reports
