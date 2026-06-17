@@ -8,7 +8,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { ArrowRight, FileText } from 'lucide-react';
+import { ArrowRight, FileCheck, FileText } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../components/fellowship/ProposalDialog';
 import StatusChip from '../../components/fellowship/StatusChip';
@@ -28,6 +28,9 @@ type StatusFilter = 'ALL' | FellowshipStatus;
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'ALL' },
   { label: 'Pending', value: FellowshipStatus.PENDING },
+  { label: 'Awaiting docs', value: FellowshipStatus.AWAITING_DOCUMENTS },
+  { label: 'Docs in review', value: FellowshipStatus.DOCUMENTS_IN_REVIEW },
+  { label: 'Docs approved', value: FellowshipStatus.DOCUMENTS_APPROVED },
   { label: 'Active', value: FellowshipStatus.ACTIVE },
   { label: 'Completed', value: FellowshipStatus.COMPLETED },
 ];
@@ -76,6 +79,9 @@ const MyFellowships = () => {
     const c: Record<StatusFilter, number> = {
       ALL: fellowships.length,
       [FellowshipStatus.PENDING]: 0,
+      [FellowshipStatus.AWAITING_DOCUMENTS]: 0,
+      [FellowshipStatus.DOCUMENTS_IN_REVIEW]: 0,
+      [FellowshipStatus.DOCUMENTS_APPROVED]: 0,
       [FellowshipStatus.ACTIVE]: 0,
       [FellowshipStatus.COMPLETED]: 0,
     };
@@ -172,6 +178,7 @@ const MyFellowships = () => {
                   lastReport={lastReportByFellowship.get(f.id)}
                   onOpen={() => setProposalAppId(f.applicationId)}
                   onViewProposal={() => setProposalAppId(f.applicationId)}
+                  onDocuments={() => navigate(`/fellowship/fellowships/${f.id}/documents`)}
                 />
               ))
             )}
@@ -234,7 +241,7 @@ const FilterPill = ({
 
 // ---- table ----
 
-const COLS = 'minmax(0, 1.8fr) 110px 130px 130px 110px 120px 120px 64px';
+const COLS = 'minmax(0, 1.8fr) 110px 130px 130px 110px 120px 120px 96px';
 const COL_GAP = 2;
 
 const HeaderRow = () => (
@@ -270,11 +277,13 @@ const FellowshipRow = ({
   lastReport,
   onOpen,
   onViewProposal,
+  onDocuments,
 }: {
   fellowship: GetFellowshipResponseDto;
   lastReport?: GetFellowshipReportResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
+  onDocuments: () => void;
 }) => {
   const trackColor = TRACK_COLORS[fellowship.type];
   const projectTitle = useFellowshipProjectTitle(fellowship);
@@ -358,18 +367,32 @@ const FellowshipRow = ({
       </Box>
 
       {/* Actions */}
-      <IconButton
-        size="small"
-        title="View proposal"
-        aria-label="View proposal"
-        onClick={(e) => {
-          e.stopPropagation();
-          onViewProposal();
-        }}
-        sx={{ color: 'text.secondary', width: 28, height: 28, '&:hover': { color: 'text.primary' } }}
-      >
-        <FileText size={14} />
-      </IconButton>
+      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+        <IconButton
+          size="small"
+          title="Documents"
+          aria-label="Documents"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDocuments();
+          }}
+          sx={{ color: 'text.secondary', width: 28, height: 28, '&:hover': { color: 'text.primary' } }}
+        >
+          <FileCheck size={14} />
+        </IconButton>
+        <IconButton
+          size="small"
+          title="View proposal"
+          aria-label="View proposal"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewProposal();
+          }}
+          sx={{ color: 'text.secondary', width: 28, height: 28, '&:hover': { color: 'text.primary' } }}
+        >
+          <FileText size={14} />
+        </IconButton>
+      </Stack>
     </Box>
   );
 };

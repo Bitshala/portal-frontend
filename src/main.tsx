@@ -42,6 +42,7 @@ const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
 const GDPresentation = lazy(() => import('./pages/GDPresentation.tsx'));
 const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
 const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
+const FellowshipDocuments = lazy(() => import('./pages/fellowship/FellowshipDocuments.tsx'));
 const MyApplications = lazy(() => import('./pages/fellowship/MyApplications.tsx'));
 const MyReports = lazy(() => import('./pages/fellowship/MyReports.tsx'));
 const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
@@ -213,6 +214,12 @@ const routes = [
     {
       path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
       element: <Layout><ProtectedRoute>{withFellowshipFallback(<Report />)}</ProtectedRoute></Layout>,
+    },
+    {
+      // Email deep-link target — fellow's contract / W-8BEN documents. Backend
+      // sets buildFellowshipDocumentsUrl to this path.
+      path: '/fellowship/fellowships/:fellowshipId/documents',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<FellowshipDocuments />)}</ProtectedRoute></Layout>,
     },
     {
       // Print-friendly proposal view — deliberately unwrapped from Layout so
