@@ -5,6 +5,7 @@ import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
   FellowshipApplicationProposalDto,
+  FellowshipDocumentResponseDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -13,6 +14,7 @@ import type {
   ListFellowshipReportsQueryDto,
   ListFellowshipsQueryDto,
   ReviewFellowshipApplicationRequestDto,
+  ReviewFellowshipDocumentRequestDto,
   ReviewFellowshipReportRequestDto,
   StartFellowshipContractRequestDto,
   UpdateFellowshipApplicationRequestDto,
@@ -116,6 +118,21 @@ export const useReviewApplication = createUseMutation<
   },
 );
 
+// Accept = multipart with the signed contract PDF. Creates the fellowship, so
+// invalidate both the application lists and the fellowship lists.
+export const useAcceptApplication = createUseMutation<
+  void,
+  { id: string; file: File }
+>(
+  ({ id, file }) => fellowshipService.acceptApplication(id, file),
+  {
+    queryInvalidation: async ({ queryClient }) => {
+      await queryClient.invalidateQueries({ queryKey: ['fellowship-applications'] });
+      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
+);
+
 // =========================
 // Fellowships — Queries
 // =========================
@@ -156,6 +173,64 @@ export const useStartFellowshipContract = createUseMutation<
       await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
     },
   },
+);
+
+// =========================
+// Fellowship Documents — Queries
+// =========================
+
+export const useFellowshipDocuments = createUseQuery<
+  FellowshipDocumentResponseDto[],
+  string
+>(
+  (fellowshipId) => ['fellowship-documents', fellowshipId],
+  (fellowshipId) => () => fellowshipService.listFellowshipDocuments(fellowshipId),
+);
+
+// =========================
+// Fellowship Documents — Mutations
+// =========================
+
+export const useUploadFellowshipDocument = createUseMutation<
+  FellowshipDocumentResponseDto,
+  { fellowshipId: string; documentId: string; file: File }
+>(
+  ({ fellowshipId, documentId, file }) =>
+    fellowshipService.uploadFellowshipDocument(fellowshipId, documentId, file),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      // The doc list changes, and uploading the last outstanding fellow doc
+      // advances the fellowship to DOCUMENTS_IN_REVIEW.
+      await queryClient.invalidateQueries({ queryKey: ['fellowship-documents', variables.fellowshipId] });
+      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
+);
+
+export const useReviewFellowshipDocument = createUseMutation<
+  FellowshipDocumentResponseDto,
+  { fellowshipId: string; documentId: string; body: ReviewFellowshipDocumentRequestDto }
+>(
+  ({ fellowshipId, documentId, body }) =>
+    fellowshipService.reviewFellowshipDocument(fellowshipId, documentId, body),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      // Reject returns the fellowship to AWAITING_DOCUMENTS; approving the last
+      // outstanding doc advances it to DOCUMENTS_APPROVED.
+      await queryClient.invalidateQueries({ queryKey: ['fellowship-documents', variables.fellowshipId] });
+      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
+);
+
+// One-shot authenticated blob fetch (no cache), modeled as a mutation like the
+// certificate download. The caller turns { blob, filename } into an object URL.
+export const useDownloadFellowshipDocument = createUseMutation<
+  { blob: Blob; filename: string },
+  { fellowshipId: string; documentId: string }
+>(
+  ({ fellowshipId, documentId }) =>
+    fellowshipService.downloadFellowshipDocument(fellowshipId, documentId),
 );
 
 // =========================
