@@ -28,10 +28,12 @@ import {
   X,
 } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
+import PdfUploadField from '../../../components/fellowship/PdfUploadField';
 import ProposalView from '../../../components/fellowship/ProposalView';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import {
+  useAcceptApplication,
   useApplications,
   useApplicationProposal,
   useReviewApplication,
@@ -136,7 +138,7 @@ const ApplicationsAdmin = () => {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
-  const [driveUrl, setDriveUrl] = useState('');
+  const [acceptFile, setAcceptFile] = useState<File | null>(null);
   const [remarks, setRemarks] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
@@ -175,6 +177,7 @@ const ApplicationsAdmin = () => {
     { placeholderData: (prev) => prev },
   );
   const reviewMut = useReviewApplication();
+  const acceptMut = useAcceptApplication();
 
   // The server returns exactly the page to render, already filtered/sorted.
   const records = useMemo(() => data?.records ?? [], [data?.records]);
@@ -191,18 +194,15 @@ const ApplicationsAdmin = () => {
   });
 
   const handleAccept = async () => {
-    if (!selected || !isDriveFolderUrl(driveUrl)) return;
+    if (!selected || !acceptFile) return;
     try {
-      await reviewMut.mutateAsync({
-        id: selected.id,
-        body: {
-          status: FellowshipApplicationStatus.ACCEPTED,
-          driveFolderUrl: driveUrl.trim(),
-        },
+      await acceptMut.mutateAsync({ id: selected.id, file: acceptFile });
+      setToast({
+        kind: 'success',
+        msg: 'Accepted — fellowship created, awaiting documents.',
       });
-      setToast({ kind: 'success', msg: 'Accepted — fellowship created in PENDING.' });
       setAcceptOpen(false);
-      setDriveUrl('');
+      setAcceptFile(null);
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -325,7 +325,7 @@ const ApplicationsAdmin = () => {
             canPrev={selectedIdx > 0}
             canNext={selectedIdx >= 0 && selectedIdx < records.length - 1}
             onAccept={() => {
-              setDriveUrl('');
+              setAcceptFile(null);
               setAcceptOpen(true);
             }}
             onReject={() => {
@@ -336,7 +336,7 @@ const ApplicationsAdmin = () => {
               setRemarks('');
               setRequestChangesOpen(true);
             }}
-            isReviewing={reviewMut.isPending}
+            isReviewing={reviewMut.isPending || acceptMut.isPending}
           />
         ) : (
           <EmptyDetail />
@@ -377,14 +377,14 @@ const ApplicationsAdmin = () => {
 
       <AcceptDialog
         open={acceptOpen}
-        value={driveUrl}
-        onChange={setDriveUrl}
+        file={acceptFile}
+        onChange={setAcceptFile}
         onCancel={() => {
           setAcceptOpen(false);
-          setDriveUrl('');
+          setAcceptFile(null);
         }}
         onConfirm={handleAccept}
-        busy={reviewMut.isPending}
+        busy={acceptMut.isPending}
       />
     </FellowshipPageLayout>
   );
@@ -957,67 +957,49 @@ const PaginatorButton = ({
 
 // ---- shared dialog ----
 
-// Require an actual Drive *folder* URL (optionally account-scoped /u/N/),
-// not just any drive.google.com link — the folder hosts the fellow's docs.
-const isDriveFolderUrl = (v: string): boolean =>
-  /^https:\/\/drive\.google\.com\/drive\/(u\/\d+\/)?folders\/[\w-]+([?#].*)?$/.test(
-    v.trim(),
-  );
-
 const AcceptDialog = ({
   open,
-  value,
+  file,
   onChange,
   onCancel,
   onConfirm,
   busy,
 }: {
   open: boolean;
-  value: string;
-  onChange: (v: string) => void;
+  file: File | null;
+  onChange: (file: File | null) => void;
   onCancel: () => void;
   onConfirm: () => void;
   busy: boolean;
-}) => {
-  const touched = value.trim().length > 0;
-  const valid = isDriveFolderUrl(value);
-  return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          Paste the Google Drive folder for this fellow. It hosts the unsigned
-          contract and is where they'll upload their W-8BEN form. Accepting creates
-          a fellowship in PENDING.
-        </Typography>
-        <TextField
-          fullWidth
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://drive.google.com/drive/folders/…"
-          autoFocus
-          error={touched && !valid}
-          helperText={
-            touched && !valid
-              ? 'Enter a Google Drive folder URL (https://drive.google.com/drive/folders/…)'
-              : ' '
-          }
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={onConfirm}
-          disabled={!valid || busy}
-        >
-          {busy ? 'Accepting…' : 'Accept'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
+}) => (
+  <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+    <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
+    <DialogContent>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        Upload the Bitshala-signed unsigned-contract PDF. Accepting creates the
+        fellowship and its documents, then emails the fellow to sign the contract
+        and upload their signed copy + W-8BEN.
+      </Typography>
+      <PdfUploadField
+        file={file}
+        onChange={onChange}
+        disabled={busy}
+        label="Choose contract PDF"
+      />
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onCancel}>Cancel</Button>
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={onConfirm}
+        disabled={!file || busy}
+      >
+        {busy ? 'Accepting…' : 'Accept'}
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
 
 const RemarksDialog = ({
   open,
