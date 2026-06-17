@@ -1,6 +1,7 @@
 import { Chip } from '@mui/material';
 import {
   FellowshipApplicationStatus,
+  FellowshipDocumentStatus,
   FellowshipReportStatus,
   FellowshipStatus,
 } from '../../types/fellowship';
@@ -8,20 +9,26 @@ import {
 type AnyStatus =
   | FellowshipApplicationStatus
   | FellowshipStatus
-  | FellowshipReportStatus;
+  | FellowshipReportStatus
+  | FellowshipDocumentStatus;
 
 const COLOR_MAP: Record<string, { bg: string; color: string; border: string }> = {
-  // grey — draft
+  // grey — draft / nothing yet
   DRAFT: { bg: 'rgba(161,161,170,0.12)', color: '#d4d4d8', border: 'rgba(161,161,170,0.25)' },
+  AWAITING_UPLOAD: { bg: 'rgba(161,161,170,0.12)', color: '#d4d4d8', border: 'rgba(161,161,170,0.25)' },
   // amber — awaiting action
   SUBMITTED: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
   PENDING: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  AWAITING_DOCUMENTS: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  DOCUMENTS_IN_REVIEW: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  PENDING_REVIEW: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
   // orange — needs revision
   CHANGES_REQUESTED: { bg: 'rgba(251,146,60,0.12)', color: '#fb923c', border: 'rgba(251,146,60,0.3)' },
   // green — good
   ACCEPTED: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
   ACTIVE: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
   APPROVED: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
+  DOCUMENTS_APPROVED: { bg: 'rgba(74,222,128,0.12)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
   // red — bad
   REJECTED: { bg: 'rgba(248,113,113,0.12)', color: '#f87171', border: 'rgba(248,113,113,0.3)' },
   // blue — closed
@@ -33,6 +40,11 @@ const LABEL_MAP: Record<string, string> = {
   // "Submitted" reads as a dead end to applicants; "Under review" tells them
   // what is actually happening. Applies to reports too — same semantics.
   SUBMITTED: 'Under review',
+  AWAITING_DOCUMENTS: 'Awaiting documents',
+  DOCUMENTS_IN_REVIEW: 'Documents in review',
+  DOCUMENTS_APPROVED: 'Documents approved',
+  AWAITING_UPLOAD: 'Awaiting upload',
+  PENDING_REVIEW: 'Under review',
 };
 
 interface Props {
