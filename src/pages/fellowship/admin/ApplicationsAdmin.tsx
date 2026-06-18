@@ -27,6 +27,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import ApplicationNotes from '../../../components/fellowship/ApplicationNotes';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import PdfUploadField from '../../../components/fellowship/PdfUploadField';
 import ProposalView from '../../../components/fellowship/ProposalView';
@@ -872,6 +873,10 @@ const DetailPane = ({
             <strong>{app.reviewedByName ?? 'Reviewer'}:</strong> {app.reviewerRemarks}
           </Alert>
         )}
+
+        {/* Internal, admin-only notes. Self-gates to ADMIN and is never shown to
+            applicants. Keyed by id so switching applications resets its state. */}
+        <ApplicationNotes key={app.id} applicationId={app.id} />
       </Box>
 
       <Box
