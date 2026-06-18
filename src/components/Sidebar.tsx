@@ -159,9 +159,13 @@ const Sidebar = () => {
     }
   };
 
-  const isAdmin =
+  const isStaff =
     user?.role === UserRole.ADMIN || user?.role === UserRole.TEACHING_ASSISTANT;
-  const navItems = isAdmin ? adminNavItems : studentNavItems;
+  // The fellowship admin tools (Applications / Manage / Reports) are admin-only.
+  // TAs keep the rest of the staff nav (Cohorts, Cohort Metrics) but don't see
+  // the fellowship "Admin" link group below.
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const navItems = isStaff ? adminNavItems : studentNavItems;
 
   // My Fellowships / My Reports only make sense once an application has been
   // approved — approval is what creates the user's first fellowship.

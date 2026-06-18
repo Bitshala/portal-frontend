@@ -232,7 +232,7 @@ const routes = [
       path: '/admin/fellowships',
       element: (
         <Layout>
-          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
             {withFellowshipFallback(<FellowshipsAdmin />)}
           </ProtectedRoute>
         </Layout>
@@ -242,7 +242,7 @@ const routes = [
       path: '/admin/fellowships/applications',
       element: (
         <Layout>
-          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
             {withFellowshipFallback(<ApplicationsAdmin />)}
           </ProtectedRoute>
         </Layout>
@@ -252,7 +252,7 @@ const routes = [
       path: '/admin/fellowships/reports',
       element: (
         <Layout>
-          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
             {withFellowshipFallback(<ReportsAdmin />)}
           </ProtectedRoute>
         </Layout>
