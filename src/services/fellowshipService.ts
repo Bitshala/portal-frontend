@@ -4,6 +4,8 @@ import type { PaginatedDataDto } from '../types/api.ts';
 import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
+  FellowshipApplicationNote,
+  FellowshipApplicationNoteWriteDto,
   FellowshipApplicationProposalDto,
   FellowshipDocumentResponseDto,
   GetFellowshipApplicationResponseDto,
@@ -206,6 +208,63 @@ class FellowshipService {
       url: `/fellowship-applications/github/${encodeURIComponent(username)}`,
     });
     return data;
+  };
+
+  // =========================
+  // Fellowship Application Notes
+  // =========================
+
+  // Internal admin notes on an application. This list route returns a PLAIN
+  // ARRAY (oldest-first) — there is no { records, totalRecords } wrapper here.
+  public listApplicationNotes = async (
+    applicationId: string,
+  ): Promise<FellowshipApplicationNote[]> => {
+    const { data } = await this.request<FellowshipApplicationNote[]>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/fellowship-applications/${applicationId}/notes`,
+    });
+    return data;
+  };
+
+  public createApplicationNote = async (
+    applicationId: string,
+    body: FellowshipApplicationNoteWriteDto,
+  ): Promise<FellowshipApplicationNote> => {
+    const { data } = await this.request<FellowshipApplicationNote>({
+      headers: this.getRequestHeaders(),
+      method: 'POST',
+      url: `/fellowship-applications/${applicationId}/notes`,
+      data: body,
+    });
+    return data;
+  };
+
+  // Author-only on the server (403 for anyone else); 404 if the note is gone.
+  public updateApplicationNote = async (
+    applicationId: string,
+    noteId: string,
+    body: FellowshipApplicationNoteWriteDto,
+  ): Promise<FellowshipApplicationNote> => {
+    const { data } = await this.request<FellowshipApplicationNote>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowship-applications/${applicationId}/notes/${noteId}`,
+      data: body,
+    });
+    return data;
+  };
+
+  // Author-only on the server (403 for anyone else); 204 No Content on success.
+  public deleteApplicationNote = async (
+    applicationId: string,
+    noteId: string,
+  ): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'DELETE',
+      url: `/fellowship-applications/${applicationId}/notes/${noteId}`,
+    });
   };
 
   // =========================

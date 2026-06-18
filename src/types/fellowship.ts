@@ -164,6 +164,30 @@ export interface GithubUserCheckResponseDto {
 }
 
 // =========================
+// Fellowship Application Notes
+// =========================
+
+// Internal, admin-only note on an application — a shared thread admins use while
+// reviewing a proposal. These are NEVER shown on any applicant-facing view. The
+// list endpoint returns a PLAIN ARRAY ordered oldest-first (no paginated
+// { records, totalRecords } wrapper). A note can be edited/deleted only by its
+// author — the server enforces this with a 403; the UI only hides the controls.
+export interface FellowshipApplicationNote {
+  id: string;
+  applicationId: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Create and edit share the same payload: a trimmed body of 1..5000 chars.
+export interface FellowshipApplicationNoteWriteDto {
+  body: string;
+}
+
+// =========================
 // Fellowships
 // =========================
 

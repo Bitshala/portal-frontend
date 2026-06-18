@@ -4,6 +4,8 @@ import type { PaginatedDataDto, PaginatedQueryDto } from '../types/api.ts';
 import type {
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
+  FellowshipApplicationNote,
+  FellowshipApplicationNoteWriteDto,
   FellowshipApplicationProposalDto,
   FellowshipDocumentResponseDto,
   GetFellowshipApplicationResponseDto,
@@ -129,6 +131,63 @@ export const useAcceptApplication = createUseMutation<
     queryInvalidation: async ({ queryClient }) => {
       await queryClient.invalidateQueries({ queryKey: ['fellowship-applications'] });
       await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
+);
+
+// =========================
+// Fellowship Application Notes
+// =========================
+
+// The list route returns a plain array ordered oldest-first, so the query data
+// is FellowshipApplicationNote[] — not a PaginatedDataDto.
+export const useApplicationNotes = createUseQuery<
+  FellowshipApplicationNote[],
+  string
+>(
+  (applicationId) => ['fellowship-application-notes', applicationId],
+  (applicationId) => () => fellowshipService.listApplicationNotes(applicationId),
+);
+
+export const useCreateApplicationNote = createUseMutation<
+  FellowshipApplicationNote,
+  { applicationId: string; body: FellowshipApplicationNoteWriteDto }
+>(
+  ({ applicationId, body }) => fellowshipService.createApplicationNote(applicationId, body),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-application-notes', variables.applicationId],
+      });
+    },
+  },
+);
+
+export const useUpdateApplicationNote = createUseMutation<
+  FellowshipApplicationNote,
+  { applicationId: string; noteId: string; body: FellowshipApplicationNoteWriteDto }
+>(
+  ({ applicationId, noteId, body }) =>
+    fellowshipService.updateApplicationNote(applicationId, noteId, body),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-application-notes', variables.applicationId],
+      });
+    },
+  },
+);
+
+export const useDeleteApplicationNote = createUseMutation<
+  void,
+  { applicationId: string; noteId: string }
+>(
+  ({ applicationId, noteId }) => fellowshipService.deleteApplicationNote(applicationId, noteId),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-application-notes', variables.applicationId],
+      });
     },
   },
 );
