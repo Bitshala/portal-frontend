@@ -1,14 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  Stack,
-  Typography,
-} from '@mui/material';
-import { ArrowRight, FileCheck, FileText } from 'lucide-react';
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import { ArrowRight } from 'lucide-react';
 import FellowshipPageLayout from '../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../components/fellowship/ProposalDialog';
 import StatusChip from '../../components/fellowship/StatusChip';
@@ -241,7 +234,7 @@ const FilterPill = ({
 
 // ---- table ----
 
-const COLS = 'minmax(0, 1.8fr) 110px 130px 130px 110px 120px 120px 96px';
+const COLS = 'minmax(0, 1.8fr) 110px 130px 130px 110px 120px 120px 200px';
 const COL_GAP = 2;
 
 const HeaderRow = () => (
@@ -272,6 +265,63 @@ const HeaderRow = () => (
   </Box>
 );
 
+// The documents action is status-aware: a fellow only needs to act while the
+// fellowship is AWAITING_DOCUMENTS (a document is unuploaded or was rejected).
+// In every other state the button just opens the documents page to view them.
+const docsAction = (status: FellowshipStatus): { label: string; emphasis: boolean } =>
+  status === FellowshipStatus.AWAITING_DOCUMENTS
+    ? { label: 'Upload docs', emphasis: true }
+    : { label: 'View docs', emphasis: false };
+
+// Compact, labeled row action. `emphasis` gives it the orange call-to-action
+// treatment (matching the active filter pill) shown when the fellow needs to
+// act; otherwise it's a quiet secondary button.
+const RowActionButton = ({
+  label,
+  emphasis = false,
+  onClick,
+}: {
+  label: string;
+  emphasis?: boolean;
+  onClick: () => void;
+}) => (
+  <Button
+    size="small"
+    variant="outlined"
+    color={emphasis ? 'primary' : 'inherit'}
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+    sx={{
+      minWidth: 0,
+      px: 1.25,
+      py: 0.4,
+      fontSize: '0.75rem',
+      lineHeight: 1.4,
+      whiteSpace: 'nowrap',
+      ...(emphasis
+        ? {
+            color: 'primary.light',
+            borderColor: 'rgba(249,115,22,0.5)',
+            bgcolor: 'rgba(249,115,22,0.08)',
+            '&:hover': { bgcolor: 'rgba(249,115,22,0.16)', borderColor: 'primary.main' },
+          }
+        : {
+            color: 'text.secondary',
+            borderColor: 'rgba(255,255,255,0.23)',
+            '&:hover': {
+              color: 'text.primary',
+              borderColor: 'rgba(255,255,255,0.4)',
+              bgcolor: 'rgba(255,255,255,0.06)',
+            },
+          }),
+    }}
+  >
+    {label}
+  </Button>
+);
+
 const FellowshipRow = ({
   fellowship,
   lastReport,
@@ -287,6 +337,7 @@ const FellowshipRow = ({
 }) => {
   const trackColor = TRACK_COLORS[fellowship.type];
   const projectTitle = useFellowshipProjectTitle(fellowship);
+  const docs = docsAction(fellowship.status);
 
   return (
     <Box
@@ -367,31 +418,9 @@ const FellowshipRow = ({
       </Box>
 
       {/* Actions */}
-      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-        <IconButton
-          size="small"
-          title="Documents"
-          aria-label="Documents"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDocuments();
-          }}
-          sx={{ color: 'text.secondary', width: 28, height: 28, '&:hover': { color: 'text.primary' } }}
-        >
-          <FileCheck size={14} />
-        </IconButton>
-        <IconButton
-          size="small"
-          title="View proposal"
-          aria-label="View proposal"
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewProposal();
-          }}
-          sx={{ color: 'text.secondary', width: 28, height: 28, '&:hover': { color: 'text.primary' } }}
-        >
-          <FileText size={14} />
-        </IconButton>
+      <Stack direction="row" spacing={0.75} alignItems="center">
+        <RowActionButton label={docs.label} emphasis={docs.emphasis} onClick={onDocuments} />
+        <RowActionButton label="Proposal" onClick={onViewProposal} />
       </Stack>
     </Box>
   );
