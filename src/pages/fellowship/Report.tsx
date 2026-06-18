@@ -43,6 +43,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
 import {
   CHAR_LIMIT,
+  MAX_LINKS,
   REFLECTIVE_QUESTIONS,
   type ReflectiveField,
   cleanLinks,
@@ -103,6 +104,9 @@ const Report = () => {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
   // Submitting is irreversible (locks the report for review), so confirm first.
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  // Set once the fellow tries to submit, so empty required fields can show inline
+  // "<field> is required" errors without nagging on a pristine form.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 50 });
   // Reports can only be filed against an active fellowship.
@@ -182,14 +186,19 @@ const Report = () => {
   // The same PR/issue link must not be listed twice.
   const duplicateLinkIndices = useMemo(() => findDuplicateLinkIndices(prLinks), [prLinks]);
   const hasDuplicateLinks = duplicateLinkIndices.size > 0;
-  const canSubmit =
-    isEditable &&
-    !!fellowshipId &&
-    fellowshipActive &&
-    !!summary.trim() &&
-    !anyOverLimit &&
-    allLinksValid &&
-    !hasDuplicateLinks;
+  // At most MAX_LINKS links may be attached.
+  const nonEmptyLinkCount = prLinks.filter((l) => l.trim()).length;
+  const tooManyLinks = nonEmptyLinkCount > MAX_LINKS;
+  // Summary and all four reflective answers are required on submit.
+  const summaryMissing = !summary.trim();
+  const missingReflective = REFLECTIVE_QUESTIONS.filter((q) => !reflective[q.field].trim());
+  // Structural problems (over-limit, bad/duplicate/too-many links) surface their
+  // own inline errors and hard-disable Submit. Empty required fields don't disable
+  // it — clicking reveals which fields still need filling (see handleSubmit).
+  const hasStructuralError =
+    anyOverLimit || !allLinksValid || hasDuplicateLinks || tooManyLinks;
+  const submitBlocked =
+    !isEditable || !fellowshipId || !fellowshipActive || hasStructuralError;
 
   const updateLink = (index: number, value: string) =>
     setPrLinks((prev) => prev.map((l, i) => (i === index ? value : l)));
@@ -229,6 +238,10 @@ const Report = () => {
       setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
       return;
     }
+    if (tooManyLinks) {
+      setToast({ kind: 'error', msg: `Add at most ${MAX_LINKS} links.` });
+      return;
+    }
     try {
       if (reportId) {
         await updateMut.mutateAsync({ id: reportId, body: buildBody() });
@@ -251,9 +264,18 @@ const Report = () => {
   };
 
   const handleSubmit = async () => {
-    if (!summary.trim() || !fellowshipId) return;
+    setSubmitAttempted(true);
+    if (!fellowshipId) return;
     if (!fellowshipActive) {
       setToast({ kind: 'error', msg: 'Reports can only be submitted for an active fellowship.' });
+      return;
+    }
+    if (summaryMissing) {
+      setToast({ kind: 'error', msg: 'Summary is required.' });
+      return;
+    }
+    if (missingReflective.length > 0) {
+      setToast({ kind: 'error', msg: `${missingReflective[0].label} is required.` });
       return;
     }
     if (anyOverLimit) {
@@ -267,6 +289,10 @@ const Report = () => {
     }
     if (hasDuplicateLinks) {
       setToast({ kind: 'error', msg: 'Remove duplicate links — each PR/issue can only be added once.' });
+      return;
+    }
+    if (tooManyLinks) {
+      setToast({ kind: 'error', msg: `Add at most ${MAX_LINKS} links.` });
       return;
     }
     try {
@@ -426,11 +452,18 @@ const Report = () => {
                       size="small"
                       startIcon={<Plus size={16} />}
                       onClick={addLink}
-                      disabled={!prLinks.every((l) => isValidGithubLink(l))}
+                      disabled={
+                        !prLinks.every((l) => isValidGithubLink(l)) || nonEmptyLinkCount >= MAX_LINKS
+                      }
                       sx={{ mt: 0.5 }}
                     >
                       Add another link
                     </Button>
+                    {tooManyLinks && (
+                      <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.5 }}>
+                        Add at most {MAX_LINKS} links.
+                      </Typography>
+                    )}
                   </Box>
 
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
@@ -445,11 +478,15 @@ const Report = () => {
                     value={summary}
                     onChange={(e) => setSummary(e.target.value)}
                     disabled={!!reportId && reportContent.isLoading}
-                    error={summaryOverLimit}
+                    error={summaryOverLimit || (submitAttempted && summaryMissing)}
                     helperText={
-                      <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        {summaryChars} / {CHAR_LIMIT} characters
-                      </Box>
+                      submitAttempted && summaryMissing ? (
+                        'Summary is required.'
+                      ) : (
+                        <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          {summaryChars} / {CHAR_LIMIT} characters
+                        </Box>
+                      )
                     }
                   />
 
@@ -458,12 +495,13 @@ const Report = () => {
                       Reflections
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                      Optional — these won't block submitting, but they help us understand your month.
+                      Share a few sentences for each — all four are required to submit.
                     </Typography>
                     <Stack spacing={3}>
                       {REFLECTIVE_QUESTIONS.map((q) => {
                         const value = reflective[q.field];
                         const chars = countChars(value);
+                        const missing = submitAttempted && !value.trim();
                         return (
                           <Box key={q.field}>
                             <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -477,11 +515,15 @@ const Report = () => {
                               value={value}
                               onChange={(e) => updateReflective(q.field, e.target.value)}
                               disabled={!!reportId && reportContent.isLoading}
-                              error={chars > CHAR_LIMIT}
+                              error={chars > CHAR_LIMIT || missing}
                               helperText={
-                                <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                  {chars} / {CHAR_LIMIT} characters
-                                </Box>
+                                missing ? (
+                                  `${q.label} is required.`
+                                ) : (
+                                  <Box component="span" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    {chars} / {CHAR_LIMIT} characters
+                                  </Box>
+                                )
                               }
                             />
                           </Box>
@@ -507,9 +549,20 @@ const Report = () => {
                     </Button>
                     <Button
                       variant="contained"
-                      onClick={() => setConfirmSubmitOpen(true)}
+                      onClick={() => {
+                        setSubmitAttempted(true);
+                        if (summaryMissing) {
+                          setToast({ kind: 'error', msg: 'Summary is required.' });
+                          return;
+                        }
+                        if (missingReflective.length > 0) {
+                          setToast({ kind: 'error', msg: `${missingReflective[0].label} is required.` });
+                          return;
+                        }
+                        setConfirmSubmitOpen(true);
+                      }}
                       disabled={
-                        !canSubmit ||
+                        submitBlocked ||
                         submitMut.isPending ||
                         createMut.isPending ||
                         updateMut.isPending

@@ -3,6 +3,9 @@
 // reflective answer independently.
 export const CHAR_LIMIT = 3500;
 
+// At most this many pull-request/issue links may be attached to a report.
+export const MAX_LINKS = 20;
+
 export const countChars = (text: string): number => text.length;
 
 // A valid pull-request or issue link, e.g.
@@ -47,8 +50,9 @@ export const cleanLinks = (links: string[]): string[] => {
   return cleaned;
 };
 
-// The four optional reflective questions, in display order. The `field` matches
-// the API body/content key; the `prompt` is the exact copy shown to the fellow.
+// The four reflective questions, in display order — all required on submit. The
+// `field` matches the API body/content key, `label` is the short name used in
+// validation messages, and `prompt` is the exact copy shown to the fellow.
 // Single source of truth for the editor inputs and the read-only views.
 export type ReflectiveField =
   | 'challengingWork'
@@ -56,23 +60,27 @@ export type ReflectiveField =
   | 'reviewerFeedback'
   | 'growthGoal';
 
-export const REFLECTIVE_QUESTIONS: { field: ReflectiveField; prompt: string }[] = [
+export const REFLECTIVE_QUESTIONS: { field: ReflectiveField; label: string; prompt: string }[] = [
   {
     field: 'challengingWork',
+    label: 'Challenging work',
     prompt:
       'Pick the single most challenging or interesting piece of work you did this month. Walk us through it: What was the problem? What approach did you first try, and what did you end up doing instead?',
   },
   {
     field: 'keyLearning',
+    label: 'Key learning',
     prompt:
       "What's something you understand now that you didn't at the start of the month? (A tool, a part of the codebase, a concept, a way of working—anything.)",
   },
   {
     field: 'reviewerFeedback',
+    label: 'Reviewer feedback',
     prompt: 'Describe one piece of feedback you got from a maintainer or reviewer.',
   },
   {
     field: 'growthGoal',
+    label: 'Growth goal',
     prompt: 'What do you want to get better at next month?',
   },
 ];

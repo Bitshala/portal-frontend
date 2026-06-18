@@ -150,11 +150,16 @@ const tagArray = () =>
     .array(z.string().max(TAG_LIMIT, { message: `Keep each entry under ${TAG_LIMIT} characters.` }))
     .max(MAX_TAGS, { message: `Add at most ${MAX_TAGS} entries.` });
 
-// Several fields are required only on the Developer track (github, project
-// details, coding languages); everything else is shared. The schema is built
-// per-track so non-developer applicants aren't blocked on developer-only fields.
-const makeApplicationSchema = (isDeveloper: boolean) =>
-  z
+// Required-ness is track-aware. GitHub, the project GitHub link and coding
+// languages are Developer-only; mentor details and the project name are required
+// on the Developer and Designer tracks (optional for Educator); everything else
+// is shared. The schema is rebuilt per-track so applicants aren't blocked on
+// fields that don't apply to their track.
+const makeApplicationSchema = (type: FellowshipType | null) => {
+  const isDeveloper = type === FellowshipType.DEVELOPER;
+  const requiresMentorAndProject =
+    type === FellowshipType.DEVELOPER || type === FellowshipType.DESIGNER;
+  return z
     .object({
       // Proposal
       title: z
@@ -175,15 +180,13 @@ const makeApplicationSchema = (isDeveloper: boolean) =>
         )
         .max(MAX_LINKS, { message: `Add at most ${MAX_LINKS} links.` }),
       // Mentor
+      // Required-ness for the mentor fields is track-aware (see superRefine);
+      // the base schema only caps length so drafts stay lenient.
       mentorName: z
         .string()
-        .trim()
-        .min(1, { message: 'Mentor name is required.' })
         .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
       mentorContact: z
         .string()
-        .trim()
-        .min(1, { message: 'Mentor contact is required.' })
         .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
       mentorTestimonial: longText(),
       // Project (developer track)
@@ -197,6 +200,8 @@ const makeApplicationSchema = (isDeveloper: boolean) =>
       // About you
       location: z
         .string()
+        .trim()
+        .min(1, { message: 'Location is required.' })
         .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` }),
       academicBackground: requiredLongText('Academic background'),
       graduationYear: z.string(),
@@ -246,11 +251,25 @@ const makeApplicationSchema = (isDeveloper: boolean) =>
         ctx.addIssue({ code: 'custom', path: ['educationInterests'], message: 'Add at least one interest.' });
       }
 
-      // Developer-only required fields.
-      if (isDeveloper) {
+      // Mentor details and the project name — required on Developer and Designer,
+      // optional on Educator.
+      if (requiresMentorAndProject) {
+        if (!data.mentorName.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['mentorName'], message: 'Mentor name is required.' });
+        }
+        if (!data.mentorContact.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['mentorContact'], message: 'Mentor contact is required.' });
+        }
+        if (!data.mentorTestimonial.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['mentorTestimonial'], message: 'Mentor testimonial is required.' });
+        }
         if (!data.projectName.trim()) {
           ctx.addIssue({ code: 'custom', path: ['projectName'], message: 'Project name is required.' });
         }
+      }
+
+      // Developer-only required fields — project GitHub link and coding languages.
+      if (isDeveloper) {
         if (!data.projectGithubLink.trim()) {
           ctx.addIssue({ code: 'custom', path: ['projectGithubLink'], message: 'Project GitHub link is required.' });
         } else if (validateLink(data.projectGithubLink)) {
@@ -272,6 +291,7 @@ const makeApplicationSchema = (isDeveloper: boolean) =>
         });
       }
     });
+};
 
 type TrackOption = {
   value: FellowshipType;
@@ -321,15 +341,20 @@ type SectionKey = 'proposal' | 'mentor' | 'project' | 'about' | 'bitcoin' | 'any
 // and the form fields validated when the applicant clicks Continue on it
 // (developer-only fields are folded in per track). Splitting the long combined
 // form across these keeps each step short and scannable.
+// Context passed to each step's field list so step-level validation matches the
+// track: `requiresProject` covers the project-name/link fields shown on the
+// Developer and Designer tracks; `isDeveloper` gates the developer-only extras.
+type StepFieldCtx = { isDeveloper: boolean; requiresProject: boolean };
+
 const EDIT_STEPS: {
   label: string;
   sections: SectionKey[];
-  fields: (isDeveloper: boolean) => (keyof ProposalFields)[];
+  fields: (ctx: StepFieldCtx) => (keyof ProposalFields)[];
 }[] = [
   {
     label: 'Proposal',
     sections: ['proposal', 'mentor', 'project'],
-    fields: (isDeveloper) => {
+    fields: ({ isDeveloper, requiresProject }) => {
       const f: (keyof ProposalFields)[] = [
         'title',
         'problemStatement',
@@ -339,14 +364,17 @@ const EDIT_STEPS: {
         'mentorContact',
         'mentorTestimonial',
       ];
-      if (isDeveloper) f.push('projectName', 'projectGithubLink', 'github');
+      // Project name/link live on the Developer and Designer tracks; the GitHub
+      // username sits in this card only on the Developer track.
+      if (requiresProject) f.push('projectName', 'projectGithubLink');
+      if (isDeveloper) f.push('github');
       return f;
     },
   },
   {
     label: 'About you',
     sections: ['about'],
-    fields: (isDeveloper) => {
+    fields: ({ isDeveloper }) => {
       const f: (keyof ProposalFields)[] = [
         'location',
         'graduationYear',
@@ -390,10 +418,13 @@ const Apply = () => {
 
   // The Developer track requires GitHub, the project fields and coding
   // languages; Designer/Educator leave those optional (GitHub is still
-  // format-checked when provided).
+  // format-checked when provided). Mentor details and the project name are
+  // required on the Developer and Designer tracks, optional on Educator.
   const isDeveloper = selectedType === FellowshipType.DEVELOPER;
+  const requiresMentorAndProject =
+    selectedType === FellowshipType.DEVELOPER || selectedType === FellowshipType.DESIGNER;
 
-  const resolver = useMemo(() => zodResolver(makeApplicationSchema(isDeveloper)), [isDeveloper]);
+  const resolver = useMemo(() => zodResolver(makeApplicationSchema(selectedType)), [selectedType]);
   const form = useForm<ProposalFields>({
     resolver,
     defaultValues: EMPTY_FIELDS,
@@ -709,7 +740,9 @@ const Apply = () => {
   // Continue on an intermediate editing step validates only that step's fields
   // (full validation is deferred to the Review/submit transition), then advances.
   const handleContinueEdit = (currentStep: number) => async () => {
-    const ok = await form.trigger(EDIT_STEPS[currentStep - 1].fields(isDeveloper));
+    const ok = await form.trigger(
+      EDIT_STEPS[currentStep - 1].fields({ isDeveloper, requiresProject: requiresMentorAndProject }),
+    );
     if (!ok) return;
     await persistThenGoTo(currentStep + 1);
   };
@@ -718,7 +751,7 @@ const Apply = () => {
   // editing step that owns an errored field so the applicant can see it.
   const handleInvalid = (errors: FieldErrors<ProposalFields>) => {
     const idx = EDIT_STEPS.findIndex((s) =>
-      s.fields(isDeveloper).some((f) => errors[f]),
+      s.fields({ isDeveloper, requiresProject: requiresMentorAndProject }).some((f) => errors[f]),
     );
     setStep(idx >= 0 ? idx + 1 : 1);
     setToast({ kind: 'error', msg: 'Please fix the highlighted fields before continuing.' });
@@ -823,6 +856,7 @@ const Apply = () => {
           onGithubBlur={handleGithubBlur}
           githubStatus={githubStatus}
           isDeveloper={isDeveloper}
+          requiresMentorAndProject={requiresMentorAndProject}
         />
       )}
 
@@ -1269,6 +1303,7 @@ const ApplicationStep = ({
   onGithubBlur,
   githubStatus,
   isDeveloper,
+  requiresMentorAndProject,
 }: {
   form: UseFormReturn<ProposalFields>;
   disabled: boolean;
@@ -1288,6 +1323,7 @@ const ApplicationStep = ({
   onGithubBlur: () => void;
   githubStatus: GithubCheckStatus | null;
   isDeveloper: boolean;
+  requiresMentorAndProject: boolean;
 }) => {
   const { control, getValues, setValue, formState } = form;
   const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
@@ -1302,6 +1338,8 @@ const ApplicationStep = ({
   };
 
   const optionalSuffix = isDeveloper ? '' : ' (optional)';
+  // Mentor fields are required on Developer/Designer, optional on Educator.
+  const mentorOptionalSuffix = requiresMentorAndProject ? '' : ' (optional)';
 
   return (
     <Box
@@ -1424,7 +1462,7 @@ const ApplicationStep = ({
         <SectionCard title="Mentor">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
             <Box sx={{ flex: 1 }}>
-              <FieldLabel>Mentor name</FieldLabel>
+              <FieldLabel>Mentor name{mentorOptionalSuffix}</FieldLabel>
               <ControlledTextField
                 control={control}
                 name="mentorName"
@@ -1435,7 +1473,7 @@ const ApplicationStep = ({
               />
             </Box>
             <Box sx={{ flex: 1 }}>
-              <FieldLabel>Mentor contact</FieldLabel>
+              <FieldLabel>Mentor contact{mentorOptionalSuffix}</FieldLabel>
               <ControlledTextField
                 control={control}
                 name="mentorContact"
@@ -1447,7 +1485,7 @@ const ApplicationStep = ({
             </Box>
           </Stack>
 
-          <FieldLabel>Mentor testimonial (optional)</FieldLabel>
+          <FieldLabel>Mentor testimonial{mentorOptionalSuffix}</FieldLabel>
           <ControlledTextField
             control={control}
             name="mentorTestimonial"
@@ -1462,8 +1500,8 @@ const ApplicationStep = ({
         </SectionCard>
         )}
 
-        {/* ---- Project (developer track) ---- */}
-        {sections.includes('project') && isDeveloper && (
+        {/* ---- Project (developer & designer tracks) ---- */}
+        {sections.includes('project') && requiresMentorAndProject && (
           <SectionCard title="Project" caption="Tell us about the open-source project you'll work on.">
             <FieldLabel>Project name</FieldLabel>
             <ControlledTextField
@@ -1476,7 +1514,7 @@ const ApplicationStep = ({
               sx={{ mb: 2.5 }}
             />
 
-            <FieldLabel>Project GitHub link</FieldLabel>
+            <FieldLabel>Project GitHub link{isDeveloper ? '' : ' (optional)'}</FieldLabel>
             <ControlledTextField
               control={control}
               name="projectGithubLink"
@@ -1487,30 +1525,34 @@ const ApplicationStep = ({
               sx={{ mb: 2.5 }}
             />
 
-            <FieldLabel>Your GitHub username</FieldLabel>
-            <Controller
-              control={control}
-              name="github"
-              render={({ field, fieldState }) => (
-                <TextField
-                  fullWidth
-                  name={field.name}
-                  value={field.value ?? ''}
-                  onChange={field.onChange}
-                  onBlur={() => {
-                    field.onBlur();
-                    onGithubBlur();
-                  }}
-                  inputRef={field.ref}
-                  disabled={disabled}
-                  placeholder="aarav-m or https://github.com/aarav-m"
-                  error={!!fieldState.error}
-                  helperText={fieldState.error?.message ?? ' '}
-                  sx={{ mb: githubStatus ? 0 : 0.5 }}
+            {isDeveloper && (
+              <>
+                <FieldLabel>Your GitHub username</FieldLabel>
+                <Controller
+                  control={control}
+                  name="github"
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      fullWidth
+                      name={field.name}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onBlur={() => {
+                        field.onBlur();
+                        onGithubBlur();
+                      }}
+                      inputRef={field.ref}
+                      disabled={disabled}
+                      placeholder="aarav-m or https://github.com/aarav-m"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message ?? ' '}
+                      sx={{ mb: githubStatus ? 0 : 0.5 }}
+                    />
+                  )}
                 />
-              )}
-            />
-            <GithubCheckHint status={githubStatus} />
+                <GithubCheckHint status={githubStatus} />
+              </>
+            )}
           </SectionCard>
         )}
 
@@ -1548,7 +1590,7 @@ const ApplicationStep = ({
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
             <Box sx={{ flex: 2 }}>
-              <FieldLabel>Location (optional)</FieldLabel>
+              <FieldLabel>Location</FieldLabel>
               <ControlledTextField
                 control={control}
                 name="location"
@@ -1964,6 +2006,8 @@ const ReviewStep = ({
   isSubmitDisabled: boolean;
   submitLabel: string;
 }) => {
+  const requiresProject =
+    track.value === FellowshipType.DEVELOPER || track.value === FellowshipType.DESIGNER;
   const links = fields.links.map((l) => l.trim()).filter(Boolean);
   return (
     <Box
@@ -2047,7 +2091,7 @@ const ReviewStep = ({
           )}
         </Box>
 
-        {isDeveloper && (
+        {requiresProject && (
           <>
             <ReviewGroupLabel>Project</ReviewGroupLabel>
             <ReviewText label="Project name" value={fields.projectName} />
