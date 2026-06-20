@@ -164,7 +164,7 @@ const AdminPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-zinc-100 px-4 md:px-8 py-6 relative" style={{ fontFamily: 'Sora, sans-serif' }}>
+    <div className="min-h-screen bg-zinc-900 text-zinc-100 px-4 md:px-8 py-6 relative" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Top-right actions */}
       <div className="absolute top-6 right-6 flex items-center gap-2">
         <button

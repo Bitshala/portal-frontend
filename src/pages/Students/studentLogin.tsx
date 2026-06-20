@@ -9,10 +9,10 @@ const CohortParticipantLogin: React.FC = () => {
   return (
     <>
       <link 
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@100;200;300;400;500;600;700;800&display=swap" 
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800&display=swap" 
         rel="stylesheet" 
       />
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#18181b', fontFamily: 'Sora, -apple-system, BlinkMacSystemFont, sans-serif', color: '#fff' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#18181b', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif', color: '#fff' }}>
         <div 
           className="rounded-2xl p-10 w-full max-w-sm text-center"
           style={{ backgroundColor: '#27272a' }}

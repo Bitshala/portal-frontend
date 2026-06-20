@@ -1,5 +1,6 @@
-import { StrictMode, lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Box, CircularProgress } from '@mui/material';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 
@@ -7,6 +8,8 @@ import { queryClient } from './http/queryClient.ts';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { UserRole } from './types/enums.ts';
 import Layout from './components/Layout.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
+import RouteErrorPage from './components/RouteErrorPage.tsx';
 
 import '@fontsource/sora';
 import 'virtual:uno.css';
@@ -37,8 +40,36 @@ const AdminPage = lazy(() => import('./pages/admin/page.tsx'));
 const FeedbackAdmin = lazy(() => import('./pages/admin/FeedbackAdmin.tsx'));
 const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
 const GDPresentation = lazy(() => import('./pages/GDPresentation.tsx'));
+const Apply = lazy(() => import('./pages/fellowship/Apply.tsx'));
+const MyFellowships = lazy(() => import('./pages/fellowship/MyFellowships.tsx'));
+const FellowshipDocuments = lazy(() => import('./pages/fellowship/FellowshipDocuments.tsx'));
+const MyApplications = lazy(() => import('./pages/fellowship/MyApplications.tsx'));
+const MyReports = lazy(() => import('./pages/fellowship/MyReports.tsx'));
+const Report = lazy(() => import('./pages/fellowship/Report.tsx'));
+const ProposalPrint = lazy(() => import('./pages/fellowship/ProposalPrint.tsx'));
+const ApplicationsAdmin = lazy(() => import('./pages/fellowship/admin/ApplicationsAdmin.tsx'));
+const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/FellowshipsAdmin.tsx'));
+const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
 
-const router = createBrowserRouter([
+const FellowshipFallback = () => (
+  <Box
+    sx={{
+      minHeight: '100vh',
+      bgcolor: '#000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <CircularProgress size={28} sx={{ color: '#f97316' }} />
+  </Box>
+);
+
+const withFellowshipFallback = (node: JSX.Element) => (
+  <Suspense fallback={<FellowshipFallback />}>{node}</Suspense>
+);
+
+const routes = [
   {
     path: '/login',
     element: <Layout><Login /></Layout>,
@@ -161,6 +192,73 @@ const router = createBrowserRouter([
       ),
     },
     {
+      path: '/fellowship',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyApplications />)}</ProtectedRoute></Layout>,
+    },
+    {
+      path: '/fellowship/apply',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Apply />)}</ProtectedRoute></Layout>,
+    },
+    {
+      path: '/fellowship/me',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyFellowships />)}</ProtectedRoute></Layout>,
+    },
+    {
+      path: '/fellowship/applications',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyApplications />)}</ProtectedRoute></Layout>,
+    },
+    {
+      path: '/fellowship/reports',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<MyReports />)}</ProtectedRoute></Layout>,
+    },
+    {
+      path: '/fellowship/fellowships/:fellowshipId/reports/:id?',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<Report />)}</ProtectedRoute></Layout>,
+    },
+    {
+      // Email deep-link target — fellow's contract / W-8BEN documents. Backend
+      // sets buildFellowshipDocumentsUrl to this path.
+      path: '/fellowship/fellowships/:fellowshipId/documents',
+      element: <Layout><ProtectedRoute>{withFellowshipFallback(<FellowshipDocuments />)}</ProtectedRoute></Layout>,
+    },
+    {
+      // Print-friendly proposal view — deliberately unwrapped from Layout so
+      // only the document itself prints. Access control happens server-side
+      // (applicants can read their own proposal, admins any).
+      path: '/fellowship/applications/:id/proposal/print',
+      element: <ProtectedRoute>{withFellowshipFallback(<ProposalPrint />)}</ProtectedRoute>,
+    },
+    {
+      path: '/admin/fellowships',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<FellowshipsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      path: '/admin/fellowships/applications',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<ApplicationsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      path: '/admin/fellowships/reports',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<ReportsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
       path: '/unauthorized',
       element: <Layout><div className="min-h-screen bg-zinc-900 text-zinc-100 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -169,14 +267,20 @@ const router = createBrowserRouter([
         </div>
       </div></Layout>,
     }
-]);
+];
+
+// Attach the friendly error page to every route so a render/loader throw shows
+// our themed fallback instead of React Router's default developer screen.
+const router = createBrowserRouter(
+  routes.map((route) => ({ ...route, errorElement: <RouteErrorPage /> })),
+);
 
 
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>
-  </StrictMode>
+  </ErrorBoundary>
 );

@@ -1,0 +1,1062 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import {
+  ArrowDownUp,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FileDown,
+  MessageSquare,
+  Search,
+  X,
+} from 'lucide-react';
+import ApplicationNotes from '../../../components/fellowship/ApplicationNotes';
+import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
+import PdfUploadField from '../../../components/fellowship/PdfUploadField';
+import ProposalView from '../../../components/fellowship/ProposalView';
+import StatusChip from '../../../components/fellowship/StatusChip';
+import { fontFamilyMono } from '../../../components/fellowship/theme';
+import {
+  useAcceptApplication,
+  useApplications,
+  useApplicationProposal,
+  useReviewApplication,
+} from '../../../hooks/fellowshipHooks';
+import { useDebounce } from '../../../hooks/useDebounce';
+import {
+  FellowshipApplicationStatus,
+  type FellowshipApplicationProposalDto,
+  type FellowshipApplicationsSortBy,
+  type GetFellowshipApplicationResponseDto,
+} from '../../../types/fellowship';
+import { SortOrder } from '../../../types/api';
+import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
+import { formatFellowshipType } from '../../../utils/fellowshipFormat';
+import { normalizeGithub } from '../../../utils/proposalFormat';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
+
+type FilterValue =
+  | 'SUBMITTED'
+  | 'CHANGES_REQUESTED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'ALL';
+
+// "Submitted" and the old reviewer-assigned "In review" state collapse into a
+// single applicant-facing "Under review" bucket.
+const FILTERS: { label: string; value: FilterValue }[] = [
+  { label: 'Under review', value: 'SUBMITTED' },
+  { label: 'Changes requested', value: 'CHANGES_REQUESTED' },
+  { label: 'Accepted', value: 'ACCEPTED' },
+  { label: 'Rejected', value: 'REJECTED' },
+  { label: 'All', value: 'ALL' },
+];
+
+// The server only sorts applications by createdAt/updatedAt, so the old
+// "by name" sort is gone — these map onto the supported fields.
+type SortKey = 'newest' | 'oldest' | 'updated';
+
+const SORT_OPTIONS: {
+  label: string;
+  value: SortKey;
+  sortBy: FellowshipApplicationsSortBy;
+  sortOrder: SortOrder;
+}[] = [
+  { label: 'Newest', value: 'newest', sortBy: 'createdAt', sortOrder: SortOrder.DESC },
+  { label: 'Oldest', value: 'oldest', sortBy: 'createdAt', sortOrder: SortOrder.ASC },
+  { label: 'Recently updated', value: 'updated', sortBy: 'updatedAt', sortOrder: SortOrder.DESC },
+];
+
+// ---- helpers ----
+
+const hash = (s: string): number => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+};
+
+const initials = (name: string | null): string => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const AVATAR_TINTS: { bg: string; color: string }[] = [
+  { bg: 'rgba(249,115,22,0.15)', color: '#fb923c' },
+  { bg: 'rgba(96,165,250,0.15)', color: '#60a5fa' },
+  { bg: 'rgba(74,222,128,0.15)', color: '#4ade80' },
+  { bg: 'rgba(167,139,250,0.15)', color: '#a78bfa' },
+  { bg: 'rgba(244,114,182,0.15)', color: '#f472b6' },
+  { bg: 'rgba(251,191,36,0.15)', color: '#fbbf24' },
+];
+
+const tintFor = (seed: string) => AVATAR_TINTS[hash(seed) % AVATAR_TINTS.length];
+
+const relativeDays = (iso: string | null): string => {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (d <= 0) return 'today';
+  if (d === 1) return '1d ago';
+  if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30);
+  return mo === 1 ? '1mo ago' : `${mo}mo ago`;
+};
+
+// ---- page ----
+
+const ApplicationsAdmin = () => {
+  const [filter, setFilter] = useState<FilterValue>('SUBMITTED');
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [requestChangesOpen, setRequestChangesOpen] = useState(false);
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptFile, setAcceptFile] = useState<File | null>(null);
+  const [remarks, setRemarks] = useState('');
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const debouncedSearch = useDebounce(search.trim(), 300);
+
+  const apiStatus =
+    filter === 'ALL'
+      ? undefined
+      : filter === 'SUBMITTED'
+        ? FellowshipApplicationStatus.SUBMITTED
+        : filter === 'CHANGES_REQUESTED'
+          ? FellowshipApplicationStatus.CHANGES_REQUESTED
+          : filter === 'ACCEPTED'
+            ? FellowshipApplicationStatus.ACCEPTED
+            : FellowshipApplicationStatus.REJECTED;
+
+  const sort = SORT_OPTIONS.find((o) => o.value === sortKey) ?? SORT_OPTIONS[0];
+
+  // Reset to the first page whenever the query changes, otherwise we can land
+  // on an out-of-range page and get an empty result set back.
+  useEffect(() => {
+    setPage(0);
+  }, [filter, debouncedSearch, sortKey, pageSize]);
+
+  const { data, isLoading, isError, error } = useApplications(
+    {
+      page,
+      pageSize,
+      ...(apiStatus ? { status: apiStatus } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      sortBy: sort.sortBy,
+      sortOrder: sort.sortOrder,
+    },
+    // Keep the previous page visible while the next one loads to avoid a
+    // full-list spinner flash when paging.
+    { placeholderData: (prev) => prev },
+  );
+  const reviewMut = useReviewApplication();
+  const acceptMut = useAcceptApplication();
+
+  // The server returns exactly the page to render, already filtered/sorted.
+  const records = useMemo(() => data?.records ?? [], [data?.records]);
+  const totalRecords = data?.totalRecords ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
+
+  // Detail-pane navigation traverses the current page only.
+  const selectedIdx = records.findIndex((r) => r.id === selectedId);
+  const selected = selectedIdx >= 0 ? records[selectedIdx] : records[0] ?? null;
+  const effectiveSelectedId = selected?.id ?? null;
+
+  const proposalQuery = useApplicationProposal(effectiveSelectedId ?? '', {
+    enabled: !!effectiveSelectedId,
+  });
+
+  const handleAccept = async () => {
+    if (!selected || !acceptFile) return;
+    try {
+      await acceptMut.mutateAsync({ id: selected.id, file: acceptFile });
+      setToast({
+        kind: 'success',
+        msg: 'Accepted — fellowship created, awaiting documents.',
+      });
+      setAcceptOpen(false);
+      setAcceptFile(null);
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selected || !remarks.trim()) return;
+    try {
+      await reviewMut.mutateAsync({
+        id: selected.id,
+        body: {
+          status: FellowshipApplicationStatus.REJECTED,
+          reviewerRemarks: remarks.trim(),
+        },
+      });
+      setToast({ kind: 'success', msg: 'Application rejected.' });
+      setRejectOpen(false);
+      setRemarks('');
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    }
+  };
+
+  const handleRequestChanges = async () => {
+    if (!selected || !remarks.trim()) return;
+    try {
+      await reviewMut.mutateAsync({
+        id: selected.id,
+        body: {
+          status: FellowshipApplicationStatus.CHANGES_REQUESTED,
+          reviewerRemarks: remarks.trim(),
+        },
+      });
+      setToast({ kind: 'success', msg: 'Changes requested — applicant notified.' });
+      setRequestChangesOpen(false);
+      setRemarks('');
+    } catch (e) {
+      setToast({ kind: 'error', msg: extractErrorMessage(e) });
+    }
+  };
+
+  const goPrev = () => {
+    if (selectedIdx > 0) setSelectedId(records[selectedIdx - 1].id);
+  };
+  const goNext = () => {
+    if (selectedIdx >= 0 && selectedIdx < records.length - 1) {
+      setSelectedId(records[selectedIdx + 1].id);
+    }
+  };
+
+  return (
+    <FellowshipPageLayout
+      title="Applications"
+      subtitle="Review submitted fellowship applications."
+      hideIcon
+    >
+      {toast && (
+        <Alert severity={toast.kind} sx={{ mb: 2 }} onClose={() => setToast(null)}>
+          {toast.msg}
+        </Alert>
+      )}
+
+      {isError && (
+        <Alert severity={isBadFilterError(error) ? 'warning' : 'error'} sx={{ mb: 2 }}>
+          {isBadFilterError(error)
+            ? `Invalid filter or search — please adjust and try again. (${extractErrorMessage(error)})`
+            : `Couldn't load applications: ${extractErrorMessage(error)}`}
+        </Alert>
+      )}
+
+      <Toolbar
+        filter={filter}
+        onFilter={setFilter}
+        search={search}
+        onSearch={setSearch}
+        sortKey={sortKey}
+        onSort={setSortKey}
+        sortMenuOpen={sortMenuOpen}
+        setSortMenuOpen={setSortMenuOpen}
+      />
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 380px) minmax(0, 1fr)' },
+          gap: 2,
+          mt: 2,
+        }}
+      >
+        <Box>
+          <ApplicantList
+            isLoading={isLoading}
+            records={records}
+            selectedId={effectiveSelectedId}
+            onSelect={setSelectedId}
+            sortLabel={sort.label}
+            totalRecords={totalRecords}
+          />
+          {totalRecords > 0 && (
+            <ListPager
+              page={page}
+              pageCount={pageCount}
+              total={totalRecords}
+              pageSize={pageSize}
+              onChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
+        </Box>
+
+        {selected ? (
+          <DetailPane
+            app={selected}
+            proposal={proposalQuery.data}
+            isLoadingProposal={proposalQuery.isLoading}
+            position={selectedIdx >= 0 ? selectedIdx + 1 : 1}
+            total={records.length}
+            onPrev={goPrev}
+            onNext={goNext}
+            canPrev={selectedIdx > 0}
+            canNext={selectedIdx >= 0 && selectedIdx < records.length - 1}
+            onAccept={() => {
+              setAcceptFile(null);
+              setAcceptOpen(true);
+            }}
+            onReject={() => {
+              setRemarks('');
+              setRejectOpen(true);
+            }}
+            onRequestChanges={() => {
+              setRemarks('');
+              setRequestChangesOpen(true);
+            }}
+            isReviewing={reviewMut.isPending || acceptMut.isPending}
+          />
+        ) : (
+          <EmptyDetail />
+        )}
+      </Box>
+
+      <RemarksDialog
+        open={rejectOpen}
+        title="Reject application"
+        helper="Share feedback — this will be shown to the applicant."
+        confirmLabel="Reject"
+        confirmColor="error"
+        value={remarks}
+        onChange={setRemarks}
+        onCancel={() => {
+          setRejectOpen(false);
+          setRemarks('');
+        }}
+        onConfirm={handleReject}
+        busy={reviewMut.isPending}
+      />
+
+      <RemarksDialog
+        open={requestChangesOpen}
+        title="Request changes"
+        helper="Tell the applicant what to revise. They'll be notified with these notes."
+        confirmLabel="Send"
+        confirmColor="warning"
+        value={remarks}
+        onChange={setRemarks}
+        onCancel={() => {
+          setRequestChangesOpen(false);
+          setRemarks('');
+        }}
+        onConfirm={handleRequestChanges}
+        busy={reviewMut.isPending}
+      />
+
+      <AcceptDialog
+        open={acceptOpen}
+        file={acceptFile}
+        onChange={setAcceptFile}
+        onCancel={() => {
+          setAcceptOpen(false);
+          setAcceptFile(null);
+        }}
+        onConfirm={handleAccept}
+        busy={acceptMut.isPending}
+      />
+    </FellowshipPageLayout>
+  );
+};
+
+// ---- toolbar ----
+
+const Toolbar = ({
+  filter,
+  onFilter,
+  search,
+  onSearch,
+  sortKey,
+  onSort,
+  sortMenuOpen,
+  setSortMenuOpen,
+}: {
+  filter: FilterValue;
+  onFilter: (v: FilterValue) => void;
+  search: string;
+  onSearch: (v: string) => void;
+  sortKey: SortKey;
+  onSort: (k: SortKey) => void;
+  sortMenuOpen: boolean;
+  setSortMenuOpen: (open: boolean) => void;
+}) => (
+  <Stack
+    direction={{ xs: 'column', md: 'row' }}
+    justifyContent="space-between"
+    alignItems={{ xs: 'stretch', md: 'center' }}
+    spacing={1.5}
+  >
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" sx={{ rowGap: 1 }}>
+      {FILTERS.map((f) => {
+        const active = filter === f.value;
+        return (
+          <Box
+            key={f.value}
+            onClick={() => onFilter(f.value)}
+            sx={{
+              px: 1.75,
+              py: 0.6,
+              borderRadius: 999,
+              border: '1px solid',
+              borderColor: active ? 'primary.main' : 'divider',
+              bgcolor: active ? 'rgba(249,115,22,0.08)' : 'background.paper',
+              color: active ? 'primary.light' : 'text.secondary',
+              fontWeight: 600,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              '&:hover': active ? {} : { borderColor: 'primary.light', color: 'text.primary' },
+            }}
+          >
+            {f.label}
+          </Box>
+        );
+      })}
+    </Stack>
+
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      sx={{ flexGrow: { md: 1 }, maxWidth: { md: 860 } }}
+    >
+      <TextField
+        size="small"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        placeholder="Search name, Discord, email…"
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <Search size={14} />
+            </InputAdornment>
+          ),
+        }}
+        inputProps={{ maxLength: 100 }}
+        sx={{ flexGrow: 1, minWidth: 240 }}
+      />
+      <Box sx={{ position: 'relative' }}>
+        <Button
+          onClick={() => setSortMenuOpen(!sortMenuOpen)}
+          startIcon={<ArrowDownUp size={14} />}
+          variant="outlined"
+          sx={{
+            color: 'text.primary',
+            borderColor: 'divider',
+            fontWeight: 600,
+            textTransform: 'none',
+            fontSize: '0.82rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Sort'}
+        </Button>
+        {sortMenuOpen && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              right: 0,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              borderRadius: 0.6,
+              p: 0.5,
+              zIndex: 5,
+              minWidth: 180,
+            }}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <Box
+                key={o.value}
+                onClick={() => {
+                  onSort(o.value);
+                  setSortMenuOpen(false);
+                }}
+                sx={{
+                  px: 1.25,
+                  py: 0.75,
+                  borderRadius: 0.4,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  bgcolor: sortKey === o.value ? 'rgba(249,115,22,0.08)' : 'transparent',
+                  color: sortKey === o.value ? 'primary.light' : 'text.primary',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+                }}
+              >
+                {o.label}
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
+    </Stack>
+  </Stack>
+);
+
+// ---- applicant list ----
+
+const ApplicantList = ({
+  isLoading,
+  records,
+  selectedId,
+  onSelect,
+  sortLabel,
+  totalRecords,
+}: {
+  isLoading: boolean;
+  records: GetFellowshipApplicationResponseDto[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  sortLabel: string;
+  totalRecords: number;
+}) => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.75,
+      bgcolor: 'background.paper',
+      p: 1.25,
+      maxHeight: '74vh',
+      overflowY: 'auto',
+    }}
+  >
+    <Typography
+      variant="caption"
+      sx={{
+        color: 'text.secondary',
+        letterSpacing: 0.6,
+        fontSize: '0.72rem',
+        px: 1,
+        display: 'block',
+        mb: 0.75,
+      }}
+    >
+      {isLoading
+        ? 'Loading…'
+        : `${totalRecords} result${totalRecords === 1 ? '' : 's'} · ${sortLabel}`}
+    </Typography>
+
+    {isLoading && (
+      <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress size={20} />
+      </Box>
+    )}
+
+    <Stack spacing={0.5}>
+      {records.map((r) => {
+        const isActive = r.id === selectedId;
+        const tint = tintFor(r.applicantName ?? r.id);
+        return (
+          <Box
+            key={r.id}
+            onClick={() => onSelect(r.id)}
+            sx={{
+              p: 1.25,
+              borderRadius: 0.5,
+              cursor: 'pointer',
+              border: '1px solid',
+              borderColor: isActive ? 'primary.main' : 'transparent',
+              bgcolor: isActive ? 'rgba(249,115,22,0.06)' : 'transparent',
+              transition: 'all 0.12s',
+              '&:hover': isActive
+                ? {}
+                : { bgcolor: 'rgba(255,255,255,0.03)', borderColor: 'divider' },
+            }}
+          >
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  bgcolor: tint.bg,
+                  color: tint.color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {initials(r.applicantName)}
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    color: 'text.primary',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {r.applicantName ?? '—'}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.74rem',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {formatFellowshipType(r.type)} fellowship · {relativeDays(r.createdAt)}
+                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+                  <StatusChip status={r.status} />
+                </Stack>
+              </Box>
+            </Stack>
+          </Box>
+        );
+      })}
+    </Stack>
+  </Box>
+);
+
+// ---- list pager ----
+
+const ListPager = ({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) => {
+  const from = total === 0 ? 0 : page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ mt: 1, px: 0.5 }}
+    >
+      <RowsPerPageSelect value={pageSize} onChange={onPageSizeChange} />
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <Typography
+          sx={{ fontFamily: fontFamilyMono, fontSize: '0.72rem', color: 'text.secondary' }}
+        >
+          {from}–{to} of {total}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label="Previous page"
+          disabled={page === 0}
+          onClick={() => onChange(page - 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronLeft size={16} />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Next page"
+          disabled={page >= pageCount - 1}
+          onClick={() => onChange(page + 1)}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+        >
+          <ChevronRight size={16} />
+        </IconButton>
+      </Stack>
+    </Stack>
+  );
+};
+
+// Compact "rows per page" picker shared by the pagers.
+const RowsPerPageSelect = ({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (size: number) => void;
+}) => (
+  <Stack direction="row" spacing={0.75} alignItems="center">
+    <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>Rows</Typography>
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      slotProps={{ htmlInput: { 'aria-label': 'Rows per page' } }}
+      sx={{
+        '& .MuiSelect-select': { py: 0.25, pl: 1, fontSize: '0.74rem' },
+      }}
+    >
+      {PAGE_SIZE_OPTIONS.map((n) => (
+        <MenuItem key={n} value={n} sx={{ fontSize: '0.8rem' }}>
+          {n}
+        </MenuItem>
+      ))}
+    </TextField>
+  </Stack>
+);
+
+// ---- detail pane ----
+
+const EmptyDetail = () => (
+  <Box
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.75,
+      bgcolor: 'background.paper',
+      p: 6,
+      textAlign: 'center',
+    }}
+  >
+    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+      Select an application from the list to review.
+    </Typography>
+  </Box>
+);
+
+const DetailPane = ({
+  app,
+  proposal,
+  isLoadingProposal,
+  position,
+  total,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext,
+  onAccept,
+  onReject,
+  onRequestChanges,
+  isReviewing,
+}: {
+  app: GetFellowshipApplicationResponseDto;
+  proposal: FellowshipApplicationProposalDto | undefined;
+  isLoadingProposal: boolean;
+  position: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+  canPrev: boolean;
+  canNext: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+  onRequestChanges: () => void;
+  isReviewing: boolean;
+}) => {
+  const handle = proposal?.github ? `@${normalizeGithub(proposal.github)}` : '';
+  const isFinal =
+    app.status === FellowshipApplicationStatus.ACCEPTED ||
+    app.status === FellowshipApplicationStatus.REJECTED;
+  const awaitingApplicant = app.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+  const actionsDisabled = isFinal || awaitingApplicant;
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 0.75,
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Box sx={{ p: { xs: 2.5, md: 3 }, flex: 1, overflowY: 'auto', maxHeight: '74vh' }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {proposal?.title || `${formatFellowshipType(app.type)} fellowship`}
+              </Typography>
+              <StatusChip status={app.status} />
+            </Stack>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {formatFellowshipType(app.type)}
+              {handle && <> · {handle}</>}
+              <> · submitted {relativeDays(app.createdAt)}</>
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={0.75}>
+            <IconButton
+              onClick={() =>
+                window.open(
+                  `/fellowship/applications/${app.id}/proposal/print`,
+                  '_blank',
+                )
+              }
+              size="small"
+              title="Export as PDF"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 0.5,
+                color: 'text.secondary',
+                width: 28,
+                height: 28,
+                '&:hover': { color: 'text.primary', bgcolor: 'rgba(255,255,255,0.04)' },
+              }}
+            >
+              <FileDown size={14} />
+            </IconButton>
+            <PaginatorButton onClick={onPrev} disabled={!canPrev} dir="prev" />
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', alignSelf: 'center', minWidth: 40, textAlign: 'center' }}
+            >
+              {position} / {total}
+            </Typography>
+            <PaginatorButton onClick={onNext} disabled={!canNext} dir="next" />
+          </Stack>
+        </Stack>
+
+        <Box sx={{ mt: 2.5 }} />
+
+        {isLoadingProposal && !proposal ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={20} />
+          </Box>
+        ) : (
+          // Reviewers read proposals in full, so no expandable clamping here.
+          <ProposalView proposal={proposal} />
+        )}
+
+        {app.status !== FellowshipApplicationStatus.SUBMITTED && app.reviewerRemarks && (
+          <Alert
+            severity={awaitingApplicant ? 'warning' : 'info'}
+            sx={{ mt: 2 }}
+            icon={<MessageSquare size={16} />}
+          >
+            <strong>{app.reviewedByName ?? 'Reviewer'}:</strong> {app.reviewerRemarks}
+          </Alert>
+        )}
+
+        {/* Internal, admin-only notes. Self-gates to ADMIN and is never shown to
+            applicants. Keyed by id so switching applications resets its state. */}
+        <ApplicationNotes key={app.id} applicationId={app.id} />
+      </Box>
+
+      <Box
+        sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          p: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {awaitingApplicant ? (
+            <>Awaiting applicant revision</>
+          ) : app.reviewedByName ? (
+            <>Reviewed by <strong>{app.reviewedByName}</strong></>
+          ) : (
+            <>Awaiting review</>
+          )}
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            onClick={onRequestChanges}
+            disabled={isReviewing || actionsDisabled}
+            sx={{ color: 'text.primary', borderColor: 'divider' }}
+          >
+            Request changes
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={onReject}
+            disabled={isReviewing || actionsDisabled}
+            startIcon={<X size={14} />}
+          >
+            Reject
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onAccept}
+            disabled={isReviewing || actionsDisabled}
+            startIcon={<Check size={14} />}
+          >
+            Accept
+          </Button>
+        </Stack>
+      </Box>
+    </Box>
+  );
+};
+
+const PaginatorButton = ({
+  onClick,
+  disabled,
+  dir,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  dir: 'prev' | 'next';
+}) => (
+  <IconButton
+    onClick={onClick}
+    disabled={disabled}
+    size="small"
+    sx={{
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 0.5,
+      color: 'text.secondary',
+      width: 28,
+      height: 28,
+      '&:hover': { color: 'text.primary', bgcolor: 'rgba(255,255,255,0.04)' },
+      '&.Mui-disabled': { opacity: 0.4 },
+    }}
+  >
+    {dir === 'prev' ? <ArrowLeft size={14} /> : <ArrowRight size={14} />}
+  </IconButton>
+);
+
+// ---- shared dialog ----
+
+const AcceptDialog = ({
+  open,
+  file,
+  onChange,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  open: boolean;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) => (
+  <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+    <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
+    <DialogContent>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        Upload the Bitshala-signed unsigned-contract PDF. Accepting creates the
+        fellowship and its documents, then emails the fellow to sign the contract
+        and upload their signed copy + W-8BEN.
+      </Typography>
+      <PdfUploadField
+        file={file}
+        onChange={onChange}
+        disabled={busy}
+        label="Choose contract PDF"
+      />
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onCancel}>Cancel</Button>
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={onConfirm}
+        disabled={!file || busy}
+      >
+        {busy ? 'Accepting…' : 'Accept'}
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
+
+const RemarksDialog = ({
+  open,
+  title,
+  helper,
+  confirmLabel,
+  confirmColor,
+  value,
+  onChange,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  open: boolean;
+  title: string;
+  helper: string;
+  confirmLabel: string;
+  confirmColor: 'error' | 'warning' | 'primary';
+  value: string;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) => (
+  <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+    <DialogTitle sx={{ fontWeight: 700 }}>{title}</DialogTitle>
+    <DialogContent>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        {helper}
+      </Typography>
+      <TextField
+        multiline
+        fullWidth
+        minRows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Remarks (required)"
+        autoFocus
+      />
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onCancel}>Cancel</Button>
+      <Button
+        variant="contained"
+        color={confirmColor}
+        onClick={onConfirm}
+        disabled={!value.trim() || busy}
+      >
+        {confirmLabel}
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
+
+export default ApplicationsAdmin;

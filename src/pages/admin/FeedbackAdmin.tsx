@@ -246,7 +246,7 @@ const FeedbackAdmin: React.FC = () => {
   const [selectedCohort, setSelectedCohort] = useState('');
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-zinc-100 px-4 md:px-8 py-6" style={{ fontFamily: 'Sora, sans-serif' }}>
+    <div className="min-h-screen bg-zinc-900 text-zinc-100 px-4 md:px-8 py-6" style={{ fontFamily: 'Inter, sans-serif' }}>
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={() => navigate('/admin')}
