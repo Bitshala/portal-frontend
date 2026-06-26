@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import type { CohortRow } from '../../types/cohort';
+export type { CohortRow };
 import {
   Table,
   TableBody,
@@ -12,27 +14,12 @@ import {
 } from '@mui/material';
 import StatusBadge from './StatusBadge';
 
-export type CohortRow = {
-  id: string;
-  name: string;
-  type: string;
-  season: number;
-  status: string;
-  startDate: string;
-  endDate: string;
-  weeks?: number;
-  completedWeeks?: number;
-  participants?: number;
-  applications?: number;
-  raw?: unknown;
-};
-
 type CohortTableProps = {
   cohorts: CohortRow[];
   onRowClick?: (cohort: CohortRow) => void;
   actions?: (cohort: CohortRow) => ReactNode;
   loading?: boolean;
-  emptyMessage?: string;
+  emptyMessage?: ReactNode;
 };
 
 const formatDate = (iso: string): string => {
@@ -82,8 +69,10 @@ const CohortTable = ({
 
   if (cohorts.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-        <Typography variant="body2" sx={{ color: '#71717a' }}>{emptyMessage}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10, px: 2 }}>
+        {typeof emptyMessage === 'string' ? (
+          <Typography variant="body2" sx={{ color: '#71717a' }}>{emptyMessage}</Typography>
+        ) : emptyMessage}
       </Box>
     );
   }

@@ -25,10 +25,16 @@ import { CohortType } from '../../types/enums';
 import Tabs from '../../components/ui/Tabs';
 import CohortTable from '../../components/ui/CohortTable';
 import type { CohortRow } from '../../components/ui/CohortTable';
-import { isRegistrationOpen, isCohortActive, formatCohortType, computeStatus } from '../../utils/cohortUtils';
+import {
+  formatCohortType,
+  getJoinableActiveCohorts,
+  groupCohortsByStatus,
+  isRegistrationOpen,
+  toCohortRow,
+  toCohortStatusTabs,
+} from '../../utils/cohortUtils';
 import { isProfileComplete } from '../../utils/userUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { cohortTypeToName } from '../../helpers/cohortHelpers';
 import type { NotificationState } from '../../types/feedback';
 
 type DashboardCohortRow = CohortRow & {
@@ -68,100 +74,86 @@ const MyStudentDashboard = () => {
     isWaitlist: false,
   });
 
-  const myCohorts = data?.records || [];
+  const myCohorts = useMemo(() => data?.records ?? [], [data]);
 
-  const availableCohorts = useMemo(() => {
-    const filtered =
-      allCohortsData?.records
-        ?.filter((cohort) => isCohortActive(cohort.endDate))
-        ?.filter((cohort) => !myCohorts.some((mc) => mc.id === cohort.id)) || [];
-
-    return filtered.filter((cohort) => {
-      const registrationOpen = isRegistrationOpen(cohort.registrationDeadline);
-      const enrolledInNewerSeason = myCohorts.some(
-        (mc) => mc.type === cohort.type && mc.season > cohort.season,
-      );
-      if (enrolledInNewerSeason) return false;
-      if (registrationOpen) return true;
-      const hasNewerOpen = filtered.some(
-        (other) =>
-          other.type === cohort.type &&
-          other.season > cohort.season &&
-          isRegistrationOpen(other.registrationDeadline),
-      );
-      return !hasNewerOpen;
-    });
-  }, [allCohortsData, myCohorts]);
+  const availableCohorts = useMemo(
+    () => getJoinableActiveCohorts(allCohortsData?.records ?? [], myCohorts),
+    [allCohortsData, myCohorts],
+  );
 
   const allRows: DashboardCohortRow[] = useMemo(() => {
-    const now = new Date();
+    const enrolledRows: DashboardCohortRow[] = myCohorts.map((cohort) => ({
+      ...toCohortRow(cohort),
+      enrolled: true,
+    }));
 
-    const calcCompletedWeeks = (startDate: string, endDate: string, totalWeeks: number) => {
-      const status = computeStatus(startDate, endDate);
-      if (status === 'Completed') return totalWeeks;
-      if (status === 'Active' && totalWeeks > 0) {
-        const msElapsed = now.getTime() - new Date(startDate).getTime();
-        return Math.max(0, Math.min(Math.floor(msElapsed / (7 * 24 * 60 * 60 * 1000)), totalWeeks));
-      }
-      return 0;
-    };
-
-    const enrolledRows: DashboardCohortRow[] = myCohorts.map((c) => {
-      const totalWeeks = c.weeks?.length ?? 0;
-      return {
-        id: c.id,
-        name: cohortTypeToName(c.type as CohortType),
-        type: c.type,
-        season: c.season,
-        status: computeStatus(c.startDate, c.endDate),
-        startDate: c.startDate,
-        endDate: c.endDate,
-        weeks: totalWeeks,
-        completedWeeks: calcCompletedWeeks(c.startDate, c.endDate, totalWeeks),
-        enrolled: true,
-        raw: c,
-      };
-    });
-
-    const availableRows: DashboardCohortRow[] = availableCohorts.map((c) => {
-      const totalWeeks = c.weeks?.length ?? 0;
-      return {
-        id: c.id,
-        name: cohortTypeToName(c.type as CohortType),
-        type: c.type,
-        season: c.season,
-        status: computeStatus(c.startDate, c.endDate),
-        startDate: c.startDate,
-        endDate: c.endDate,
-        weeks: totalWeeks,
-        completedWeeks: calcCompletedWeeks(c.startDate, c.endDate, totalWeeks),
-        enrolled: false,
-        registrationOpen: isRegistrationOpen(c.registrationDeadline),
-        cohortType: c.type as CohortType,
-        raw: c,
-      };
-    });
+    const availableRows: DashboardCohortRow[] = availableCohorts.map((cohort) => ({
+      ...toCohortRow(cohort),
+      enrolled: false,
+      registrationOpen: isRegistrationOpen(cohort.registrationDeadline),
+      cohortType: cohort.type as CohortType,
+    }));
 
     return [...enrolledRows, ...availableRows];
   }, [myCohorts, availableCohorts]);
 
-  const grouped = useMemo(() => {
-    const active = allRows.filter((c) => c.status === 'Active');
-    const upcoming = allRows.filter((c) => c.status === 'Upcoming');
-    const completed = allRows.filter((c) => c.status === 'Completed');
-    return { Active: active, Upcoming: upcoming, Completed: completed };
-  }, [allRows]);
+  const grouped = useMemo(() => groupCohortsByStatus(allRows), [allRows]);
 
-  const tabs = useMemo(
-    () => [
-      { label: 'Active', value: 'Active', count: grouped.Active.length },
-      { label: 'Upcoming', value: 'Upcoming', count: grouped.Upcoming.length },
-      { label: 'Completed', value: 'Completed', count: grouped.Completed.length },
-    ],
-    [grouped],
-  );
+  const tabs = useMemo(() => toCohortStatusTabs(grouped), [grouped]);
 
   const filteredCohorts = grouped[activeTab as keyof typeof grouped] ?? [];
+
+  const emptyCohortsMessage = (() => {
+    const isUpcoming = activeTab === 'Upcoming';
+    const title = isUpcoming ? 'No upcoming cohorts yet' : `No ${activeTab.toLowerCase()} cohorts found`;
+    const description = isUpcoming
+      ? 'There are no future cohorts scheduled at the moment. You can still explore active cohorts and join or waitlist where available.'
+      : `When you have ${activeTab.toLowerCase()} cohorts, they will appear here.`;
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', maxWidth: 460 }}>
+        <Box
+          sx={{
+            width: 58,
+            height: 58,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(20,184,166,0.1)',
+            border: '1px solid rgba(20,184,166,0.25)',
+            mb: 2,
+          }}
+        >
+          {isUpcoming ? <Clock size={26} color="#5eead4" /> : <BookOpen size={26} color="#5eead4" />}
+        </Box>
+        <Typography variant="h6" sx={{ color: '#fafafa', fontWeight: 700, mb: 0.75 }}>
+          {title}
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#a1a1aa', lineHeight: 1.7 }}>
+          {description}
+        </Typography>
+        {isUpcoming && grouped.Active.length > 0 && (
+          <Button
+            size="small"
+            onClick={() => setActiveTab('Active')}
+            sx={{
+              mt: 2.5,
+              color: '#5eead4',
+              borderColor: 'rgba(20,184,166,0.35)',
+              bgcolor: 'rgba(20,184,166,0.08)',
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': { bgcolor: 'rgba(20,184,166,0.16)', borderColor: 'rgba(20,184,166,0.5)' },
+            }}
+            variant="outlined"
+          >
+            Browse active cohorts
+          </Button>
+        )}
+      </Box>
+    );
+  })();
 
   const handleJoinCohort = (cohortId: string, cohortName: string) => {
     if (!isProfileComplete(userData)) {
@@ -332,11 +324,20 @@ const MyStudentDashboard = () => {
         <CohortTable
           cohorts={filteredCohorts}
           loading={isLoading}
-          emptyMessage={`No ${activeTab.toLowerCase()} cohorts.`}
+          emptyMessage={emptyCohortsMessage}
           onRowClick={(cohort) => {
             const row = cohort as DashboardCohortRow;
             if (row.enrolled && userData?.id) {
               navigate(`/student/${userData.id}/${row.id}`);
+              return;
+            }
+
+            if (!row.enrolled) {
+              if (row.registrationOpen) {
+                handleJoinCohort(row.id, formatCohortType(row.type));
+              } else if (row.cohortType) {
+                handleJoinWaitlist(row.id, row.cohortType);
+              }
             }
           }}
           actions={(cohort) => {
@@ -492,8 +493,8 @@ const MyStudentDashboard = () => {
         <DialogContent>
           <Typography variant="body2" sx={{ color: '#d4d4d8' }}>
             {confirmationModal.isWaitlist
-              ? `Are you sure you want to join the waitlist for ${confirmationModal.cohortName}?`
-              : `Are you sure you want to join the ${confirmationModal.cohortName} cohort?`}
+              ? `You are not a part of this cohort. Please join the ${confirmationModal.cohortName} cohort waitlist.`
+              : `You are not a part of this cohort. Please join the ${confirmationModal.cohortName} cohort.`}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>

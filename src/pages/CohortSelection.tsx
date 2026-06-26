@@ -40,12 +40,12 @@ import type { CertificatePreviewResponseDto } from '../types/api';
 import apiService from '../services/apiService';
 import { UserRole, CohortType } from '../types/enums';
 import type { GetCohortResponseDto } from '../types/api';
-import type { ApiCohort, CohortStatus } from '../types/cohort';
+import type { CohortStatus } from '../types/cohort';
 import Tabs from '../components/ui/Tabs';
 import CohortTable from '../components/ui/CohortTable';
 import type { CohortRow } from '../components/ui/CohortTable';
 import { cohortTypeToName } from '../helpers/cohortHelpers';
-import { computeStatus, COHORT_TYPES } from '../utils/cohortUtils';
+import { COHORT_TYPES, groupCohortsByStatus, toCohortRow, toCohortStatusTabs } from '../utils/cohortUtils';
 import { getTodayDate, calculateRegistrationDeadline, formatDateForInput } from '../utils/dateUtils';
 import { downloadCSV } from '../utils/csvUtils';
 
@@ -452,52 +452,11 @@ export const CohortSelection = () => {
   }, [formStartDate, isEditMode]);
 
   // Table data
-  const cohorts = useMemo(() => {
-    const records: ApiCohort[] = data?.records ?? [];
-    const now = new Date();
-    return records.map((c) => {
-      const totalWeeks = c.weeks?.length ?? 0;
-      const start = new Date(c.startDate);
-      const status = computeStatus(c.startDate, c.endDate);
+  const cohorts = useMemo(() => (data?.records ?? []).map((cohort) => toCohortRow(cohort)), [data]);
 
-      let completedWeeks = 0;
-      if (status === 'Completed') {
-        completedWeeks = totalWeeks;
-      } else if (status === 'Active' && totalWeeks > 0) {
-        const msElapsed = now.getTime() - start.getTime();
-        completedWeeks = Math.max(0, Math.min(Math.floor(msElapsed / (7 * 24 * 60 * 60 * 1000)), totalWeeks));
-      }
+  const grouped = useMemo(() => groupCohortsByStatus(cohorts), [cohorts]);
 
-      return {
-        id: c.id,
-        name: cohortTypeToName(c.type as CohortType),
-        type: c.type,
-        season: c.season,
-        status,
-        startDate: c.startDate,
-        endDate: c.endDate,
-        weeks: totalWeeks,
-        completedWeeks,
-        raw: c,
-      };
-    });
-  }, [data]);
-
-  const grouped = useMemo(() => {
-    const active = cohorts.filter((c) => c.status === 'Active');
-    const upcoming = cohorts.filter((c) => c.status === 'Upcoming');
-    const completed = cohorts.filter((c) => c.status === 'Completed');
-    return { Active: active, Upcoming: upcoming, Completed: completed };
-  }, [cohorts]);
-
-  const tabs = useMemo(
-    () => [
-      { label: 'Active', value: 'Active', count: grouped.Active.length },
-      { label: 'Upcoming', value: 'Upcoming', count: grouped.Upcoming.length },
-      { label: 'Completed', value: 'Completed', count: grouped.Completed.length },
-    ],
-    [grouped],
-  );
+  const tabs = useMemo(() => toCohortStatusTabs(grouped), [grouped]);
 
   const filteredCohorts = grouped[activeTab as CohortStatus] ?? [];
 
