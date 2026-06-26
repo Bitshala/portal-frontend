@@ -10,7 +10,7 @@ import {
   Bar,
   LabelList,
 } from 'recharts';
-import { BarChart3, Users, TrendingUp, Target, Info } from 'lucide-react';
+import { BarChart3, Info } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useCohorts } from '../hooks/cohortHooks';
 import apiService from '../services/apiService';
@@ -85,48 +85,6 @@ const MetricsTooltip = ({ active, payload }: { active?: boolean; payload?: Metri
     </Box>
   );
 };
-
-const StatCard = ({
-  icon: Icon,
-  label,
-  value,
-  subtitle,
-  color,
-}: {
-  icon: React.ComponentType<{ size: number; color: string }>;
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  color: string;
-}) => (
-  <Box
-    sx={{
-      bgcolor: '#1c1c1f',
-      border: '1px solid #27272a',
-      borderRadius: 2,
-      p: 2.5,
-      flex: '1 1 200px',
-      minWidth: 180,
-    }}
-  >
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-      <Icon size={18} color={color} />
-      <Typography sx={{ color: '#a1a1aa', fontSize: '0.8rem', fontWeight: 500 }}>
-        {label}
-      </Typography>
-    </Box>
-    <Typography
-      sx={{ color: '#fafafa', fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.2 }}
-    >
-      {value}
-    </Typography>
-    {subtitle && (
-      <Typography sx={{ color: '#71717a', fontSize: '0.75rem', mt: 0.5 }}>
-        {subtitle}
-      </Typography>
-    )}
-  </Box>
-);
 
 /* ── Formula info box ── */
 const FormulaBox = ({ formulas }: { formulas: { name: string; formula: string }[] }) => (
@@ -254,20 +212,6 @@ const CohortMetrics = () => {
   );
 
 
-  const avgRetention =
-    chronologicalData.length > 0
-      ? Math.round(
-          (chronologicalData.reduce((s, d) => s + d.retentionRate, 0) / chronologicalData.length) * 10,
-        ) / 10
-      : 0;
-  const avgCompletion =
-    chronologicalData.length > 0
-      ? Math.round(
-          (chronologicalData.reduce((s, d) => s + d.completionRate, 0) / chronologicalData.length) * 10,
-        ) / 10
-      : 0;
-  const totalParticipants = chronologicalData.reduce((s, d) => s + d.totalParticipants, 0);
-
   if (cohortsLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
@@ -317,14 +261,6 @@ const CohortMetrics = () => {
           <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>Loading cohort data...</Typography>
         </Box>
       )}
-
-      {/* Summary Cards */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
-        <StatCard icon={BarChart3} label="Cohorts Analyzed" value={chronologicalData.length} color="#fb923c" />
-        <StatCard icon={TrendingUp} label="Avg Retention Rate" value={`${avgRetention}%`} subtitle="Students attending ≥50% weeks" color="#4ade80" />
-        <StatCard icon={Target} label="Avg Completion Rate" value={`${avgCompletion}%`} subtitle="Average score percentage" color="#38bdf8" />
-        <StatCard icon={Users} label="Total Participants" value={totalParticipants} color="#a78bfa" />
-      </Box>
 
       {chronologicalData.length === 0 && allLoaded && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
