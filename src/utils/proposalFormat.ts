@@ -18,6 +18,7 @@ export type ProposalFields = {
   // About you. `graduationYear` is held as a string for the text input and
   // parsed to an integer only when building the request body.
   location: string;
+  certificateName: string;
   academicBackground: string;
   graduationYear: string;
   professionalExperience: string;
@@ -45,6 +46,7 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
   projectName: '',
   projectGithubLink: '',
   location: '',
+  certificateName: '',
   academicBackground: '',
   graduationYear: '',
   professionalExperience: '',
@@ -60,8 +62,9 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
 
 // Map the structured proposal from the API into react-hook-form state:
 // null becomes '' (or [] for multi-value fields) and an empty links list keeps
-// one blank row for the UI. `location` is NOT on the proposal — it lives on the
-// user profile, so the caller overlays it from GET /users/me after this maps.
+// one blank row for the UI. `location` and `certificateName` are NOT on the proposal
+// — they live on the user profile, so the caller overlays them from GET
+// /users/me after this maps (certificateName from user.name).
 export const proposalDtoToFields = (
   dto: FellowshipApplicationProposalDto | null | undefined,
 ): ProposalFields => {
@@ -78,6 +81,7 @@ export const proposalDtoToFields = (
     projectName: dto.projectName ?? '',
     projectGithubLink: dto.projectGithubLink ?? '',
     location: '',
+    certificateName: '',
     academicBackground: dto.academicBackground ?? '',
     graduationYear: dto.graduationYear != null ? String(dto.graduationYear) : '',
     professionalExperience: dto.professionalExperience ?? '',
@@ -122,6 +126,7 @@ export const buildProposalBody = (
   projectName: f.projectName.trim(),
   projectGithubLink: f.projectGithubLink.trim(),
   location: f.location.trim(),
+  certificateName: f.certificateName.trim(),
   academicBackground: f.academicBackground.trim(),
   graduationYear: parseGraduationYear(f.graduationYear),
   professionalExperience: f.professionalExperience.trim(),
