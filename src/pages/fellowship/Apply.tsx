@@ -203,6 +203,11 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
         .trim()
         .min(1, { message: 'Location is required.' })
         .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` }),
+      certificateName: z
+        .string()
+        .trim()
+        .min(1, { message: 'Name is required.' })
+        .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` }),
       academicBackground: requiredLongText('Academic background'),
       graduationYear: z.string(),
       professionalExperience: requiredLongText('Professional experience'),
@@ -377,6 +382,7 @@ const EDIT_STEPS: {
     fields: ({ isDeveloper }) => {
       const f: (keyof ProposalFields)[] = [
         'location',
+        'certificateName',
         'graduationYear',
         'academicBackground',
         'professionalExperience',
@@ -485,7 +491,7 @@ const Apply = () => {
     }
   }, [activeId, loadedProposal.data, reset]);
 
-  // Prefill the location field from the fellow's profile once, when the profile
+  // Prefill the location and name fields from the fellow's profile once, when the profile
   // loads and the user hasn't typed one. Keyed per editor so switching drafts
   // re-seeds. Only fills a blank field, so it never clobbers an edit in progress.
   useEffect(() => {
@@ -496,6 +502,9 @@ const Apply = () => {
     locationSeededFor.current = key;
     if (!getValues('location') && profileQuery.data.location) {
       setValue('location', profileQuery.data.location);
+    }
+    if (!getValues('certificateName') && profileQuery.data.name) {
+      setValue('certificateName', profileQuery.data.name);
     }
   }, [profileQuery.data, activeId, getValues, setValue]);
 
@@ -1156,6 +1165,7 @@ type TextFieldName =
   | 'projectName'
   | 'projectGithubLink'
   | 'location'
+  | 'certificateName'
   | 'academicBackground'
   | 'graduationYear'
   | 'professionalExperience'
@@ -1559,7 +1569,8 @@ const ApplicationStep = ({
         {/* ---- About you ---- */}
         {sections.includes('about') && (
         <SectionCard title="About you">
-          {!isDeveloper && (
+
+          {isDeveloper && (
             <>
               <FieldLabel>GitHub username (optional)</FieldLabel>
               <Controller
@@ -1587,7 +1598,17 @@ const ApplicationStep = ({
               <GithubCheckHint status={githubStatus} />
             </>
           )}
-
+            <Box sx={{ flex: 2 }}>
+              <FieldLabel>Name</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="certificateName"
+                fullWidth
+                disabled={disabled}
+                placeholder="John Doe"
+                slotProps={{ htmlInput: { maxLength: LOCATION_LIMIT } }}
+              />
+            </Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
             <Box sx={{ flex: 2 }}>
               <FieldLabel>Location</FieldLabel>
@@ -1597,7 +1618,6 @@ const ApplicationStep = ({
                 fullWidth
                 disabled={disabled}
                 placeholder="Bengaluru, India"
-                helperText="Saved to your profile."
                 slotProps={{ htmlInput: { maxLength: LOCATION_LIMIT } }}
               />
             </Box>
@@ -2123,6 +2143,7 @@ const ReviewStep = ({
             <Dash />
           )}
         </Box>
+        <ReviewText label="Name" value={fields.certificateName} />
         <ReviewText label="Location" value={fields.location} />
         <ReviewText label="Graduation year" value={fields.graduationYear} />
         <ReviewLong label="Academic background" text={fields.academicBackground} />

@@ -99,9 +99,11 @@ export interface FellowshipApplicationProposalDto {
 
 // Writable proposal shape for create/update. All fields optional — drafts may be
 // partial. Sending a field as "" clears it; omitting a key leaves it untouched.
-// `location` and `github` are written through to the user profile by the backend
-// (location → user.location, github → user.githubProfileUrl); github is also kept
-// on the application, but location is not returned by the proposal endpoint.
+// `location`, `certificateName` and `github` are written through to the user
+// profile by the backend (location → user.location,
+// certificateName → user.name, github → user.githubProfileUrl); github is also
+// kept on the application, but location and certificateName are not returned by
+// the proposal endpoint.
 export interface FellowshipApplicationProposalWriteDto {
   title?: string;
   problemStatement?: string;
@@ -114,6 +116,7 @@ export interface FellowshipApplicationProposalWriteDto {
   projectName?: string;
   projectGithubLink?: string;
   location?: string;
+  certificateName?: string;
   academicBackground?: string;
   graduationYear?: number;
   professionalExperience?: string;
