@@ -1,12 +1,31 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import {
+  Box,
+  Typography,
+  IconButton,
+  FormControl,
+  Select,
+  MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Chip,
+  Divider,
+  Pagination,
+} from '@mui/material';
+import { MessageSquare, X } from 'lucide-react';
 import { useAllFeedback, useFeedbackByCohort } from '../../hooks/feedbackHooks';
 import { useCohorts } from '../../hooks/cohortHooks';
+import { useUserById } from '../../hooks/userHooks';
 import type { GetFeedbackResponseDto } from '../../types/api';
-import {
-  CohortComponent,
-  ComponentRating,
-} from '../../types/enums';
+import { CohortComponent, ComponentRating } from '../../types/enums';
 
 const COMPONENT_LABELS: Record<CohortComponent, string> = {
   [CohortComponent.SESSION_INSTRUCTIONS]: 'Session Instructions',
@@ -29,54 +48,166 @@ const RATING_LABELS: Record<ComponentRating, string> = {
 };
 
 const RATING_COLOR: Record<ComponentRating, string> = {
-  [ComponentRating.NOT_AT_ALL]: 'text-red-400',
-  [ComponentRating.SOMEWHAT]: 'text-yellow-400',
-  [ComponentRating.HELPFUL]: 'text-blue-400',
-  [ComponentRating.VERY_HELPFUL]: 'text-green-400',
+  [ComponentRating.NOT_AT_ALL]: '#f87171',
+  [ComponentRating.SOMEWHAT]: '#facc15',
+  [ComponentRating.HELPFUL]: '#60a5fa',
+  [ComponentRating.VERY_HELPFUL]: '#4ade80',
 };
 
 const PAGE_SIZE = 20;
 
-const FeedbackDetailModal = ({
+const headerCellSx = {
+  color: '#71717a',
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.05em',
+  borderBottom: '1px solid rgba(63,63,70,0.5)',
+  py: 2,
+  px: 3,
+  whiteSpace: 'nowrap' as const,
+};
+
+const bodyCellSx = {
+  borderBottom: '1px solid rgba(63,63,70,0.3)',
+  py: 2.5,
+  px: 3,
+};
+
+const sectionLabelSx = {
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  color: '#71717a',
+  textTransform: 'uppercase' as const,
+  letterSpacing: 0.6,
+};
+
+const INTEREST_COLORS = {
+  opportunity: { bg: 'rgba(59,130,246,0.1)', text: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+  fellowship: { bg: 'rgba(249,115,22,0.1)', text: '#fb923c', border: 'rgba(249,115,22,0.3)' },
+};
+
+const cohortLabel = (cohort: { displayName: string; season: number }): string =>
+  `${cohort.displayName} — Season ${cohort.season}`;
+
+const getFeedbackSnippet = (feedback: GetFeedbackResponseDto): string | null =>
+  feedback.testimonial || feedback.expectations || feedback.improvements || feedback.idealProject || null;
+
+const DiscordUsernameCell = ({ userId, fallback }: { userId: string; fallback: string }) => {
+  const { data: user, isLoading } = useUserById(userId);
+
+  if (isLoading) {
+    return <CircularProgress size={14} sx={{ color: '#71717a' }} />;
+  }
+
+  return (
+    <Typography variant="body2" sx={{ color: '#fafafa', fontWeight: 500 }}>
+      {user?.discordUsername ?? fallback}
+    </Typography>
+  );
+};
+
+const FeedbackSummaryCell = ({ feedback }: { feedback: GetFeedbackResponseDto }) => {
+  const snippet = getFeedbackSnippet(feedback);
+
+  return (
+    <Typography
+      variant="body2"
+      sx={{
+        color: snippet ? '#a1a1aa' : '#52525b',
+        maxWidth: 420,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        fontStyle: snippet ? 'normal' : 'italic',
+      }}
+    >
+      {snippet ?? 'No written feedback'}
+    </Typography>
+  );
+};
+
+const InterestSection = ({
+  title,
+  items,
+  variant,
+}: {
+  title: string;
+  items: string[];
+  variant: keyof typeof INTEREST_COLORS;
+}) => {
+  if (items.length === 0) return null;
+  const { bg, text, border } = INTEREST_COLORS[variant];
+
+  return (
+    <Box>
+      <Typography sx={{ ...sectionLabelSx, mb: 1 }}>{title}</Typography>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        {items.map((item) => (
+          <Chip
+            key={item}
+            label={item.replace(/_/g, ' ')}
+            size="small"
+            sx={{ bgcolor: bg, color: text, border: `1px solid ${border}` }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+};
+
+const FeedbackDetailDialog = ({
   feedback,
   onClose,
 }: {
   feedback: GetFeedbackResponseDto;
   onClose: () => void;
 }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 px-4 py-6">
-    <div className="bg-zinc-800 rounded-3xl shadow-2xl p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-zinc-100">{feedback.userName ?? feedback.userEmail ?? 'Anonymous'}</h2>
-          <p className="text-zinc-400 text-sm mt-0.5">{feedback.userEmail}</p>
-        </div>
-        <button onClick={onClose} className="b-0 bg-transparent text-zinc-400 hover:text-zinc-100 transition-colors">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="space-y-6 text-sm">
-        {/* Component Ratings */}
+  <Dialog
+    open
+    onClose={onClose}
+    maxWidth="sm"
+    fullWidth
+    PaperProps={{ sx: { bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 3 } }}
+  >
+    <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', pb: 1 }}>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: '#fafafa' }}>
+          {feedback.userName ?? feedback.userEmail ?? 'Anonymous'}
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#71717a', mt: 0.25 }}>
+          {feedback.userEmail}
+        </Typography>
+      </Box>
+      <IconButton onClick={onClose} size="small" sx={{ color: '#a1a1aa', '&:hover': { color: '#fafafa' } }}>
+        <X size={20} />
+      </IconButton>
+    </DialogTitle>
+    <DialogContent dividers sx={{ borderColor: '#27272a' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {feedback.componentRatings && Object.keys(feedback.componentRatings).length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-3">Component Ratings</h3>
-            <div className="space-y-2">
+          <Box>
+            <Typography sx={{ ...sectionLabelSx, mb: 1.5 }}>
+              Component Ratings
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               {(Object.entries(feedback.componentRatings) as [CohortComponent, ComponentRating][]).map(([comp, rating]) => (
-                <div key={comp} className="flex justify-between items-center py-1.5 border-b border-zinc-700/50">
-                  <span className="text-zinc-300">{COMPONENT_LABELS[comp] ?? comp}</span>
-                  <span className={`font-medium ${RATING_COLOR[rating] ?? 'text-zinc-300'}`}>
+                <Box
+                  key={comp}
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderBottom: '1px solid rgba(63,63,70,0.5)' }}
+                >
+                  <Typography variant="body2" sx={{ color: '#d4d4d8' }}>{COMPONENT_LABELS[comp] ?? comp}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: RATING_COLOR[rating] ?? '#d4d4d8' }}>
                     {RATING_LABELS[rating] ?? rating}
-                  </span>
-                </div>
+                  </Typography>
+                </Box>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
 
-        {/* Text fields */}
         {[
           { label: 'Expectations', value: feedback.expectations },
           { label: 'Improvements', value: feedback.improvements },
@@ -84,103 +215,42 @@ const FeedbackDetailModal = ({
           { label: 'Testimonial', value: feedback.testimonial },
         ].map(({ label, value }) =>
           value ? (
-            <div key={label}>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-1">{label}</h3>
-              <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">{value}</p>
-            </div>
+            <Box key={label}>
+              <Typography sx={{ ...sectionLabelSx, mb: 0.5 }}>
+                {label}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#d4d4d8', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {value}
+              </Typography>
+            </Box>
           ) : null
         )}
 
-        {/* Opportunity Interests */}
-        {feedback.opportunityInterests.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Opportunity Interests</h3>
-            <div className="flex flex-wrap gap-2">
-              {feedback.opportunityInterests.map(item => (
-                <span key={item} className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-300 text-xs">
-                  {item.replace(/_/g, ' ')}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <InterestSection title="Opportunity Interests" items={feedback.opportunityInterests} variant="opportunity" />
+        <InterestSection title="Fellowship Interests" items={feedback.fellowshipInterests} variant="fellowship" />
 
-        {/* Fellowship Interests */}
-        {feedback.fellowshipInterests.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Fellowship Interests</h3>
-            <div className="flex flex-wrap gap-2">
-              {feedback.fellowshipInterests.map(item => (
-                <span key={item} className="px-3 py-1 bg-orange-500/10 border border-orange-500/30 rounded-full text-orange-300 text-xs">
-                  {item.replace(/_/g, ' ')}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className="text-zinc-600 text-xs pt-2">
+        <Divider sx={{ borderColor: '#27272a' }} />
+        <Typography sx={{ color: '#52525b', fontSize: '0.75rem' }}>
           Submitted {new Date(feedback.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
-      </div>
-    </div>
-  </div>
+        </Typography>
+      </Box>
+    </DialogContent>
+  </Dialog>
 );
 
-const FeedbackCard = ({ feedback, onClick }: { feedback: GetFeedbackResponseDto; onClick: () => void }) => {
-  const ratingCount = feedback.componentRatings ? Object.keys(feedback.componentRatings).length : 0;
-  const hasText = feedback.expectations || feedback.improvements || feedback.testimonial || feedback.idealProject;
-
-  return (
-    <button
-      onClick={onClick}
-      className="b-0 w-full text-left bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 hover:border-zinc-600 rounded-xl p-5 transition-all duration-150 space-y-3"
-    >
-      <div className="flex justify-between items-start gap-4">
-        <div>
-          <p className="font-semibold text-zinc-100">{feedback.userName ?? 'Unnamed'}</p>
-          <p className="text-zinc-500 text-xs mt-0.5">{feedback.userEmail}</p>
-        </div>
-        <p className="text-zinc-600 text-xs shrink-0">
-          {new Date(feedback.createdAt).toLocaleDateString()}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-xs">
-        {ratingCount > 0 && (
-          <span className="px-2 py-0.5 bg-zinc-700/60 rounded-full text-zinc-300">
-            {ratingCount} ratings
-          </span>
-        )}
-        {feedback.opportunityInterests.length > 0 && (
-          <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-400">
-            {feedback.opportunityInterests.length} opportunity interest{feedback.opportunityInterests.length > 1 ? 's' : ''}
-          </span>
-        )}
-        {feedback.fellowshipInterests.length > 0 && (
-          <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-400">
-            {feedback.fellowshipInterests.length} fellowship interest{feedback.fellowshipInterests.length > 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-
-      {hasText && (
-        <p className="text-zinc-400 text-sm line-clamp-2">
-          {feedback.testimonial || feedback.expectations || feedback.improvements || feedback.idealProject}
-        </p>
-      )}
-    </button>
-  );
-};
-
-const AllFeedbackList = ({ selectedCohort }: { selectedCohort: string }) => {
+const FeedbackAdmin: React.FC = () => {
+  const { data: cohortsData } = useCohorts({ page: 0, pageSize: 100 });
+  const [selectedCohort, setSelectedCohort] = useState('');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<GetFeedbackResponseDto | null>(null);
 
-  const allQuery = useAllFeedback(
-    { page, pageSize: PAGE_SIZE },
-    { enabled: !selectedCohort }
-  );
+  const cohortNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    cohortsData?.records.forEach((cohort) => map.set(cohort.id, cohortLabel(cohort)));
+    return map;
+  }, [cohortsData]);
+
+  const allQuery = useAllFeedback({ page, pageSize: PAGE_SIZE }, { enabled: !selectedCohort });
   const cohortQuery = useFeedbackByCohort(
     { cohortId: selectedCohort, query: { page, pageSize: PAGE_SIZE } },
     { enabled: !!selectedCohort }
@@ -189,97 +259,131 @@ const AllFeedbackList = ({ selectedCohort }: { selectedCohort: string }) => {
   const { data, isLoading } = selectedCohort ? cohortQuery : allQuery;
   const records = data?.records ?? [];
   const total = data?.totalRecords ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  if (isLoading) {
-    return <div className="text-zinc-400 text-sm py-8 text-center">Loading feedback...</div>;
-  }
-
-  if (records.length === 0) {
-    return (
-      <div className="text-zinc-500 text-sm py-12 text-center">
-        No feedback submissions yet{selectedCohort ? ' for this cohort' : ''}.
-      </div>
-    );
-  }
+  const handleCohortChange = (cohortId: string) => {
+    setSelectedCohort(cohortId);
+    setPage(0);
+  };
 
   return (
-    <>
-      <div className="flex justify-between items-center mb-4">
-        <p className="text-zinc-400 text-sm">{total} submission{total !== 1 ? 's' : ''}</p>
-      </div>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+          <MessageSquare size={28} color="#fb923c" />
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#fafafa', fontSize: { xs: '1.5rem', md: '2rem' } }}>
+            Feedback
+          </Typography>
+        </Box>
+        <Typography sx={{ color: '#71717a', fontSize: '0.9rem' }}>
+          View all cohort feedback submissions
+        </Typography>
+      </Box>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {records.map(fb => (
-          <FeedbackCard key={fb.id} feedback={fb} onClick={() => setSelected(fb)} />
-        ))}
-      </div>
+      <FormControl size="small" sx={{ mb: 3, minWidth: 260 }}>
+        <Select
+          value={selectedCohort}
+          onChange={(e) => handleCohortChange(e.target.value)}
+          displayEmpty
+          sx={{
+            bgcolor: '#1c1c1f',
+            color: '#fafafa',
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3f3f46' },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#52525b' },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fb923c' },
+          }}
+          MenuProps={{ PaperProps: { sx: { bgcolor: '#1c1c1f', border: '1px solid #27272a' } } }}
+        >
+          <MenuItem value="" sx={{ color: '#fafafa' }}>All Cohorts</MenuItem>
+          {cohortsData?.records.map((cohort) => (
+            <MenuItem key={cohort.id} value={cohort.id} sx={{ color: '#fafafa' }}>
+              {cohortLabel(cohort)}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-3 mt-6">
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="b-0 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-sm transition-colors"
-          >
-            Previous
-          </button>
-          <span className="text-zinc-400 text-sm">Page {page + 1} of {totalPages}</span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
-            className="b-0 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-sm transition-colors"
-          >
-            Next
-          </button>
-        </div>
+      {isLoading ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 10 }}>
+          <CircularProgress size={36} sx={{ color: '#f97316' }} />
+          <Typography variant="body2" sx={{ color: '#71717a' }}>Loading feedback...</Typography>
+        </Box>
+      ) : records.length === 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+          <Typography variant="body2" sx={{ color: '#71717a' }}>
+            No feedback submissions yet{selectedCohort ? ' for this cohort' : ''}.
+          </Typography>
+        </Box>
+      ) : (
+        <>
+          <Typography sx={{ color: '#a1a1aa', fontSize: '0.85rem', mb: 2 }}>
+            {total} submission{total !== 1 ? 's' : ''}
+          </Typography>
+
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={headerCellSx}>Discord Username</TableCell>
+                  <TableCell sx={headerCellSx}>Cohort</TableCell>
+                  <TableCell sx={headerCellSx}>Feedback</TableCell>
+                  <TableCell sx={{ ...headerCellSx, display: { xs: 'none', md: 'table-cell' } }}>Submitted</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {records.map((feedback) => (
+                  <TableRow
+                    key={feedback.id}
+                    hover
+                    onClick={() => setSelected(feedback)}
+                    sx={{
+                      cursor: 'pointer',
+                      '&:nth-of-type(odd)': { bgcolor: 'transparent' },
+                      '&:nth-of-type(even)': { bgcolor: 'rgba(255,255,255,0.045)' },
+                      '&:hover': { bgcolor: 'rgba(63,63,70,0.4)' },
+                      transition: 'background-color 150ms',
+                    }}
+                  >
+                    <TableCell sx={bodyCellSx}>
+                      <DiscordUsernameCell userId={feedback.userId} fallback={feedback.userName ?? feedback.userEmail ?? 'Unknown'} />
+                    </TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      <Typography variant="body2" sx={{ color: '#d4d4d8' }}>
+                        {cohortNameMap.get(feedback.cohortId) ?? '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={bodyCellSx}>
+                      <FeedbackSummaryCell feedback={feedback} />
+                    </TableCell>
+                    <TableCell sx={{ ...bodyCellSx, display: { xs: 'none', md: 'table-cell' } }}>
+                      <Typography variant="body2" sx={{ color: '#71717a', whiteSpace: 'nowrap' }}>
+                        {new Date(feedback.createdAt).toLocaleDateString()}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={totalPages}
+                page={page + 1}
+                onChange={(_, value) => setPage(value - 1)}
+                sx={{
+                  '& .MuiPaginationItem-root': { color: '#a1a1aa' },
+                  '& .Mui-selected': { bgcolor: 'rgba(249,115,22,0.15) !important', color: '#fb923c' },
+                }}
+              />
+            </Box>
+          )}
+        </>
       )}
 
-      {selected && <FeedbackDetailModal feedback={selected} onClose={() => setSelected(null)} />}
-    </>
-  );
-};
-
-const FeedbackAdmin: React.FC = () => {
-  const navigate = useNavigate();
-  const { data: cohortsData } = useCohorts({ page: 0, pageSize: 100 });
-  const [selectedCohort, setSelectedCohort] = useState('');
-
-  return (
-    <div className="min-h-screen bg-zinc-900 text-zinc-100 px-4 md:px-8 py-6" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => navigate('/admin')}
-          className="b-0 bg-transparent text-zinc-400 hover:text-zinc-100 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-        </button>
-        <div>
-          <h1 className="text-2xl md:text-4xl font-bold">Feedback</h1>
-          <p className="text-zinc-400 mt-1 text-sm">View all cohort feedback submissions</p>
-        </div>
-      </div>
-
-      {/* Cohort filter */}
-      <div className="mb-6 max-w-xs">
-        <select
-          value={selectedCohort}
-          onChange={e => setSelectedCohort(e.target.value)}
-          className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer text-sm"
-        >
-          <option value="" className="bg-zinc-900">All Cohorts</option>
-          {cohortsData?.records.map(cohort => (
-            <option key={cohort.id} value={cohort.id} className="bg-zinc-900">
-              {cohort.type.replace(/_/g, ' ')} — Season {cohort.season}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <AllFeedbackList selectedCohort={selectedCohort} />
-    </div>
+      {selected && <FeedbackDetailDialog feedback={selected} onClose={() => setSelected(null)} />}
+    </Box>
   );
 };
 

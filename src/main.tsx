@@ -36,7 +36,6 @@ const MyStudentDashboard = lazy(() => import('./pages/myProfile/myStudentDashboa
 const ProfilePage = lazy(() => import('./pages/myProfile/profilePage.tsx'));
 const MyCohortInstructions = lazy(() => import('./pages/myProfile/myCohortInstructions.tsx'));
 const CohortFeedback = lazy(() => import('./pages/CohortFeedback.tsx'));
-const AdminPage = lazy(() => import('./pages/admin/page.tsx'));
 const FeedbackAdmin = lazy(() => import('./pages/admin/FeedbackAdmin.tsx'));
 const CohortMetrics = lazy(() => import('./pages/CohortMetrics.tsx'));
 const GDPresentation = lazy(() => import('./pages/GDPresentation.tsx'));
@@ -159,16 +158,6 @@ const routes = [
             <GDPresentation />
           </Suspense>
         </ProtectedRoute>
-      ),
-    },
-    {
-      path: '/admin',
-      element: (
-        <Layout>
-          <ProtectedRoute requiredRole={[UserRole.ADMIN, UserRole.TEACHING_ASSISTANT]}>
-            <AdminPage />
-          </ProtectedRoute>
-        </Layout>
       ),
     },
     {
