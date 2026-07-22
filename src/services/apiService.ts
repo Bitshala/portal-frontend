@@ -395,15 +395,7 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'POST',
       url: `/certificates/cohort/${cohortId}/generate`,
-      data: { sendEmail: false },
-    });
-  };
-
-  public sendCohortCertificateEmails = async (cohortId: string): Promise<void> => {
-    await this.request<void>({
-      headers: this.getRequestHeaders(),
-      method: 'POST',
-      url: `/certificates/cohort/${cohortId}/send-emails`,
+      data: { sendEmail: true },
     });
   };
 

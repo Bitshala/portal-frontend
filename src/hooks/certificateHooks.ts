@@ -55,10 +55,6 @@ export const useGenerateCohortCertificates = createUseMutation<
   },
 );
 
-export const useSendCohortCertificateEmails = createUseMutation<void, { cohortId: string }>(
-  ({ cohortId }) => apiService.sendCohortCertificateEmails(cohortId),
-);
-
 export const useDownloadCertificate = createUseMutation<Blob, { id: string }>(
   ({ id }) => apiService.downloadCertificate(id),
 );
