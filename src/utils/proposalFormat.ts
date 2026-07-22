@@ -1,6 +1,7 @@
-import type {
-  FellowshipApplicationProposalDto,
-  FellowshipApplicationProposalWriteDto,
+import {
+  FellowshipType,
+  type FellowshipApplicationProposalDto,
+  type FellowshipApplicationProposalWriteDto,
 } from '../types/fellowship';
 
 export type ProposalFields = {
@@ -204,3 +205,45 @@ export const duplicateLinkIndices = (links: string[]): Set<number> => {
   });
   return dups;
 };
+
+// =========================
+// Track-aware proposal labels
+// =========================
+
+export type ProposalLabels = {
+  title: string;
+  titlePlaceholder: string;
+  problemStatement: string;
+  problemStatementPlaceholder: string;
+  plan: string;
+  planPlaceholder: string;
+};
+
+const DEFAULT_PROPOSAL_LABELS: ProposalLabels = {
+  title: 'Project title',
+  titlePlaceholder: 'BIP-324 transport relay — large-scale fuzz testing harness',
+  problemStatement: 'Problem statement',
+  problemStatementPlaceholder:
+    'What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions.',
+  plan: '6-month plan & milestones',
+  planPlaceholder:
+    'Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff',
+};
+
+// The Educator track proposes a subject to teach or document rather than a
+// piece of software to ship, so these fields ask for the subject and a
+// curriculum-shaped plan instead of a project and an engineering plan.
+const EDUCATOR_PROPOSAL_LABELS: ProposalLabels = {
+  title: 'Target Subject',
+  titlePlaceholder: 'Post-Quantum Bitcoin Readiness Handbook',
+  problemStatement: 'Tell us more about the subject',
+  problemStatementPlaceholder:
+    'What is the subject, and why does it matter to Bitcoin contributors or learners? Link to any relevant references, prior art, or discussions.',
+  plan: 'The plan for this Education Track',
+  planPlaceholder:
+    'Month 1–2: outline curriculum, gather references, draft first chapter\nMonth 3–4: write core content, diagrams, exercises\nMonth 5–6: review, publish, gather community feedback',
+};
+
+/** Labels/placeholders for the proposal fields, tailored to the Educator track. */
+export const getProposalLabels = (type: FellowshipType | null | undefined): ProposalLabels =>
+  type === FellowshipType.EDUCATOR ? EDUCATOR_PROPOSAL_LABELS : DEFAULT_PROPOSAL_LABELS;

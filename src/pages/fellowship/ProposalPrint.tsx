@@ -13,7 +13,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { fellowshipLightTheme } from '../../components/fellowship/theme';
 import { useApplication, useApplicationProposal } from '../../hooks/fellowshipHooks';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
-import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
+import { getProposalLabels, githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
 
 // A long-text section, only rendered when there's content to show.
 const PrintTextSection = ({ title, text }: { title: string; text: string | null | undefined }) =>
@@ -63,6 +63,7 @@ const ProposalPrint = () => {
   const codingLanguages = fields?.codingLanguages ?? [];
   const educationInterests = fields?.educationInterests ?? [];
   const isLoading = appQuery.isLoading || proposalQuery.isLoading;
+  const proposalLabels = getProposalLabels(app?.type);
 
   return (
     <ThemeProvider theme={fellowshipLightTheme}>
@@ -113,13 +114,13 @@ const ProposalPrint = () => {
               </Typography>
               <Divider sx={{ mt: 2.5 }} />
 
-              <PrintSection title="Problem statement">
+              <PrintSection title={proposalLabels.problemStatement}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
                   {fields?.problemStatement || '—'}
                 </Typography>
               </PrintSection>
 
-              <PrintSection title="6-month plan & milestones">
+              <PrintSection title={proposalLabels.plan}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
                   {fields?.plan || '—'}
                 </Typography>

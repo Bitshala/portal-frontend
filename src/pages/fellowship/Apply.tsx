@@ -62,12 +62,14 @@ import {
   EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
   buildProposalBody,
   duplicateLinkIndices,
+  getProposalLabels,
   githubProfileUrl,
   normalizeGithub,
   proposalDtoToFields,
   validateGithub,
   validateLink,
   type ProposalFields,
+  type ProposalLabels,
 } from '../../utils/proposalFormat';
 
 // X/Twitter-style long-form limit per section — mirrored server-side.
@@ -159,16 +161,17 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
   const isDeveloper = type === FellowshipType.DEVELOPER;
   const requiresMentorAndProject =
     type === FellowshipType.DEVELOPER || type === FellowshipType.DESIGNER;
+  const labels = getProposalLabels(type);
   return z
     .object({
       // Proposal
       title: z
         .string()
         .trim()
-        .min(1, { message: 'Project title is required.' })
+        .min(1, { message: `${labels.title} is required.` })
         .max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
-      problemStatement: requiredLongText('Problem statement'),
-      plan: requiredLongText('6-month plan'),
+      problemStatement: requiredLongText(labels.problemStatement),
+      plan: requiredLongText(labels.plan),
       links: z
         .array(
           z
@@ -430,6 +433,7 @@ const Apply = () => {
   const requiresMentorAndProject =
     selectedType === FellowshipType.DEVELOPER || selectedType === FellowshipType.DESIGNER;
 
+  const proposalLabels = useMemo(() => getProposalLabels(selectedType), [selectedType]);
   const resolver = useMemo(() => zodResolver(makeApplicationSchema(selectedType)), [selectedType]);
   const form = useForm<ProposalFields>({
     resolver,
@@ -866,6 +870,7 @@ const Apply = () => {
           githubStatus={githubStatus}
           isDeveloper={isDeveloper}
           requiresMentorAndProject={requiresMentorAndProject}
+          proposalLabels={proposalLabels}
         />
       )}
 
@@ -1314,6 +1319,7 @@ const ApplicationStep = ({
   githubStatus,
   isDeveloper,
   requiresMentorAndProject,
+  proposalLabels,
 }: {
   form: UseFormReturn<ProposalFields>;
   disabled: boolean;
@@ -1334,6 +1340,7 @@ const ApplicationStep = ({
   githubStatus: GithubCheckStatus | null;
   isDeveloper: boolean;
   requiresMentorAndProject: boolean;
+  proposalLabels: ProposalLabels;
 }) => {
   const { control, getValues, setValue, formState } = form;
   const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
@@ -1371,7 +1378,7 @@ const ApplicationStep = ({
         {/* ---- Proposal ---- */}
         {sections.includes('proposal') && (
         <SectionCard title="Proposal">
-          <FieldLabel>Project title</FieldLabel>
+          <FieldLabel>{proposalLabels.title}</FieldLabel>
           <ControlledTextField
             control={control}
             name="title"
@@ -1379,12 +1386,12 @@ const ApplicationStep = ({
             counterLimit={TITLE_LIMIT}
             fullWidth
             disabled={disabled}
-            placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
+            placeholder={proposalLabels.titlePlaceholder}
             slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
             sx={{ mb: 2.5 }}
           />
 
-          <FieldLabel>Problem statement</FieldLabel>
+          <FieldLabel>{proposalLabels.problemStatement}</FieldLabel>
           <ControlledTextField
             control={control}
             name="problemStatement"
@@ -1393,12 +1400,12 @@ const ApplicationStep = ({
             multiline
             minRows={4}
             disabled={disabled}
-            placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
+            placeholder={proposalLabels.problemStatementPlaceholder}
             slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
             sx={{ mb: 2.5 }}
           />
 
-          <FieldLabel>6-month plan & milestones</FieldLabel>
+          <FieldLabel>{proposalLabels.plan}</FieldLabel>
           <ControlledTextField
             control={control}
             name="plan"
@@ -1407,7 +1414,7 @@ const ApplicationStep = ({
             multiline
             minRows={6}
             disabled={disabled}
-            placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
+            placeholder={proposalLabels.planPlaceholder}
             slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
             sx={{ mb: 2.5 }}
           />
@@ -2028,6 +2035,7 @@ const ReviewStep = ({
 }) => {
   const requiresProject =
     track.value === FellowshipType.DEVELOPER || track.value === FellowshipType.DESIGNER;
+  const proposalLabels = getProposalLabels(track.value);
   const links = fields.links.map((l) => l.trim()).filter(Boolean);
   return (
     <Box
@@ -2065,9 +2073,9 @@ const ReviewStep = ({
         </Box>
 
         <ReviewGroupLabel>Proposal</ReviewGroupLabel>
-        <ReviewText label="Project title" value={fields.title} />
-        <ReviewLong label="Problem statement" text={fields.problemStatement} />
-        <ReviewLong label="6-month plan & milestones" text={fields.plan} />
+        <ReviewText label={proposalLabels.title} value={fields.title} />
+        <ReviewLong label={proposalLabels.problemStatement} text={fields.problemStatement} />
+        <ReviewLong label={proposalLabels.plan} text={fields.plan} />
         <Box>
           <FieldLabel>Links</FieldLabel>
           {links.length === 0 ? (

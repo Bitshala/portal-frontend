@@ -861,7 +861,7 @@ const DetailPane = ({
           </Box>
         ) : (
           // Reviewers read proposals in full, so no expandable clamping here.
-          <ProposalView proposal={proposal} />
+          <ProposalView proposal={proposal} type={app.type} />
         )}
 
         {app.status !== FellowshipApplicationStatus.SUBMITTED && app.reviewerRemarks && (

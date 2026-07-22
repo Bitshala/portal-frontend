@@ -501,7 +501,7 @@ const ApplicationDetail = ({
               <CircularProgress size={20} />
             </Box>
           ) : (
-            <ProposalView proposal={proposal} expandable />
+            <ProposalView proposal={proposal} type={app.type} expandable />
           )}
         </Box>
       </Box>

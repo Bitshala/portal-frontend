@@ -2,8 +2,8 @@ import { Box, Chip, Stack, Typography } from '@mui/material';
 import { ExternalLink, Github } from 'lucide-react';
 import ExpandableText from './ExpandableText';
 import LinkChip from './LinkChip';
-import type { FellowshipApplicationProposalDto } from '../../types/fellowship';
-import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
+import type { FellowshipApplicationProposalDto, FellowshipType } from '../../types/fellowship';
+import { getProposalLabels, githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
 
 export const ProposalSection = ({
   title,
@@ -58,12 +58,16 @@ const ChipRow = ({ values }: { values: string[] }) => (
 
 export const ProposalView = ({
   proposal,
+  type,
   expandable = false,
 }: {
   proposal: FellowshipApplicationProposalDto | null | undefined;
+  /** The application's fellowship track — picks Educator-specific section titles. */
+  type?: FellowshipType | null;
   /** Clamp long sections behind a "Show more" toggle (for compact contexts). */
   expandable?: boolean;
 }) => {
+  const labels = getProposalLabels(type);
   const github = proposal?.github ?? '';
   const links = (proposal?.links ?? []).map((l) => l.trim()).filter(Boolean);
   const domains = proposal?.domains ?? [];
@@ -72,11 +76,11 @@ export const ProposalView = ({
 
   return (
     <>
-      <ProposalSection title="Problem statement">
+      <ProposalSection title={labels.problemStatement}>
         <LongText text={proposal?.problemStatement ?? ''} expandable={expandable} />
       </ProposalSection>
 
-      <ProposalSection title="6-month plan">
+      <ProposalSection title={labels.plan}>
         <LongText text={proposal?.plan ?? ''} expandable={expandable} />
       </ProposalSection>
 
