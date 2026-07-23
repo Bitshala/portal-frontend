@@ -3,9 +3,10 @@ import {
   Box,
   Typography,
   IconButton,
-  FormControl,
-  Select,
+  Button,
+  Menu,
   MenuItem,
+  ListItemText,
   Table,
   TableBody,
   TableCell,
@@ -25,8 +26,9 @@ import { useAllFeedback, useFeedbackByCohort } from '../../hooks/feedbackHooks';
 import { useCohorts } from '../../hooks/cohortHooks';
 import { useUserById } from '../../hooks/userHooks';
 import FeedbackRatingCharts from '../../components/FeedbackRatingCharts';
-import type { GetFeedbackResponseDto } from '../../types/api';
-import { CohortComponent, ComponentRating } from '../../types/enums';
+import { cohortTypeToName } from '../../helpers/cohortHelpers';
+import type { GetCohortResponseDto, GetFeedbackResponseDto } from '../../types/api';
+import { CohortComponent, ComponentRating, type CohortType } from '../../types/enums';
 
 const COMPONENT_LABELS: Record<CohortComponent, string> = {
   [CohortComponent.SESSION_INSTRUCTIONS]: 'Session Instructions',
@@ -244,12 +246,36 @@ const FeedbackAdmin: React.FC = () => {
   const [selectedCohort, setSelectedCohort] = useState('');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<GetFeedbackResponseDto | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [submenuAnchor, setSubmenuAnchor] = useState<null | HTMLElement>(null);
+  const [activeType, setActiveType] = useState<CohortType | null>(null);
 
   const cohortNameMap = useMemo(() => {
     const map = new Map<string, string>();
     cohortsData?.records.forEach((cohort) => map.set(cohort.id, cohortLabel(cohort)));
     return map;
   }, [cohortsData]);
+
+  const cohortsByType = useMemo(() => {
+    const map = new Map<CohortType, GetCohortResponseDto[]>();
+    for (const cohort of cohortsData?.records ?? []) {
+      const list = map.get(cohort.type) ?? [];
+      list.push(cohort);
+      map.set(cohort.type, list);
+    }
+    return Array.from(map.entries())
+      .map(([type, seasons]) => ({
+        type,
+        name: cohortTypeToName(type),
+        seasons: [...seasons].sort((a, b) => b.season - a.season),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [cohortsData]);
+
+  const activeSeasons = useMemo(
+    () => cohortsByType.find((group) => group.type === activeType)?.seasons ?? [],
+    [cohortsByType, activeType],
+  );
 
   const allQuery = useAllFeedback({ page, pageSize: PAGE_SIZE }, { enabled: !selectedCohort });
   const cohortQuery = useFeedbackByCohort(
@@ -262,9 +288,25 @@ const FeedbackAdmin: React.FC = () => {
   const total = data?.totalRecords ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const selectedLabel = selectedCohort
+    ? (cohortNameMap.get(selectedCohort) ?? 'Selected cohort')
+    : 'All Cohorts';
+
+  const closeMenus = () => {
+    setMenuAnchor(null);
+    setSubmenuAnchor(null);
+    setActiveType(null);
+  };
+
   const handleCohortChange = (cohortId: string) => {
     setSelectedCohort(cohortId);
     setPage(0);
+    closeMenus();
+  };
+
+  const openSubmenu = (event: React.MouseEvent<HTMLElement>, type: CohortType) => {
+    setSubmenuAnchor(event.currentTarget);
+    setActiveType(type);
   };
 
   return (
@@ -283,28 +325,125 @@ const FeedbackAdmin: React.FC = () => {
 
       <FeedbackRatingCharts cohorts={cohortsData?.records ?? []} />
 
-      <FormControl size="small" sx={{ mb: 3, minWidth: 260 }}>
-        <Select
-          value={selectedCohort}
-          onChange={(e) => handleCohortChange(e.target.value)}
-          displayEmpty
+      <Box sx={{ mb: 3 }}>
+        <Button
+          variant="outlined"
+          onClick={(e) => setMenuAnchor(e.currentTarget)}
+          endIcon={
+            <Typography component="span" sx={{ fontSize: '0.7rem', color: '#a1a1aa', lineHeight: 1 }}>
+              ▾
+            </Typography>
+          }
           sx={{
+            minWidth: 280,
+            justifyContent: 'space-between',
+            textTransform: 'none',
             bgcolor: '#1c1c1f',
             color: '#fafafa',
-            '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3f3f46' },
-            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#52525b' },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fb923c' },
+            borderColor: '#3f3f46',
+            px: 1.75,
+            py: 0.85,
+            '&:hover': { borderColor: '#52525b', bgcolor: '#1c1c1f' },
           }}
-          MenuProps={{ PaperProps: { sx: { bgcolor: '#1c1c1f', border: '1px solid #27272a' } } }}
         >
-          <MenuItem value="" sx={{ color: '#fafafa' }}>All Cohorts</MenuItem>
-          {cohortsData?.records.map((cohort) => (
-            <MenuItem key={cohort.id} value={cohort.id} sx={{ color: '#fafafa' }}>
-              {cohortLabel(cohort)}
+          <Typography noWrap sx={{ color: '#fafafa', fontSize: '0.875rem' }}>
+            {selectedLabel}
+          </Typography>
+        </Button>
+
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={closeMenus}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          PaperProps={{
+            sx: {
+              bgcolor: '#1c1c1f',
+              border: '1px solid #27272a',
+              mt: 0.5,
+              minWidth: 280,
+            },
+          }}
+        >
+          <MenuItem
+            selected={!selectedCohort}
+            onClick={() => handleCohortChange('')}
+            sx={{ color: '#fafafa' }}
+          >
+            All Cohorts
+          </MenuItem>
+          <Divider sx={{ borderColor: '#27272a', my: 0.5 }} />
+          {cohortsByType.map((group) => {
+            const isGroupSelected = group.seasons.some((s) => s.id === selectedCohort);
+            return (
+              <MenuItem
+                key={group.type}
+                onMouseEnter={(e) => openSubmenu(e, group.type)}
+                onClick={(e) => openSubmenu(e, group.type)}
+                selected={isGroupSelected || activeType === group.type}
+                sx={{
+                  color: '#fafafa',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  '&.Mui-selected': { bgcolor: 'rgba(249,115,22,0.12)' },
+                  '&.Mui-selected:hover': { bgcolor: 'rgba(249,115,22,0.18)' },
+                }}
+              >
+                <ListItemText
+                  primary={group.name}
+                  primaryTypographyProps={{ fontSize: '0.875rem', noWrap: true }}
+                />
+                <Typography component="span" sx={{ color: '#71717a', fontSize: '0.85rem' }}>
+                  ›
+                </Typography>
+              </MenuItem>
+            );
+          })}
+        </Menu>
+
+        <Menu
+          anchorEl={submenuAnchor}
+          open={Boolean(submenuAnchor) && Boolean(activeType)}
+          onClose={() => {
+            setSubmenuAnchor(null);
+            setActiveType(null);
+          }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          disableAutoFocusItem
+          MenuListProps={{
+            onMouseLeave: () => {
+              setSubmenuAnchor(null);
+              setActiveType(null);
+            },
+          }}
+          PaperProps={{
+            sx: {
+              bgcolor: '#1c1c1f',
+              border: '1px solid #27272a',
+              ml: 0.5,
+              minWidth: 160,
+            },
+          }}
+        >
+          {activeSeasons.map((cohort) => (
+            <MenuItem
+              key={cohort.id}
+              selected={selectedCohort === cohort.id}
+              onClick={() => handleCohortChange(cohort.id)}
+              sx={{
+                color: '#fafafa',
+                '&.Mui-selected': { bgcolor: 'rgba(249,115,22,0.12)', color: '#fb923c' },
+                '&.Mui-selected:hover': { bgcolor: 'rgba(249,115,22,0.18)' },
+              }}
+            >
+              Season {cohort.season}
             </MenuItem>
           ))}
-        </Select>
-      </FormControl>
+        </Menu>
+      </Box>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 10 }}>

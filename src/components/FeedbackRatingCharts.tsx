@@ -86,14 +86,7 @@ const buildRatingSeries = (
 const formatRating = (value: number) => value.toFixed(1);
 
 const getTrend = (points: SeasonRatingPoint[]) => {
-  if (points.length < 2) {
-    return {
-      label: 'Single season',
-      color: '#a1a1aa',
-      bg: 'rgba(161,161,170,0.12)',
-      border: 'rgba(161,161,170,0.3)',
-    };
-  }
+  if (points.length < 2) return null;
 
   const prev = points[points.length - 2];
   const latest = points[points.length - 1];
@@ -275,19 +268,21 @@ const FeedbackRatingCharts = ({ cohorts }: FeedbackRatingChartsProps) => {
                   </Typography>
                 </Stack>
 
-                <Chip
-                  size="small"
-                  label={trend.label}
-                  sx={{
-                    alignSelf: 'flex-start',
-                    bgcolor: trend.bg,
-                    color: trend.color,
-                    border: `1px solid ${trend.border}`,
-                    fontWeight: 600,
-                    fontSize: '0.72rem',
-                    height: 24,
-                  }}
-                />
+                {trend && (
+                  <Chip
+                    size="small"
+                    label={trend.label}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      bgcolor: trend.bg,
+                      color: trend.color,
+                      border: `1px solid ${trend.border}`,
+                      fontWeight: 600,
+                      fontSize: '0.72rem',
+                      height: 24,
+                    }}
+                  />
+                )}
 
                 <Typography sx={{ color: '#52525b', fontSize: '0.72rem' }}>
                   {series.name}
