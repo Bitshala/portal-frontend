@@ -24,6 +24,7 @@ import { MessageSquare, X } from 'lucide-react';
 import { useAllFeedback, useFeedbackByCohort } from '../../hooks/feedbackHooks';
 import { useCohorts } from '../../hooks/cohortHooks';
 import { useUserById } from '../../hooks/userHooks';
+import FeedbackRatingCharts from '../../components/FeedbackRatingCharts';
 import type { GetFeedbackResponseDto } from '../../types/api';
 import { CohortComponent, ComponentRating } from '../../types/enums';
 
@@ -279,6 +280,8 @@ const FeedbackAdmin: React.FC = () => {
           View all cohort feedback submissions
         </Typography>
       </Box>
+
+      <FeedbackRatingCharts cohorts={cohortsData?.records ?? []} />
 
       <FormControl size="small" sx={{ mb: 3, minWidth: 260 }}>
         <Select
