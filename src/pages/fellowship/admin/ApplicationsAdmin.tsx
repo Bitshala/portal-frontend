@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import ApplicationNotes from '../../../components/fellowship/ApplicationNotes';
+import ApplicantCohortRecord from '../../../components/fellowship/ApplicantCohortRecord';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import PdfUploadField from '../../../components/fellowship/PdfUploadField';
 import ProposalView from '../../../components/fellowship/ProposalView';
@@ -862,6 +863,13 @@ const DetailPane = ({
         ) : (
           // Reviewers read proposals in full, so no expandable clamping here.
           <ProposalView proposal={proposal} />
+        )}
+
+        {app.applicantId && (
+          <ApplicantCohortRecord
+            applicantId={app.applicantId}
+            applicantName={app.applicantName}
+          />
         )}
 
         {app.status !== FellowshipApplicationStatus.SUBMITTED && app.reviewerRemarks && (

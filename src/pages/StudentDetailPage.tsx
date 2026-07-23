@@ -10,6 +10,7 @@ import { ArrowLeft, Calendar, BookOpen, Trophy } from 'lucide-react';
 
 import { StudentSummary } from '../components/student/StudentSummary';
 import { WeeklyProgressChart } from '../components/student/WeeklyProgressChart';
+import { CohortPerformanceChart } from '../components/student/CohortPerformanceChart';
 import { WeeklyBreakdownList } from '../components/student/WeeklyBreakdownCard';
 import { ProfileDataCard } from '../components/student/ProfileDataCard';
 
@@ -18,60 +19,8 @@ import { useUserScores, useMyScores } from '../hooks/scoreHooks';
 import { useUser, useUserById } from '../hooks/userHooks';
 import { UserRole } from '../types/enums';
 import { cohortHasExercises } from '../utils/calculations';
-
-interface GroupDiscussionScores {
-  id: string;
-  attendance: boolean;
-  communicationScore: number;
-  maxCommunicationScore: number;
-  depthOfAnswerScore: number;
-  maxDepthOfAnswerScore: number;
-  technicalBitcoinFluencyScore: number;
-  maxTechnicalBitcoinFluencyScore: number;
-  engagementScore: number;
-  maxEngagementScore: number;
-  isBonusAttempted: boolean;
-  bonusAnswerScore: number;
-  maxBonusAnswerScore: number;
-  bonusFollowupScore: number;
-  maxBonusFollowupScore: number;
-  totalScore: number;
-  maxTotalScore: number;
-  groupNumber: number | null;
-}
-
-interface ExerciseScores {
-  id: string;
-  isSubmitted: boolean;
-  isPassing: boolean;
-  totalScore: number;
-  maxTotalScore: number;
-}
-
-interface WeeklyScore {
-  weekId: string;
-  attended: boolean;
-  groupDiscussionScores: GroupDiscussionScores;
-  exerciseScores: ExerciseScores;
-  attendanceScores?: { totalScore: number; maxTotalScore: number };
-  totalScore: number;
-  maxTotalScore: number;
-}
-
-interface Cohort {
-  cohortId: string;
-  cohortType: string;
-  seasonNumber: number;
-  weeklyScores: WeeklyScore[];
-  totalScore: number;
-  maxTotalScore: number;
-}
-
-interface ScoresData {
-  cohorts: Cohort[];
-  totalScore: number;
-  maxTotalScore: number;
-}
+import { cohortTypeToName, cohortTypeToShortName } from '../helpers/cohortHelpers';
+import type { GetCohortScoresResponseDto } from '../types/api';
 
 const StudentDetailPage = () => {
   const { studentId, cohortId: cohortIdParam } = useParams<{ studentId: string; cohortId: string }>();
@@ -86,7 +35,8 @@ const StudentDetailPage = () => {
   const { data: myScoresData } = useMyScores(undefined, { enabled: isViewingOwnProfile });
   const { data: userScoresData } = useUserScores(studentId || '', { enabled: !isViewingOwnProfile && canViewOtherScores && !!studentId });
 
-  const scoresData: ScoresData | undefined = isViewingOwnProfile ? myScoresData : userScoresData;
+  const scoresData = isViewingOwnProfile ? myScoresData : userScoresData;
+  const allCohorts: GetCohortScoresResponseDto[] = scoresData?.cohorts ?? [];
 
   const { data: studentProfileData } = useUserById(studentId || '', { enabled: canViewOtherScores && !!studentId });
 
@@ -97,7 +47,13 @@ const StudentDetailPage = () => {
     ? currentUser?.email
     : studentProfileData?.email;
 
-  const selectedCohort = scoresData?.cohorts.find(cohort => cohort.cohortId === cohortIdParam) || scoresData?.cohorts[0];
+  const selectedCohort =
+    allCohorts.find((cohort) => cohort.cohortId === cohortIdParam) || allCohorts[0];
+
+  const handleSelectCohort = (nextCohortId: string) => {
+    if (!studentId || nextCohortId === cohortIdParam) return;
+    navigate(`/student/${studentId}/${nextCohortId}`, { replace: true });
+  };
 
   const sortedCohortWeeks = useMemo(() => {
     if (!cohortData?.weeks) return [];
@@ -210,19 +166,44 @@ const StudentDetailPage = () => {
                 <Typography variant="body2" sx={{ color: '#a1a1aa', mt: 0.5 }}>
                   {displayEmail}
                 </Typography>
-                {selectedCohort && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                    <Chip
-                      label={selectedCohort.cohortType.replace(/_/g, ' ')}
-                      size="small"
-                      sx={{ bgcolor: 'rgba(249,115,22,0.15)', color: '#fb923c', fontWeight: 600, fontSize: '0.7rem' }}
-                    />
-                    <Chip
-                      label={`Season ${selectedCohort.seasonNumber}`}
-                      size="small"
-                      sx={{ bgcolor: '#3f3f46', color: '#d4d4d8', fontWeight: 500, fontSize: '0.7rem' }}
-                    />
+                {allCohorts.length > 0 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                    {allCohorts
+                      .slice()
+                      .sort((a, b) =>
+                        `${a.cohortType}-${a.seasonNumber}`.localeCompare(
+                          `${b.cohortType}-${b.seasonNumber}`,
+                        ),
+                      )
+                      .map((cohort) => {
+                        const active = cohort.cohortId === selectedCohort?.cohortId;
+                        return (
+                          <Chip
+                            key={cohort.cohortId}
+                            label={`${cohortTypeToShortName(cohort.cohortType)} S${cohort.seasonNumber}`}
+                            size="small"
+                            onClick={() => handleSelectCohort(cohort.cohortId)}
+                            sx={{
+                              bgcolor: active ? 'rgba(249,115,22,0.2)' : '#27272a',
+                              color: active ? '#fb923c' : '#d4d4d8',
+                              border: active ? '1px solid #f97316' : '1px solid #3f3f46',
+                              fontWeight: 600,
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              '&:hover': {
+                                bgcolor: active ? 'rgba(249,115,22,0.28)' : '#3f3f46',
+                              },
+                            }}
+                          />
+                        );
+                      })}
                   </Box>
+                )}
+                {selectedCohort && (
+                  <Typography variant="body2" sx={{ color: '#71717a', mt: 1, fontSize: '0.8rem' }}>
+                    Viewing {cohortTypeToName(selectedCohort.cohortType)} — Season{' '}
+                    {selectedCohort.seasonNumber}
+                  </Typography>
                 )}
               </Box>
 
@@ -271,6 +252,17 @@ const StudentDetailPage = () => {
 
         {/* Summary Stats */}
         <StudentSummary stats={stats} hasExercises={hasExercises} />
+
+        {/* All-cohort performance */}
+        {allCohorts.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <CohortPerformanceChart
+              cohorts={allCohorts}
+              selectedCohortId={selectedCohort?.cohortId}
+              onSelectCohort={handleSelectCohort}
+            />
+          </Box>
+        )}
 
         {/* Progress Chart */}
         <Box sx={{ mb: 3 }}>
