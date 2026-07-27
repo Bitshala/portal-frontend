@@ -8,7 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FileDown } from 'lucide-react';
-import { useApplicationProposal } from '../../hooks/fellowshipHooks';
+import { useApplication, useApplicationProposal } from '../../hooks/fellowshipHooks';
 import ProposalView from './ProposalView';
 
 /**
@@ -33,6 +33,8 @@ export const ProposalDialog = ({
     enabled: !!applicationId,
   });
   const proposal = proposalQuery.data;
+  // Only needed for its `.type`, to pick Educator-specific section titles.
+  const appQuery = useApplication(applicationId ?? '', { enabled: !!applicationId });
 
   return (
     <Dialog open={!!applicationId} onClose={onClose} fullWidth maxWidth="md">
@@ -47,7 +49,7 @@ export const ProposalDialog = ({
             Could not load the proposal.
           </Typography>
         ) : (
-          <ProposalView proposal={proposal} expandable />
+          <ProposalView proposal={proposal} type={appQuery.data?.type} expandable />
         )}
       </DialogContent>
       <DialogActions>
