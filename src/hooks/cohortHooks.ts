@@ -4,6 +4,7 @@ import type {
   PaginatedDataDto,
   PaginatedQueryDto,
   GetCohortResponseDto,
+  GetCohortMetricsResponseDto,
   CreateCohortRequestDto,
   UpdateCohortRequestDto,
   UpdateCohortWeekRequestDto,
@@ -42,6 +43,14 @@ export const useMyWaitlistStatus = createUseQuery<
 >(
   () => ['cohorts', 'waitlist', 'me'],
   () => apiService.getUserWaitlistStatus,
+);
+
+export const useCohortMetrics = createUseQuery<
+  GetCohortMetricsResponseDto,
+  void
+>(
+  () => ['cohorts', 'metrics'],
+  () => apiService.getCohortMetrics,
 );
 
 // ===============

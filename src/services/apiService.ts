@@ -9,6 +9,7 @@ import type {
   PaginatedDataDto,
   PaginatedQueryDto,
   GetCohortResponseDto,
+  GetCohortMetricsResponseDto,
   CreateCohortRequestDto,
   UpdateCohortRequestDto,
   UpdateCohortWeekRequestDto,
@@ -139,6 +140,15 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'GET',
       url: `/cohorts/${id}`,
+    });
+    return data;
+  };
+
+  public getCohortMetrics = async (): Promise<GetCohortMetricsResponseDto> => {
+    const { data } = await this.request<GetCohortMetricsResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/cohorts/metrics',
     });
     return data;
   };
