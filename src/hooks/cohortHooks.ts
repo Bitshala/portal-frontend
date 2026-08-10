@@ -9,6 +9,7 @@ import type {
   UpdateCohortWeekRequestDto,
   JoinWaitlistRequestDto,
   UserCohortWaitlistResponseDto,
+  GetCohortMetricsResponseDto,
 } from '../types/api.ts';
 
 // ===============
@@ -42,6 +43,13 @@ export const useMyWaitlistStatus = createUseQuery<
 >(
   () => ['cohorts', 'waitlist', 'me'],
   () => apiService.getUserWaitlistStatus,
+);
+
+// Precomputed daily (see computedAt in the response) — the default 5min
+// staleTime/no-refetch-on-focus config already fits a slowly-changing snapshot.
+export const useCohortMetrics = createUseQuery<GetCohortMetricsResponseDto, void>(
+  () => ['cohorts', 'metrics'],
+  () => apiService.getCohortMetrics,
 );
 
 // ===============

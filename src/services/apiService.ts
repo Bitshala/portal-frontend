@@ -14,6 +14,7 @@ import type {
   UpdateCohortWeekRequestDto,
   JoinWaitlistRequestDto,
   UserCohortWaitlistResponseDto,
+  GetCohortMetricsResponseDto,
   // Scores
   GetUsersScoresResponseDto,
   ListScoresForCohortAndWeekResponseDto,
@@ -139,6 +140,16 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'GET',
       url: `/cohorts/${id}`,
+    });
+    return data;
+  };
+
+  // Precomputed daily by a background job — reads the stored snapshot, doesn't compute live.
+  public getCohortMetrics = async (): Promise<GetCohortMetricsResponseDto> => {
+    const { data } = await this.request<GetCohortMetricsResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/cohorts/metrics',
     });
     return data;
   };
