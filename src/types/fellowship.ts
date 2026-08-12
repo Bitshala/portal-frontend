@@ -1,5 +1,6 @@
 import type { PaginatedQueryDto } from './api.ts';
 import type { SortOrder } from './api.ts';
+import type { CohortType, EducationCategory } from './enums.ts';
 
 export enum FellowshipType {
   DEVELOPER = 'DEVELOPER',
@@ -103,6 +104,13 @@ export interface FellowshipApplicationProposalDto {
   bitcoinOssGoal: string | null;
   additionalInfo: string | null;
   questionsForBitshala: string | null;
+  // Education track. `educationCategory` selects which conditional field applies:
+  // COHORT_TA → cohortType, MEETUP → city, OTHER → educationCategoryOther.
+  educationCategory: EducationCategory | null;
+  cohortType: CohortType | null;
+  city: string | null;
+  educationCategoryOther: string | null;
+  scopeOfWork: string | null;
 }
 
 // Writable proposal shape for create/update. All fields optional — drafts may be
@@ -136,6 +144,11 @@ export interface FellowshipApplicationProposalWriteDto {
   bitcoinOssGoal?: string;
   additionalInfo?: string;
   questionsForBitshala?: string;
+  educationCategory?: EducationCategory;
+  cohortType?: CohortType;
+  city?: string;
+  educationCategoryOther?: string;
+  scopeOfWork?: string;
 }
 
 export interface CreateFellowshipApplicationRequestDto
