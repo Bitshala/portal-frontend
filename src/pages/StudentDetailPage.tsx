@@ -228,7 +228,7 @@ const StudentDetailPage = () => {
 
               {/* Action buttons */}
               <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                {selectedCohort && (selectedCohort.cohortType === "MASTERING_BITCOIN" || selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE" || selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK" || selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT" || selectedCohort.cohortType === "PROGRAMMING_BITCOIN") && (
+                {selectedCohort && (selectedCohort.cohortType === "MASTERING_BITCOIN" || selectedCohort.cohortType === "LEARNING_BITCOIN_FROM_COMMAND_LINE" || selectedCohort.cohortType === "MASTERING_LIGHTNING_NETWORK" || selectedCohort.cohortType === "BITCOIN_PROTOCOL_DEVELOPMENT" || selectedCohort.cohortType === "PROGRAMMING_BITCOIN" || selectedCohort.cohortType === "BUILDING_BITCOIN_IN_RUST") && (
                   <Button
                     variant="contained"
                     size="small"
@@ -246,6 +246,8 @@ const StudentDetailPage = () => {
                         navigate('/bpd-instructions');
                       } else if (selectedCohort.cohortType === "PROGRAMMING_BITCOIN") {
                         navigate('/pb-instructions');
+                      } else if (selectedCohort.cohortType === "BUILDING_BITCOIN_IN_RUST") {
+                        navigate('/bbr-instructions');
                       }
                     }}
                     sx={{ bgcolor: '#ea580c', textTransform: 'none', fontWeight: 600, boxShadow: 'none', '&:hover': { bgcolor: '#c2410c' } }}

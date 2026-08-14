@@ -6,6 +6,7 @@ import {
   useWatch,
   type Control,
   type FieldErrors,
+  type Resolver,
   type UseFormReturn,
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +18,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -56,9 +58,13 @@ import {
   FellowshipType,
   type FellowshipApplicationProposalWriteDto,
 } from '../../types/fellowship';
+import { CohortType, EducationCategory } from '../../types/enums';
+import { cohortTypeToName } from '../../helpers/cohortHelpers';
+import { COHORT_TYPES } from '../../utils/cohortUtils';
 import fellowshipService from '../../services/fellowshipService';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
+  EDUCATION_CATEGORY_LABELS,
   EMPTY_PROPOSAL_FIELDS as EMPTY_FIELDS,
   buildProposalBody,
   duplicateLinkIndices,
@@ -134,6 +140,18 @@ const EDUCATION_INTEREST_OPTIONS = [
   'Community building',
 ];
 
+// Education-track dropdown options. Category labels come from the shared
+// EDUCATION_CATEGORY_LABELS map; course labels reuse the app-wide
+// `cohortTypeToName` helper so naming stays consistent everywhere.
+const EDUCATION_CATEGORY_OPTIONS = (
+  Object.keys(EDUCATION_CATEGORY_LABELS) as EducationCategory[]
+).map((value) => ({ value, label: EDUCATION_CATEGORY_LABELS[value] }));
+
+const COHORT_OPTIONS = COHORT_TYPES.map((value) => ({
+  value,
+  label: cohortTypeToName(value),
+}));
+
 // ---- Validation schema (react-hook-form + zod) ----
 
 const longText = () =>
@@ -159,16 +177,18 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
   const isDeveloper = type === FellowshipType.DEVELOPER;
   const requiresMentorAndProject =
     type === FellowshipType.DEVELOPER || type === FellowshipType.DESIGNER;
+  const isEducator = type === FellowshipType.EDUCATOR;
   return z
     .object({
-      // Proposal
+      // Proposal. Title/problemStatement/plan are cap-only here; required-ness is
+      // branched per track in superRefine (the educator form drops the problem
+      // statement and uses different labels/messages).
       title: z
         .string()
         .trim()
-        .min(1, { message: 'Project title is required.' })
         .max(TITLE_LIMIT, { message: `Keep the title under ${TITLE_LIMIT} characters.` }),
-      problemStatement: requiredLongText('Problem statement'),
-      plan: requiredLongText('6-month plan'),
+      problemStatement: longText(),
+      plan: longText(),
       links: z
         .array(
           z
@@ -221,8 +241,69 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
       // Anything else
       additionalInfo: longText(),
       questionsForBitshala: longText(),
+      // Education track. Enum-or-empty (the selects only ever produce a valid
+      // enum value or ''); required-ness and the conditional requirements live
+      // in the isEducator superRefine branch.
+      educationCategory: z.enum(EducationCategory).or(z.literal('')),
+      cohortType: z.enum(CohortType).or(z.literal('')),
+      city: z
+        .string()
+        .max(TITLE_LIMIT, { message: `Keep this under ${TITLE_LIMIT} characters.` }),
+      educationCategoryOther: longText(),
+      scopeOfWork: longText(),
     })
     .superRefine((data, ctx) => {
+      // Title / problem statement / plan required-ness is track-aware. The
+      // educator form drops the problem statement and uses its own labels; the
+      // messages mirror the backend so a valid form never 400s.
+      if (isEducator) {
+        if (!data.title.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['title'], message: 'Title is required' });
+        }
+        if (!data.plan.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['plan'], message: 'Plan is required' });
+        }
+        if (!data.scopeOfWork.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['scopeOfWork'], message: 'Scope of work is required' });
+        }
+        const cat = data.educationCategory.trim();
+        if (!cat) {
+          ctx.addIssue({ code: 'custom', path: ['educationCategory'], message: 'Education category is required' });
+        } else if (cat === EducationCategory.MEETUP) {
+          if (!data.city.trim()) {
+            ctx.addIssue({ code: 'custom', path: ['city'], message: 'City is required for a meetup' });
+          }
+        } else if (cat === EducationCategory.COHORT_TA) {
+          if (!data.cohortType.trim()) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['cohortType'],
+              message: 'A cohort is required when the category is Cohort TA',
+            });
+          }
+        } else if (cat === EducationCategory.OTHER) {
+          if (!data.educationCategoryOther.trim()) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['educationCategoryOther'],
+              message: 'A description is required when the category is Other',
+            });
+          }
+        }
+      } else {
+        // Developer / designer: preserve the required-ness (and messages) that
+        // moved out of the base object.
+        if (!data.title.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['title'], message: 'Project title is required.' });
+        }
+        if (!data.problemStatement.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['problemStatement'], message: 'Problem statement is required.' });
+        }
+        if (!data.plan.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['plan'], message: '6-month plan is required.' });
+        }
+      }
+
       const gh = data.github.trim();
       if (isDeveloper && normalizeGithub(gh).length === 0) {
         ctx.addIssue({ code: 'custom', path: ['github'], message: 'GitHub username is required.' });
@@ -349,7 +430,7 @@ type SectionKey = 'proposal' | 'mentor' | 'project' | 'about' | 'bitcoin' | 'any
 // Context passed to each step's field list so step-level validation matches the
 // track: `requiresProject` covers the project-name/link fields shown on the
 // Developer and Designer tracks; `isDeveloper` gates the developer-only extras.
-type StepFieldCtx = { isDeveloper: boolean; requiresProject: boolean };
+type StepFieldCtx = { isDeveloper: boolean; requiresProject: boolean; isEducator: boolean };
 
 const EDIT_STEPS: {
   label: string;
@@ -359,7 +440,23 @@ const EDIT_STEPS: {
   {
     label: 'Proposal',
     sections: ['proposal', 'mentor', 'project'],
-    fields: ({ isDeveloper, requiresProject }) => {
+    fields: ({ isDeveloper, requiresProject, isEducator }) => {
+      // The educator proposal step replaces problem statement / mentor / project
+      // with the education category, its conditional field, and scope of work.
+      // Every educator-required path must be listed so per-step validation
+      // surfaces its error on Continue.
+      if (isEducator) {
+        return [
+          'educationCategory',
+          'cohortType',
+          'city',
+          'educationCategoryOther',
+          'title',
+          'plan',
+          'scopeOfWork',
+          'links',
+        ];
+      }
       const f: (keyof ProposalFields)[] = [
         'title',
         'problemStatement',
@@ -379,7 +476,7 @@ const EDIT_STEPS: {
   {
     label: 'About you',
     sections: ['about'],
-    fields: ({ isDeveloper }) => {
+    fields: ({ isDeveloper, isEducator }) => {
       const f: (keyof ProposalFields)[] = [
         'location',
         'certificateName',
@@ -389,8 +486,11 @@ const EDIT_STEPS: {
         'domains',
         'educationInterests',
       ];
-      // GitHub lives in the Project card on the Developer track, otherwise here.
-      f.push(isDeveloper ? 'codingLanguages' : 'github');
+      // Coding languages are Developer-only. The GitHub username lives in the
+      // Project card on Developer and in this card on Designer; the educator
+      // form drops GitHub entirely.
+      if (isDeveloper) f.push('codingLanguages');
+      else if (!isEducator) f.push('github');
       return f;
     },
   },
@@ -429,8 +529,16 @@ const Apply = () => {
   const isDeveloper = selectedType === FellowshipType.DEVELOPER;
   const requiresMentorAndProject =
     selectedType === FellowshipType.DEVELOPER || selectedType === FellowshipType.DESIGNER;
+  const isEducator = selectedType === FellowshipType.EDUCATOR;
 
-  const resolver = useMemo(() => zodResolver(makeApplicationSchema(selectedType)), [selectedType]);
+  // The educationCategory/cohortType fields are typed as `EducationCategory | ''`
+  // in ProposalFields, but zod v4 infers an empty-string union as an optional
+  // key, so the resolver's input type doesn't line up. The cast reconciles it;
+  // the form always supplies both fields via defaultValues, so it's sound.
+  const resolver = useMemo(
+    () => zodResolver(makeApplicationSchema(selectedType)) as unknown as Resolver<ProposalFields>,
+    [selectedType],
+  );
   const form = useForm<ProposalFields>({
     resolver,
     defaultValues: EMPTY_FIELDS,
@@ -507,6 +615,35 @@ const Apply = () => {
       setValue('certificateName', profileQuery.data.name);
     }
   }, [profileQuery.data, activeId, getValues, setValue]);
+
+  // Educator title auto-fill. For Cohort TA and Meetup the title is derived from
+  // the cohort / city and the input is rendered disabled; Club and Other let the
+  // applicant type it. Lives here (not in the step) so it survives step nav and
+  // recomputes when the cohort/city change. The `!== next` guard makes it a no-op
+  // on hydration and prevents a set→watch→set loop; clearing on category change is
+  // handled imperatively by the category select's onValueChange.
+  useEffect(() => {
+    if (selectedType !== FellowshipType.EDUCATOR) return;
+    const cat = values.educationCategory;
+    let next: string | null = null;
+    if (cat === EducationCategory.COHORT_TA) {
+      next = values.cohortType
+        ? `TA in ${cohortTypeToName(values.cohortType as CohortType)} cohort`
+        : '';
+    } else if (cat === EducationCategory.MEETUP) {
+      next = values.city.trim() ? `Meetup in ${values.city.trim()}` : '';
+    }
+    if (next !== null && getValues('title') !== next) {
+      setValue('title', next, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [
+    selectedType,
+    values.educationCategory,
+    values.cohortType,
+    values.city,
+    getValues,
+    setValue,
+  ]);
 
   useEffect(() => {
     if (!activeId || !loadedApp.data?.type) return;
@@ -750,7 +887,11 @@ const Apply = () => {
   // (full validation is deferred to the Review/submit transition), then advances.
   const handleContinueEdit = (currentStep: number) => async () => {
     const ok = await form.trigger(
-      EDIT_STEPS[currentStep - 1].fields({ isDeveloper, requiresProject: requiresMentorAndProject }),
+      EDIT_STEPS[currentStep - 1].fields({
+        isDeveloper,
+        requiresProject: requiresMentorAndProject,
+        isEducator,
+      }),
     );
     if (!ok) return;
     await persistThenGoTo(currentStep + 1);
@@ -760,7 +901,9 @@ const Apply = () => {
   // editing step that owns an errored field so the applicant can see it.
   const handleInvalid = (errors: FieldErrors<ProposalFields>) => {
     const idx = EDIT_STEPS.findIndex((s) =>
-      s.fields({ isDeveloper, requiresProject: requiresMentorAndProject }).some((f) => errors[f]),
+      s
+        .fields({ isDeveloper, requiresProject: requiresMentorAndProject, isEducator })
+        .some((f) => errors[f]),
     );
     setStep(idx >= 0 ? idx + 1 : 1);
     setToast({ kind: 'error', msg: 'Please fix the highlighted fields before continuing.' });
@@ -866,6 +1009,7 @@ const Apply = () => {
           githubStatus={githubStatus}
           isDeveloper={isDeveloper}
           requiresMentorAndProject={requiresMentorAndProject}
+          isEducator={isEducator}
         />
       )}
 
@@ -1173,10 +1317,16 @@ type TextFieldName =
   | 'bitcoinMotivation'
   | 'bitcoinOssGoal'
   | 'additionalInfo'
-  | 'questionsForBitshala';
+  | 'questionsForBitshala'
+  | 'city'
+  | 'educationCategoryOther'
+  | 'scopeOfWork';
 
 // Multi-value chip fields.
 type TagFieldName = 'domains' | 'codingLanguages' | 'educationInterests';
+
+// Enum-backed single-select fields (education track).
+type SelectFieldName = 'educationCategory' | 'cohortType';
 
 // A react-hook-form Controller wrapped around an MUI TextField. Shows the
 // field's validation error, or a character counter / fallback helper text.
@@ -1265,6 +1415,63 @@ const ControlledChips = ({
   />
 );
 
+// A single-select dropdown backed by an enum field (education category / cohort).
+// Mirrors ControlledTextField but renders MUI's <TextField select>. A disabled
+// placeholder item shows while the value is empty. `onValueChange` fires after
+// the field updates so callers can clear dependent fields on a real selection.
+const ControlledSelect = ({
+  control,
+  name,
+  options,
+  disabled,
+  placeholder,
+  onValueChange,
+  ...textFieldProps
+}: {
+  control: Control<ProposalFields>;
+  name: SelectFieldName;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+  placeholder?: string;
+  onValueChange?: (value: string) => void;
+} & Omit<
+  TextFieldProps,
+  'name' | 'value' | 'error' | 'onChange' | 'onBlur' | 'select' | 'children'
+>) => (
+  <Controller
+    control={control}
+    name={name}
+    render={({ field, fieldState }) => (
+      <TextField
+        {...textFieldProps}
+        select
+        fullWidth
+        name={field.name}
+        value={field.value ?? ''}
+        onChange={(e) => {
+          field.onChange(e);
+          onValueChange?.(e.target.value);
+        }}
+        onBlur={field.onBlur}
+        inputRef={field.ref}
+        disabled={disabled}
+        error={!!fieldState.error}
+        helperText={fieldState.error?.message ?? ' '}
+        slotProps={{ select: { displayEmpty: true } }}
+      >
+        <MenuItem value="" disabled>
+          {placeholder ?? 'Select…'}
+        </MenuItem>
+        {options.map((o) => (
+          <MenuItem key={o.value} value={o.value}>
+            {o.label}
+          </MenuItem>
+        ))}
+      </TextField>
+    )}
+  />
+);
+
 // A grouped section of the application form, rendered as its own card so the
 // combined form reads as clear categories rather than one long list.
 const SectionCard = ({
@@ -1314,6 +1521,7 @@ const ApplicationStep = ({
   githubStatus,
   isDeveloper,
   requiresMentorAndProject,
+  isEducator,
 }: {
   form: UseFormReturn<ProposalFields>;
   disabled: boolean;
@@ -1334,9 +1542,24 @@ const ApplicationStep = ({
   githubStatus: GithubCheckStatus | null;
   isDeveloper: boolean;
   requiresMentorAndProject: boolean;
+  isEducator: boolean;
 }) => {
   const { control, getValues, setValue, formState } = form;
   const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
+  const educationCategory = useWatch({ control, name: 'educationCategory' }) as
+    | EducationCategory
+    | '';
+
+  // Clear the now-irrelevant conditional inputs when the category changes so
+  // stale city/cohort/other-description values aren't sent, and blank the title
+  // (the auto-title effect refills it for Cohort TA / Meetup). Runs only on a
+  // real user selection, so a hydrated draft is never wiped.
+  const handleCategoryChange = () => {
+    setValue('cohortType', '', { shouldDirty: true });
+    setValue('city', '', { shouldDirty: true });
+    setValue('educationCategoryOther', '', { shouldDirty: true });
+    setValue('title', '', { shouldDirty: true, shouldValidate: true });
+  };
   const linksArrayError =
     typeof formState.errors.links?.message === 'string' ? formState.errors.links.message : null;
 
@@ -1371,46 +1594,153 @@ const ApplicationStep = ({
         {/* ---- Proposal ---- */}
         {sections.includes('proposal') && (
         <SectionCard title="Proposal">
-          <FieldLabel>Project title</FieldLabel>
-          <ControlledTextField
-            control={control}
-            name="title"
-            counter
-            counterLimit={TITLE_LIMIT}
-            fullWidth
-            disabled={disabled}
-            placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
-            slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
-            sx={{ mb: 2.5 }}
-          />
+          {isEducator ? (
+            <>
+              <FieldLabel>Category</FieldLabel>
+              <ControlledSelect
+                control={control}
+                name="educationCategory"
+                options={EDUCATION_CATEGORY_OPTIONS}
+                placeholder="Select a category"
+                disabled={disabled}
+                onValueChange={handleCategoryChange}
+                sx={{ mb: 2.5 }}
+              />
 
-          <FieldLabel>Problem statement</FieldLabel>
-          <ControlledTextField
-            control={control}
-            name="problemStatement"
-            counter
-            fullWidth
-            multiline
-            minRows={4}
-            disabled={disabled}
-            placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
-            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-            sx={{ mb: 2.5 }}
-          />
+              {educationCategory === EducationCategory.COHORT_TA && (
+                <>
+                  <FieldLabel>Cohort</FieldLabel>
+                  <ControlledSelect
+                    control={control}
+                    name="cohortType"
+                    options={COHORT_OPTIONS}
+                    placeholder="Select a cohort"
+                    disabled={disabled}
+                    sx={{ mb: 2.5 }}
+                  />
+                </>
+              )}
+              {educationCategory === EducationCategory.MEETUP && (
+                <>
+                  <FieldLabel>City</FieldLabel>
+                  <ControlledTextField
+                    control={control}
+                    name="city"
+                    fullWidth
+                    disabled={disabled}
+                    placeholder="Pune"
+                    slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+                    sx={{ mb: 2.5 }}
+                  />
+                </>
+              )}
+              {educationCategory === EducationCategory.OTHER && (
+                <>
+                  <FieldLabel>Describe what you want to do</FieldLabel>
+                  <ControlledTextField
+                    control={control}
+                    name="educationCategoryOther"
+                    counter
+                    fullWidth
+                    multiline
+                    minRows={4}
+                    disabled={disabled}
+                    placeholder="Tell us what you'd like to run and how it helps learners."
+                    slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+                    sx={{ mb: 2.5 }}
+                  />
+                </>
+              )}
 
-          <FieldLabel>6-month plan & milestones</FieldLabel>
-          <ControlledTextField
-            control={control}
-            name="plan"
-            counter
-            fullWidth
-            multiline
-            minRows={6}
-            disabled={disabled}
-            placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
-            slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
-            sx={{ mb: 2.5 }}
-          />
+              <FieldLabel>Title</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="title"
+                counter
+                counterLimit={TITLE_LIMIT}
+                fullWidth
+                disabled={
+                  disabled ||
+                  educationCategory === EducationCategory.COHORT_TA ||
+                  educationCategory === EducationCategory.MEETUP
+                }
+                placeholder="Give your initiative a short, descriptive title"
+                slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+
+              <FieldLabel>Describe your plan</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="plan"
+                counter
+                fullWidth
+                multiline
+                minRows={6}
+                disabled={disabled}
+                placeholder="What will you run, how often, and what will learners walk away with?"
+                slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+
+              <FieldLabel>Scope of work</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="scopeOfWork"
+                counter
+                fullWidth
+                multiline
+                minRows={4}
+                disabled={disabled}
+                placeholder={`Month-by-month breakdown — how many meetups/clubs per month; for clubs: curriculum, exercises, hands-on sessions.`}
+                slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+            </>
+          ) : (
+            <>
+              <FieldLabel>Project title</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="title"
+                counter
+                counterLimit={TITLE_LIMIT}
+                fullWidth
+                disabled={disabled}
+                placeholder="BIP-324 transport relay — large-scale fuzz testing harness"
+                slotProps={{ htmlInput: { maxLength: TITLE_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+
+              <FieldLabel>Problem statement</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="problemStatement"
+                counter
+                fullWidth
+                multiline
+                minRows={4}
+                disabled={disabled}
+                placeholder="What gap are you closing, and why does it matter for the ecosystem? Link to the relevant issues, RFCs, or discussions."
+                slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+
+              <FieldLabel>6-month plan & milestones</FieldLabel>
+              <ControlledTextField
+                control={control}
+                name="plan"
+                counter
+                fullWidth
+                multiline
+                minRows={6}
+                disabled={disabled}
+                placeholder={`Month 1–2: scope, prior-art review, first PR\nMonth 3–4: core implementation, tests\nMonth 5–6: integration, docs, handoff`}
+                slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
+                sx={{ mb: 2.5 }}
+              />
+            </>
+          )}
 
           <FieldLabel>Links (portfolio, LinkedIn, prior work)</FieldLabel>
           <Stack spacing={1.25} sx={{ mb: 1 }}>
@@ -1468,7 +1798,7 @@ const ApplicationStep = ({
         )}
 
         {/* ---- Mentor ---- */}
-        {sections.includes('mentor') && (
+        {sections.includes('mentor') && !isEducator && (
         <SectionCard title="Mentor">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
             <Box sx={{ flex: 1 }}>
@@ -1758,7 +2088,10 @@ const ApplicationStep = ({
             sx={{ mb: 2.5 }}
           />
 
-          <FieldLabel>Questions for Bitshala{optionalSuffix}</FieldLabel>
+          <FieldLabel>
+            {isEducator ? 'Ask from Bitshala' : 'Questions for Bitshala'}
+            {optionalSuffix}
+          </FieldLabel>
           <ControlledTextField
             control={control}
             name="questionsForBitshala"
@@ -1767,7 +2100,11 @@ const ApplicationStep = ({
             multiline
             minRows={3}
             disabled={disabled}
-            placeholder="Anything you'd like to ask us."
+            placeholder={
+              isEducator
+                ? 'Any special support or logistics you need from us.'
+                : "Anything you'd like to ask us."
+            }
             slotProps={{ htmlInput: { maxLength: LONG_TEXT_LIMIT } }}
           />
         </SectionCard>
@@ -2028,7 +2365,17 @@ const ReviewStep = ({
 }) => {
   const requiresProject =
     track.value === FellowshipType.DEVELOPER || track.value === FellowshipType.DESIGNER;
+  const isEducator = track.value === FellowshipType.EDUCATOR;
   const links = fields.links.map((l) => l.trim()).filter(Boolean);
+  // The education-category detail shown in review depends on the chosen category.
+  const educationDetail =
+    fields.educationCategory === EducationCategory.COHORT_TA
+      ? { label: 'Cohort', text: fields.cohortType ? cohortTypeToName(fields.cohortType as CohortType) : '' }
+      : fields.educationCategory === EducationCategory.MEETUP
+        ? { label: 'City', text: fields.city }
+        : fields.educationCategory === EducationCategory.OTHER
+          ? { label: 'Description', text: fields.educationCategoryOther }
+          : null;
   return (
     <Box
       sx={{
@@ -2065,9 +2412,33 @@ const ReviewStep = ({
         </Box>
 
         <ReviewGroupLabel>Proposal</ReviewGroupLabel>
-        <ReviewText label="Project title" value={fields.title} />
-        <ReviewLong label="Problem statement" text={fields.problemStatement} />
-        <ReviewLong label="6-month plan & milestones" text={fields.plan} />
+        {isEducator ? (
+          <>
+            <ReviewText
+              label="Category"
+              value={
+                fields.educationCategory
+                  ? EDUCATION_CATEGORY_LABELS[fields.educationCategory]
+                  : ''
+              }
+            />
+            {educationDetail &&
+              (educationDetail.label === 'Description' ? (
+                <ReviewLong label={educationDetail.label} text={educationDetail.text} />
+              ) : (
+                <ReviewText label={educationDetail.label} value={educationDetail.text} />
+              ))}
+            <ReviewText label="Title" value={fields.title} />
+            <ReviewLong label="Describe your plan" text={fields.plan} />
+            <ReviewLong label="Scope of work" text={fields.scopeOfWork} />
+          </>
+        ) : (
+          <>
+            <ReviewText label="Project title" value={fields.title} />
+            <ReviewLong label="Problem statement" text={fields.problemStatement} />
+            <ReviewLong label="6-month plan & milestones" text={fields.plan} />
+          </>
+        )}
         <Box>
           <FieldLabel>Links</FieldLabel>
           {links.length === 0 ? (
@@ -2086,30 +2457,34 @@ const ReviewStep = ({
           )}
         </Box>
 
-        <ReviewGroupLabel>Mentor</ReviewGroupLabel>
-        <Box>
-          <FieldLabel>Mentor</FieldLabel>
-          {fields.mentorName || fields.mentorContact ? (
-            <>
-              <Typography>
-                {fields.mentorName || '—'}
-                {fields.mentorContact && (
-                  <Box component="span" sx={{ color: 'text.secondary' }}>
-                    {' '}
-                    · {fields.mentorContact}
-                  </Box>
-                )}
-              </Typography>
-              {fields.mentorTestimonial && (
-                <Box sx={{ mt: 1 }}>
-                  <ExpandableText text={fields.mentorTestimonial} />
-                </Box>
+        {!isEducator && (
+          <>
+            <ReviewGroupLabel>Mentor</ReviewGroupLabel>
+            <Box>
+              <FieldLabel>Mentor</FieldLabel>
+              {fields.mentorName || fields.mentorContact ? (
+                <>
+                  <Typography>
+                    {fields.mentorName || '—'}
+                    {fields.mentorContact && (
+                      <Box component="span" sx={{ color: 'text.secondary' }}>
+                        {' '}
+                        · {fields.mentorContact}
+                      </Box>
+                    )}
+                  </Typography>
+                  {fields.mentorTestimonial && (
+                    <Box sx={{ mt: 1 }}>
+                      <ExpandableText text={fields.mentorTestimonial} />
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Dash />
               )}
-            </>
-          ) : (
-            <Dash />
-          )}
-        </Box>
+            </Box>
+          </>
+        )}
 
         {requiresProject && (
           <>
@@ -2131,18 +2506,20 @@ const ReviewStep = ({
         )}
 
         <ReviewGroupLabel>About you</ReviewGroupLabel>
-        <Box>
-          <FieldLabel>GitHub username</FieldLabel>
-          {fields.github ? (
-            <LinkChip
-              href={githubProfileUrl(fields.github)}
-              icon={<Github size={13} />}
-              label={`@${normalizeGithub(fields.github)}`}
-            />
-          ) : (
-            <Dash />
-          )}
-        </Box>
+        {!isEducator && (
+          <Box>
+            <FieldLabel>GitHub username</FieldLabel>
+            {fields.github ? (
+              <LinkChip
+                href={githubProfileUrl(fields.github)}
+                icon={<Github size={13} />}
+                label={`@${normalizeGithub(fields.github)}`}
+              />
+            ) : (
+              <Dash />
+            )}
+          </Box>
+        )}
         <ReviewText label="Name" value={fields.certificateName} />
         <ReviewText label="Location" value={fields.location} />
         <ReviewText label="Graduation year" value={fields.graduationYear} />

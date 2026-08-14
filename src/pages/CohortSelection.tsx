@@ -35,7 +35,7 @@ import {
 import { Tooltip } from '@mui/material';
 import { useCohorts, useCreateCohort, useUpdateCohort } from '../hooks/cohortHooks';
 import { useUser } from '../hooks/userHooks';
-import { useGenerateCohortCertificates, useCohortCertificates, usePreviewCohortCertificates, useSendCohortCertificateEmails } from '../hooks/certificateHooks';
+import { useGenerateCohortCertificates, useCohortCertificates, usePreviewCohortCertificates } from '../hooks/certificateHooks';
 import type { CertificatePreviewResponseDto } from '../types/api';
 import apiService from '../services/apiService';
 import { UserRole, CohortType } from '../types/enums';
@@ -127,17 +127,13 @@ const CertificatePreviewModal = ({
   cohortName,
   onClose,
   onGenerate,
-  onSendEmails,
   isGenerating,
-  isSendingEmails,
 }: {
   cohortId: string;
   cohortName: string;
   onClose: () => void;
   onGenerate: () => void;
-  onSendEmails: () => void;
   isGenerating: boolean;
-  isSendingEmails: boolean;
 }) => {
   const { data: previews, isLoading } = usePreviewCohortCertificates(cohortId);
 
@@ -355,22 +351,6 @@ const CertificatePreviewModal = ({
           Close
         </Button>
         <Button
-          onClick={() => { onSendEmails(); onClose(); }}
-          variant="outlined"
-          disabled={isSendingEmails || isLoading || !previews || previews.length === 0}
-          startIcon={isSendingEmails ? <CircularProgress size={13} sx={{ color: '#60a5fa' }} /> : undefined}
-          sx={{
-            color: '#60a5fa',
-            borderColor: '#3b82f6',
-            textTransform: 'none',
-            fontWeight: 600,
-            '&:hover': { borderColor: '#60a5fa', bgcolor: 'rgba(96,165,250,0.08)' },
-            '&.Mui-disabled': { borderColor: '#1e3a5f', color: '#1e40af' },
-          }}
-        >
-          Send Emails
-        </Button>
-        <Button
           onClick={() => { onGenerate(); onClose(); }}
           variant="contained"
           disabled={isGenerating || isLoading || !previews || previews.length === 0}
@@ -419,8 +399,6 @@ export const CohortSelection = () => {
   const createCohortMutation = useCreateCohort();
   const updateCohortMutation = useUpdateCohort();
   const { mutate: generateCertificates, isPending: isGeneratingCerts } = useGenerateCohortCertificates();
-  const { mutate: sendCertificateEmails, isPending: isSendingCertEmails } = useSendCohortCertificateEmails();
-  const [sendingEmailsCohortId, setSendingEmailsCohortId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('Active');
   const [generatingCohortId, setGeneratingCohortId] = useState<string | null>(null);
@@ -504,34 +482,11 @@ export const CohortSelection = () => {
       {
         onSuccess: () => {
           setGeneratingCohortId(null);
-          setSnackbar({ open: true, message: `Certificates generated for ${cohortName}!`, severity: 'success' });
+          setSnackbar({ open: true, message: `Certificate generated and emails sent for ${cohortName}!`, severity: 'success' });
         },
         onError: (error) => {
           setGeneratingCohortId(null);
           let errorMessage = 'Failed to generate certificates.';
-          if (typeof error === 'object' && error !== null && 'response' in error) {
-            const re = error as { response?: { data?: { message?: string } } };
-            if (re.response?.data?.message) errorMessage = re.response.data.message;
-          }
-          setSnackbar({ open: true, message: errorMessage, severity: 'error' });
-        },
-      },
-    );
-  };
-
-
-  const handleSendCertificateEmails = (cohortId: string, cohortName: string) => {
-    setSendingEmailsCohortId(cohortId);
-    sendCertificateEmails(
-      { cohortId },
-      {
-        onSuccess: () => {
-          setSendingEmailsCohortId(null);
-          setSnackbar({ open: true, message: `Certificate emails sent for ${cohortName}!`, severity: 'success' });
-        },
-        onError: (error) => {
-          setSendingEmailsCohortId(null);
-          let errorMessage = 'Failed to send certificate emails.';
           if (typeof error === 'object' && error !== null && 'response' in error) {
             const re = error as { response?: { data?: { message?: string } } };
             if (re.response?.data?.message) errorMessage = re.response.data.message;
@@ -880,9 +835,7 @@ export const CohortSelection = () => {
           cohortName={previewCohort.name}
           onClose={() => setPreviewCohort(null)}
           onGenerate={() => handleGenerateCertificates(previewCohort.id, previewCohort.name)}
-          onSendEmails={() => handleSendCertificateEmails(previewCohort.id, previewCohort.name)}
           isGenerating={isGeneratingCerts && generatingCohortId === previewCohort.id}
-          isSendingEmails={isSendingCertEmails && sendingEmailsCohortId === previewCohort.id}
         />
       )}
 

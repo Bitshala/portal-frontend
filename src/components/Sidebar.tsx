@@ -24,6 +24,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   User,
+  Users,
   LogOut,
   BookOpen,
   BarChart3,
@@ -63,6 +64,7 @@ const instructionLinks = [
   { label: 'Lightning Network', path: '/ln-instructions' },
   { label: 'Bitcoin Protocol Dev', path: '/bpd-instructions' },
   { label: 'Programming Bitcoin', path: '/pb-instructions' },
+  { label: 'Building Bitcoin in Rust', path: '/bbr-instructions' },
 ];
 
 // The apply form has no sidebar entry — it opens from the Apply button on
@@ -81,6 +83,11 @@ const adminFellowshipLinks = [
   { label: 'Applications', path: '/admin/fellowships/applications', icon: FileText },
   { label: 'Manage', path: '/admin/fellowships', icon: Award },
   { label: 'Reports', path: '/admin/fellowships/reports', icon: ClipboardList },
+];
+
+// Admin-only top-level tools — TAs (who share the rest of the staff nav) don't see these.
+const adminOnlyNavItems: NavItem[] = [
+  { label: 'Users', path: '/admin/users', icon: Users },
 ];
 
 const EXPANDED_WIDTH = 260;
@@ -167,7 +174,9 @@ const Sidebar = () => {
   // TAs keep the rest of the staff nav (Cohorts, Cohort Metrics) but don't see
   // the fellowship "Admin" link group below.
   const isAdmin = user?.role === UserRole.ADMIN;
-  const navItems = isStaff ? adminNavItems : studentNavItems;
+  const navItems = isStaff
+    ? [...adminNavItems, ...(isAdmin ? adminOnlyNavItems : [])]
+    : studentNavItems;
 
   // My Fellowships / My Reports only make sense once an application has been
   // approved — approval is what creates the user's first fellowship.

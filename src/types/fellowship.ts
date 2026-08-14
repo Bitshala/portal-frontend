@@ -1,10 +1,30 @@
 import type { PaginatedQueryDto } from './api.ts';
 import type { SortOrder } from './api.ts';
+import type { CohortType, EducationCategory } from './enums.ts';
 
 export enum FellowshipType {
   DEVELOPER = 'DEVELOPER',
   DESIGNER = 'DESIGNER',
   EDUCATOR = 'EDUCATOR',
+}
+
+// Orthogonal to `type`: a fellowship is either a regular FELLOWSHIP or a
+// higher-tier, invite-only STARTER_GRANT. An admin sets this when accepting an
+// application; applicants never choose it.
+export enum FellowshipKind {
+  FELLOWSHIP = 'FELLOWSHIP',
+  STARTER_GRANT = 'STARTER_GRANT',
+}
+
+// How the contract is provided when an admin accepts an application. UNSIGNED
+// (default): the admin uploads the unsigned contract, then the fellow signs and
+// uploads their signed copy + W-8BEN for admin review. PRESIGNED: the contract was
+// signed out of band, so the admin uploads the already-signed contract + W-8BEN
+// directly and the fellowship is created straight in DOCUMENTS_APPROVED, skipping
+// the fellow upload/review cycle.
+export enum FellowshipContractMode {
+  UNSIGNED = 'UNSIGNED',
+  PRESIGNED = 'PRESIGNED',
 }
 
 export enum FellowshipApplicationStatus {
@@ -95,6 +115,13 @@ export interface FellowshipApplicationProposalDto {
   bitcoinOssGoal: string | null;
   additionalInfo: string | null;
   questionsForBitshala: string | null;
+  // Education track. `educationCategory` selects which conditional field applies:
+  // COHORT_TA → cohortType, MEETUP → city, OTHER → educationCategoryOther.
+  educationCategory: EducationCategory | null;
+  cohortType: CohortType | null;
+  city: string | null;
+  educationCategoryOther: string | null;
+  scopeOfWork: string | null;
 }
 
 // Writable proposal shape for create/update. All fields optional — drafts may be
@@ -128,6 +155,11 @@ export interface FellowshipApplicationProposalWriteDto {
   bitcoinOssGoal?: string;
   additionalInfo?: string;
   questionsForBitshala?: string;
+  educationCategory?: EducationCategory;
+  cohortType?: CohortType;
+  city?: string;
+  educationCategoryOther?: string;
+  scopeOfWork?: string;
 }
 
 export interface CreateFellowshipApplicationRequestDto
@@ -191,6 +223,31 @@ export interface FellowshipApplicationNoteWriteDto {
 }
 
 // =========================
+// Fellowship Report Notes
+// =========================
+
+// Internal, admin-only note on a fellowship report — a shared thread admins use
+// while reviewing a report. These are NEVER shown to the fellow, and are distinct
+// from the fellow-facing `reviewerRemarks` field. The list endpoint returns a
+// PLAIN ARRAY ordered oldest-first (no paginated { records, totalRecords }
+// wrapper). A note can be edited/deleted only by its author — the server enforces
+// this with a 403; the UI only hides the controls. Mirrors FellowshipApplicationNote.
+export interface FellowshipReportNote {
+  id: string;
+  reportId: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Create and edit share the same payload: a trimmed body of 1..5000 chars.
+export interface FellowshipReportNoteWriteDto {
+  body: string;
+}
+
+// =========================
 // Fellowships
 // =========================
 
@@ -222,6 +279,7 @@ export interface GetFellowshipResponseDto extends FellowshipOnboardingDto {
   // The application this fellowship was created from — links back to the proposal.
   applicationId: string;
   type: FellowshipType;
+  kind: FellowshipKind;
   status: FellowshipStatus;
   startDate: string | null;
   endDate: string | null;
@@ -237,6 +295,7 @@ export type FellowshipsSortBy = 'createdAt' | 'startDate' | 'endDate' | 'amountU
 export interface ListFellowshipsQueryDto extends PaginatedQueryDto {
   status?: FellowshipStatus;
   type?: FellowshipType;
+  kind?: FellowshipKind;
   search?: string;
   sortBy?: FellowshipsSortBy;
   sortOrder?: SortOrder;

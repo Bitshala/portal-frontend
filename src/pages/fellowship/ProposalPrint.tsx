@@ -13,7 +13,13 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { fellowshipLightTheme } from '../../components/fellowship/theme';
 import { useApplication, useApplicationProposal } from '../../hooks/fellowshipHooks';
 import { formatFellowshipType } from '../../utils/fellowshipFormat';
-import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
+import {
+  EDUCATION_CATEGORY_LABELS,
+  githubProfileUrl,
+  normalizeGithub,
+} from '../../utils/proposalFormat';
+import { cohortTypeToName } from '../../helpers/cohortHelpers';
+import { EducationCategory } from '../../types/enums';
 
 // A long-text section, only rendered when there's content to show.
 const PrintTextSection = ({ title, text }: { title: string; text: string | null | undefined }) =>
@@ -63,6 +69,18 @@ const ProposalPrint = () => {
   const codingLanguages = fields?.codingLanguages ?? [];
   const educationInterests = fields?.educationInterests ?? [];
   const isLoading = appQuery.isLoading || proposalQuery.isLoading;
+  // Education applications carry a category; when present we show the education
+  // fields and drop the problem statement (educators don't fill it in).
+  const educationCategory = fields?.educationCategory ?? null;
+  const isEducation = !!educationCategory;
+  const educationDetail =
+    educationCategory === EducationCategory.COHORT_TA
+      ? { label: 'Cohort', text: fields?.cohortType ? cohortTypeToName(fields.cohortType) : '' }
+      : educationCategory === EducationCategory.MEETUP
+        ? { label: 'City', text: fields?.city ?? '' }
+        : educationCategory === EducationCategory.OTHER
+          ? { label: 'Description', text: fields?.educationCategoryOther ?? '' }
+          : null;
 
   return (
     <ThemeProvider theme={fellowshipLightTheme}>
@@ -113,17 +131,38 @@ const ProposalPrint = () => {
               </Typography>
               <Divider sx={{ mt: 2.5 }} />
 
-              <PrintSection title="Problem statement">
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
-                  {fields?.problemStatement || '—'}
-                </Typography>
-              </PrintSection>
+              {isEducation && educationCategory && (
+                <PrintSection title="Category">
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>
+                    {EDUCATION_CATEGORY_LABELS[educationCategory]}
+                  </Typography>
+                </PrintSection>
+              )}
+              {isEducation && educationDetail && educationDetail.text && (
+                <PrintSection title={educationDetail.label}>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+                    {educationDetail.text}
+                  </Typography>
+                </PrintSection>
+              )}
 
-              <PrintSection title="6-month plan & milestones">
+              {!isEducation && (
+                <PrintSection title="Problem statement">
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+                    {fields?.problemStatement || '—'}
+                  </Typography>
+                </PrintSection>
+              )}
+
+              <PrintSection title={isEducation ? 'Plan' : '6-month plan & milestones'}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
                   {fields?.plan || '—'}
                 </Typography>
               </PrintSection>
+
+              {isEducation && (
+                <PrintTextSection title="Scope of work" text={fields?.scopeOfWork} />
+              )}
 
               {(fields?.mentorName || fields?.mentorContact) && (
                 <PrintSection title="Mentor">
@@ -226,7 +265,10 @@ const ProposalPrint = () => {
               <PrintTextSection title="Bitcoin motivation" text={fields?.bitcoinMotivation} />
               <PrintTextSection title="Bitcoin OSS goal" text={fields?.bitcoinOssGoal} />
               <PrintTextSection title="Additional info" text={fields?.additionalInfo} />
-              <PrintTextSection title="Questions for Bitshala" text={fields?.questionsForBitshala} />
+              <PrintTextSection
+                title={isEducation ? 'Ask from Bitshala' : 'Questions for Bitshala'}
+                text={fields?.questionsForBitshala}
+              />
             </>
           )}
 

@@ -30,6 +30,11 @@ import type {
   GetFeedbackResponseDto,
   UpdateFeedbackRequestDto,
 } from '../types/api.ts';
+import type {
+  ListUsersQueryDto,
+  UserSearchResultDto,
+  GetUserOverviewResponseDto,
+} from '../types/userOverview.ts';
 
 const COMMON_REQUEST_HEADERS = {
   'Content-Type': 'application/json',
@@ -102,6 +107,30 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'GET',
       url: `/users/${id}`,
+    });
+    return data;
+  };
+
+  // Admin-only paginated user search (name/email/Discord). Page is zero-based.
+  public searchUsers = async (
+    query: ListUsersQueryDto,
+  ): Promise<PaginatedDataDto<UserSearchResultDto>> => {
+    const { data } = await this.request<PaginatedDataDto<UserSearchResultDto>>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/users',
+      params: query,
+    });
+    return data;
+  };
+
+  // Admin-only consolidated overview: profile + per-cohort scores/attendance/
+  // certificates + cohort/fellowship summaries. A non-UUID or unknown id → 400.
+  public getUserOverview = async (id: string): Promise<GetUserOverviewResponseDto> => {
+    const { data } = await this.request<GetUserOverviewResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/users/${id}/overview`,
     });
     return data;
   };
@@ -395,15 +424,7 @@ class ApiService {
       headers: this.getRequestHeaders(),
       method: 'POST',
       url: `/certificates/cohort/${cohortId}/generate`,
-      data: { sendEmail: false },
-    });
-  };
-
-  public sendCohortCertificateEmails = async (cohortId: string): Promise<void> => {
-    await this.request<void>({
-      headers: this.getRequestHeaders(),
-      method: 'POST',
-      url: `/certificates/cohort/${cohortId}/send-emails`,
+      data: { sendEmail: true },
     });
   };
 

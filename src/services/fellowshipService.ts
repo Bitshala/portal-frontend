@@ -8,6 +8,8 @@ import type {
   FellowshipApplicationNoteWriteDto,
   FellowshipApplicationProposalDto,
   FellowshipDocumentResponseDto,
+  FellowshipReportNote,
+  FellowshipReportNoteWriteDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -23,7 +25,7 @@ import type {
   UpdateFellowshipApplicationRequestDto,
   UpdateFellowshipReportRequestDto,
 } from '../types/fellowship.ts';
-import { FellowshipApplicationStatus } from '../types/fellowship.ts';
+import { FellowshipApplicationStatus, FellowshipContractMode, FellowshipKind } from '../types/fellowship.ts';
 import type { PaginatedQueryDto } from '../types/api.ts';
 
 const COMMON_REQUEST_HEADERS = {
@@ -185,13 +187,36 @@ class FellowshipService {
     });
   };
 
-  // Accept an application. Multipart: the Bitshala-signed unsigned-contract PDF
-  // is required. On success the backend creates the fellowship (in
-  // AWAITING_DOCUMENTS) and its three document rows.
-  public acceptApplication = async (id: string, file: File): Promise<void> => {
+  // Accept an application. Multipart. Two contract modes:
+  //  - UNSIGNED (default): send the Bitshala-signed unsigned-contract PDF as `file`.
+  //    The backend creates the fellowship in AWAITING_DOCUMENTS and its document rows;
+  //    the fellow then signs and uploads their signed copy + W-8BEN for review.
+  //  - PRESIGNED: send the already-signed contract (`signedContract`) + W-8BEN (`w8ben`);
+  //    do NOT send `file`. The fellowship is created straight in DOCUMENTS_APPROVED,
+  //    skipping the fellow upload/review cycle.
+  public acceptApplication = async (
+    id: string,
+    params: {
+      kind: FellowshipKind;
+      contractMode: FellowshipContractMode;
+      file?: File | null; // UNSIGNED mode
+      signedContract?: File | null; // PRESIGNED mode
+      w8ben?: File | null; // PRESIGNED mode
+    },
+  ): Promise<void> => {
+    const { kind, contractMode, file, signedContract, w8ben } = params;
     const formData = new FormData();
     formData.append('status', FellowshipApplicationStatus.ACCEPTED);
-    formData.append('file', file);
+    // Both optional server-side (kind defaults to FELLOWSHIP, contractMode to
+    // UNSIGNED); always sent for clarity.
+    formData.append('kind', kind);
+    formData.append('contractMode', contractMode);
+    if (contractMode === FellowshipContractMode.PRESIGNED) {
+      if (signedContract) formData.append('signedContract', signedContract);
+      if (w8ben) formData.append('w8ben', w8ben);
+    } else if (file) {
+      formData.append('file', file);
+    }
     await this.request<void>({
       headers: this.getMultipartRequestHeaders(),
       method: 'PATCH',
@@ -264,6 +289,59 @@ class FellowshipService {
       headers: this.getRequestHeaders(),
       method: 'DELETE',
       url: `/fellowship-applications/${applicationId}/notes/${noteId}`,
+    });
+  };
+
+  // =========================
+  // Fellowship Report Notes
+  // =========================
+
+  // Internal admin notes on a report. Like the application-note list route, this
+  // returns a PLAIN ARRAY (oldest-first) — there is no { records, totalRecords }
+  // wrapper here.
+  public listReportNotes = async (reportId: string): Promise<FellowshipReportNote[]> => {
+    const { data } = await this.request<FellowshipReportNote[]>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: `/fellowship-reports/${reportId}/notes`,
+    });
+    return data;
+  };
+
+  public createReportNote = async (
+    reportId: string,
+    body: FellowshipReportNoteWriteDto,
+  ): Promise<FellowshipReportNote> => {
+    const { data } = await this.request<FellowshipReportNote>({
+      headers: this.getRequestHeaders(),
+      method: 'POST',
+      url: `/fellowship-reports/${reportId}/notes`,
+      data: body,
+    });
+    return data;
+  };
+
+  // Author-only on the server (403 for anyone else); 404 if the note is gone.
+  public updateReportNote = async (
+    reportId: string,
+    noteId: string,
+    body: FellowshipReportNoteWriteDto,
+  ): Promise<FellowshipReportNote> => {
+    const { data } = await this.request<FellowshipReportNote>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowship-reports/${reportId}/notes/${noteId}`,
+      data: body,
+    });
+    return data;
+  };
+
+  // Author-only on the server (403 for anyone else); 204 No Content on success.
+  public deleteReportNote = async (reportId: string, noteId: string): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'DELETE',
+      url: `/fellowship-reports/${reportId}/notes/${noteId}`,
     });
   };
 

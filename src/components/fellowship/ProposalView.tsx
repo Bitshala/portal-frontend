@@ -3,7 +3,13 @@ import { ExternalLink, Github } from 'lucide-react';
 import ExpandableText from './ExpandableText';
 import LinkChip from './LinkChip';
 import type { FellowshipApplicationProposalDto } from '../../types/fellowship';
-import { githubProfileUrl, normalizeGithub } from '../../utils/proposalFormat';
+import {
+  EDUCATION_CATEGORY_LABELS,
+  githubProfileUrl,
+  normalizeGithub,
+} from '../../utils/proposalFormat';
+import { cohortTypeToName } from '../../helpers/cohortHelpers';
+import { EducationCategory } from '../../types/enums';
 
 export const ProposalSection = ({
   title,
@@ -69,16 +75,57 @@ export const ProposalView = ({
   const domains = proposal?.domains ?? [];
   const codingLanguages = proposal?.codingLanguages ?? [];
   const educationInterests = proposal?.educationInterests ?? [];
+  // Education applications carry a category; when present we show the education
+  // fields and drop the problem statement (educators don't fill it in).
+  const educationCategory = proposal?.educationCategory ?? null;
+  const isEducation = !!educationCategory;
+  const educationDetail =
+    educationCategory === EducationCategory.COHORT_TA
+      ? { label: 'Cohort', text: proposal?.cohortType ? cohortTypeToName(proposal.cohortType) : '' }
+      : educationCategory === EducationCategory.MEETUP
+        ? { label: 'City', text: proposal?.city ?? '' }
+        : educationCategory === EducationCategory.OTHER
+          ? { label: 'Description', text: proposal?.educationCategoryOther ?? '' }
+          : null;
 
   return (
     <>
-      <ProposalSection title="Problem statement">
-        <LongText text={proposal?.problemStatement ?? ''} expandable={expandable} />
-      </ProposalSection>
+      {isEducation && (
+        <>
+          <ProposalSection title="Category">
+            <Typography variant="body2" sx={{ color: 'text.primary' }}>
+              {EDUCATION_CATEGORY_LABELS[educationCategory]}
+            </Typography>
+          </ProposalSection>
+          {educationDetail && educationDetail.text && (
+            <ProposalSection title={educationDetail.label}>
+              {educationDetail.label === 'Description' ? (
+                <LongText text={educationDetail.text} expandable={expandable} />
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                  {educationDetail.text}
+                </Typography>
+              )}
+            </ProposalSection>
+          )}
+        </>
+      )}
 
-      <ProposalSection title="6-month plan">
+      {!isEducation && (
+        <ProposalSection title="Problem statement">
+          <LongText text={proposal?.problemStatement ?? ''} expandable={expandable} />
+        </ProposalSection>
+      )}
+
+      <ProposalSection title={isEducation ? 'Plan' : '6-month plan'}>
         <LongText text={proposal?.plan ?? ''} expandable={expandable} />
       </ProposalSection>
+
+      {isEducation && proposal?.scopeOfWork && (
+        <ProposalSection title="Scope of work">
+          <LongText text={proposal.scopeOfWork} expandable={expandable} />
+        </ProposalSection>
+      )}
 
       {(proposal?.mentorName || proposal?.mentorContact) && (
         <ProposalSection title="Mentor">
@@ -201,7 +248,7 @@ export const ProposalView = ({
       )}
 
       {proposal?.questionsForBitshala && (
-        <ProposalSection title="Questions for Bitshala">
+        <ProposalSection title={isEducation ? 'Ask from Bitshala' : 'Questions for Bitshala'}>
           <LongText text={proposal.questionsForBitshala} expandable={expandable} />
         </ProposalSection>
       )}

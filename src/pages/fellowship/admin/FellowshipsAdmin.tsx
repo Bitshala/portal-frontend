@@ -36,6 +36,7 @@ import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTi
 import fellowshipService from '../../../services/fellowshipService';
 import {
   type FellowshipsSortBy,
+  FellowshipKind,
   FellowshipStatus,
   FellowshipType,
   type GetFellowshipReportResponseDto,
@@ -43,7 +44,7 @@ import {
 } from '../../../types/fellowship';
 import { SortOrder } from '../../../types/api';
 import { extractErrorMessage, isBadFilterError } from '../../../utils/errorUtils';
-import { formatFellowshipType } from '../../../utils/fellowshipFormat';
+import { formatFellowshipKind, formatFellowshipType } from '../../../utils/fellowshipFormat';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_PAGE_SIZE = 25;
@@ -87,6 +88,16 @@ const TRACK_COLORS: Record<FellowshipType, string> = {
   [FellowshipType.DEVELOPER]: '#fb923c',
   [FellowshipType.DESIGNER]: '#60a5fa',
   [FellowshipType.EDUCATOR]: '#a78bfa',
+};
+
+const KIND_OPTIONS: FellowshipKind[] = [
+  FellowshipKind.FELLOWSHIP,
+  FellowshipKind.STARTER_GRANT,
+];
+
+const KIND_COLORS: Record<FellowshipKind, string> = {
+  [FellowshipKind.FELLOWSHIP]: '#a1a1aa', // muted — the common case
+  [FellowshipKind.STARTER_GRANT]: '#fbbf24', // gold — the higher, invite-only tier
 };
 
 // ---- helpers ----
@@ -150,6 +161,7 @@ const FellowshipsAdmin = () => {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [trackFilter, setTrackFilter] = useState<string>(ALL_VALUE);
+  const [kindFilter, setKindFilter] = useState<string>(ALL_VALUE);
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDir, setSortDir] = useState<SortOrder>(SortOrder.DESC);
   const [page, setPage] = useState(0);
@@ -167,10 +179,11 @@ const FellowshipsAdmin = () => {
   const debouncedSearch = useDebounce(search.trim(), 300);
   const statusParam = STATUS_PARAM[filter];
   const typeParam = trackFilter === ALL_VALUE ? undefined : (trackFilter as FellowshipType);
+  const kindParam = kindFilter === ALL_VALUE ? undefined : (kindFilter as FellowshipKind);
 
   useEffect(() => {
     setPage(0);
-  }, [filter, debouncedSearch, trackFilter, sortKey, sortDir, pageSize]);
+  }, [filter, debouncedSearch, trackFilter, kindFilter, sortKey, sortDir, pageSize]);
 
   const { data, isLoading, isError, error } = useFellowships(
     {
@@ -178,6 +191,7 @@ const FellowshipsAdmin = () => {
       pageSize,
       ...(statusParam ? { status: statusParam } : {}),
       ...(typeParam ? { type: typeParam } : {}),
+      ...(kindParam ? { kind: kindParam } : {}),
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
       sortBy: sortKey,
       sortOrder: sortDir,
@@ -208,6 +222,7 @@ const FellowshipsAdmin = () => {
         fellowshipService.fetchAllFellowships({
           ...(statusParam ? { status: statusParam } : {}),
           ...(typeParam ? { type: typeParam } : {}),
+          ...(kindParam ? { kind: kindParam } : {}),
           ...(debouncedSearch ? { search: debouncedSearch } : {}),
           sortBy: sortKey,
           sortOrder: sortDir,
@@ -227,6 +242,7 @@ const FellowshipsAdmin = () => {
       const header = [
         'fellow',
         'track',
+        'kind',
         'project',
         'maintainer',
         'end_date',
@@ -240,6 +256,7 @@ const FellowshipsAdmin = () => {
         return [
           csvCell(f.userName ?? ''),
           f.type,
+          f.kind,
           csvCell(f.projectName ?? ''),
           csvCell(f.projectMaintainerName ?? ''),
           f.endDate ?? '',
@@ -339,6 +356,21 @@ const FellowshipsAdmin = () => {
               </MenuItem>
             ))}
           </TextField>
+          <TextField
+            select
+            size="small"
+            label="Kind"
+            value={kindFilter}
+            onChange={(e) => setKindFilter(e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value={ALL_VALUE}>All kinds</MenuItem>
+            {KIND_OPTIONS.map((k) => (
+              <MenuItem key={k} value={k}>
+                {formatFellowshipKind(k)}
+              </MenuItem>
+            ))}
+          </TextField>
           <Button
             variant="outlined"
             startIcon={<Download size={14} />}
@@ -398,6 +430,7 @@ const FellowshipsAdmin = () => {
 
       <ProposalDialog
         applicationId={proposalFellowship?.applicationId ?? null}
+        kind={proposalFellowship?.kind}
         onClose={() => setProposalFellowship(null)}
         actions={
           proposalFellowship?.status === FellowshipStatus.DOCUMENTS_APPROVED ? (
@@ -526,9 +559,9 @@ const FilterPill = ({
 // ---- table header ----
 
 // Proportional columns so the row fills the width evenly instead of dumping all
-// slack into Project. Order: Fellow, Track, Project, End date, Payout, Status, Actions.
+// slack into Project. Order: Fellow, Track, Kind, Project, End date, Payout, Status, Actions.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
+  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -589,6 +622,7 @@ const HeaderRow = ({
         headers now — sorting lives on the End date and Payout columns. */}
     <Box>Fellow</Box>
     <Box>Track</Box>
+    <Box>Kind</Box>
     <Box>Project</Box>
     <SortableHeader
       label="End date"
@@ -768,6 +802,7 @@ const FellowshipRow = ({
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
+  const kindColor = KIND_COLORS[fellowship.kind];
   const projectTitle = useFellowshipProjectTitle(fellowship);
   const docs = docsAction(fellowship.status);
 
@@ -841,6 +876,18 @@ const FellowshipRow = ({
         }}
       >
         {formatFellowshipType(fellowship.type)}
+      </Box>
+
+      {/* Kind */}
+      <Box
+        sx={{
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          color: kindColor,
+        }}
+      >
+        {formatFellowshipKind(fellowship.kind)}
       </Box>
 
       {/* Project */}

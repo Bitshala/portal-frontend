@@ -2,6 +2,17 @@ import type {
   FellowshipApplicationProposalDto,
   FellowshipApplicationProposalWriteDto,
 } from '../types/fellowship';
+import type { CohortType } from '../types/enums';
+import { EducationCategory } from '../types/enums';
+
+// Human labels for the education category enum, shared by the application form
+// and the read-only proposal viewer so the naming stays consistent.
+export const EDUCATION_CATEGORY_LABELS: Record<EducationCategory, string> = {
+  [EducationCategory.MEETUP]: 'Meetup',
+  [EducationCategory.CLUB]: 'Club',
+  [EducationCategory.COHORT_TA]: 'Cohort TA',
+  [EducationCategory.OTHER]: 'Other',
+};
 
 export type ProposalFields = {
   title: string;
@@ -32,6 +43,13 @@ export type ProposalFields = {
   // Anything else
   additionalInfo: string;
   questionsForBitshala: string;
+  // Education track. Enum-backed selects hold '' until chosen so the empty
+  // option renders; free-text fields are plain strings.
+  educationCategory: EducationCategory | '';
+  cohortType: CohortType | '';
+  city: string;
+  educationCategoryOther: string;
+  scopeOfWork: string;
 };
 
 export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
@@ -58,6 +76,11 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
   bitcoinOssGoal: '',
   additionalInfo: '',
   questionsForBitshala: '',
+  educationCategory: '',
+  cohortType: '',
+  city: '',
+  educationCategoryOther: '',
+  scopeOfWork: '',
 };
 
 // Map the structured proposal from the API into react-hook-form state:
@@ -93,6 +116,11 @@ export const proposalDtoToFields = (
     bitcoinOssGoal: dto.bitcoinOssGoal ?? '',
     additionalInfo: dto.additionalInfo ?? '',
     questionsForBitshala: dto.questionsForBitshala ?? '',
+    educationCategory: dto.educationCategory ?? '',
+    cohortType: dto.cohortType ?? '',
+    city: dto.city ?? '',
+    educationCategoryOther: dto.educationCategoryOther ?? '',
+    scopeOfWork: dto.scopeOfWork ?? '',
   };
 };
 
@@ -138,6 +166,13 @@ export const buildProposalBody = (
   bitcoinOssGoal: f.bitcoinOssGoal.trim(),
   additionalInfo: f.additionalInfo.trim(),
   questionsForBitshala: f.questionsForBitshala.trim(),
+  // Enum-backed fields are omitted when blank (sending '' fails backend enum
+  // validation and would 400 the autosave), mirroring parseGraduationYear.
+  educationCategory: f.educationCategory || undefined,
+  cohortType: f.cohortType || undefined,
+  city: f.city.trim(),
+  educationCategoryOther: f.educationCategoryOther.trim(),
+  scopeOfWork: f.scopeOfWork.trim(),
 });
 
 // =========================

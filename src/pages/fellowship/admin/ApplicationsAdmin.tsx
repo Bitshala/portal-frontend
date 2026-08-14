@@ -3,14 +3,20 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
   IconButton,
   InputAdornment,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -42,6 +48,8 @@ import {
 import { useDebounce } from '../../../hooks/useDebounce';
 import {
   FellowshipApplicationStatus,
+  FellowshipContractMode,
+  FellowshipKind,
   type FellowshipApplicationProposalDto,
   type FellowshipApplicationsSortBy,
   type GetFellowshipApplicationResponseDto,
@@ -140,6 +148,12 @@ const ApplicationsAdmin = () => {
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [acceptFile, setAcceptFile] = useState<File | null>(null);
+  const [acceptSignedContract, setAcceptSignedContract] = useState<File | null>(null);
+  const [acceptW8ben, setAcceptW8ben] = useState<File | null>(null);
+  const [acceptKind, setAcceptKind] = useState<FellowshipKind>(FellowshipKind.FELLOWSHIP);
+  const [acceptContractMode, setAcceptContractMode] = useState<FellowshipContractMode>(
+    FellowshipContractMode.UNSIGNED,
+  );
   const [remarks, setRemarks] = useState('');
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
@@ -194,16 +208,37 @@ const ApplicationsAdmin = () => {
     enabled: !!effectiveSelectedId,
   });
 
+  // Reset the accept dialog back to its defaults (unsigned mode, no files).
+  const resetAcceptForm = () => {
+    setAcceptFile(null);
+    setAcceptSignedContract(null);
+    setAcceptW8ben(null);
+    setAcceptKind(FellowshipKind.FELLOWSHIP);
+    setAcceptContractMode(FellowshipContractMode.UNSIGNED);
+  };
+
   const handleAccept = async () => {
-    if (!selected || !acceptFile) return;
+    if (!selected) return;
+    const presigned = acceptContractMode === FellowshipContractMode.PRESIGNED;
+    // Mirror the server's per-mode file requirement before firing the request.
+    if (presigned ? !acceptSignedContract || !acceptW8ben : !acceptFile) return;
     try {
-      await acceptMut.mutateAsync({ id: selected.id, file: acceptFile });
+      await acceptMut.mutateAsync({
+        id: selected.id,
+        kind: acceptKind,
+        contractMode: acceptContractMode,
+        ...(presigned
+          ? { signedContract: acceptSignedContract, w8ben: acceptW8ben }
+          : { file: acceptFile }),
+      });
       setToast({
         kind: 'success',
-        msg: 'Accepted — fellowship created, awaiting documents.',
+        msg: presigned
+          ? 'Accepted — fellowship created with the signed contract; documents approved, ready to start.'
+          : 'Accepted — fellowship created, awaiting documents.',
       });
       setAcceptOpen(false);
-      setAcceptFile(null);
+      resetAcceptForm();
     } catch (e) {
       setToast({ kind: 'error', msg: extractErrorMessage(e) });
     }
@@ -326,7 +361,7 @@ const ApplicationsAdmin = () => {
             canPrev={selectedIdx > 0}
             canNext={selectedIdx >= 0 && selectedIdx < records.length - 1}
             onAccept={() => {
-              setAcceptFile(null);
+              resetAcceptForm();
               setAcceptOpen(true);
             }}
             onReject={() => {
@@ -378,11 +413,19 @@ const ApplicationsAdmin = () => {
 
       <AcceptDialog
         open={acceptOpen}
+        contractMode={acceptContractMode}
+        onContractModeChange={setAcceptContractMode}
         file={acceptFile}
         onChange={setAcceptFile}
+        signedContract={acceptSignedContract}
+        onSignedContractChange={setAcceptSignedContract}
+        w8ben={acceptW8ben}
+        onW8benChange={setAcceptW8ben}
+        kind={acceptKind}
+        onKindChange={setAcceptKind}
         onCancel={() => {
           setAcceptOpen(false);
-          setAcceptFile(null);
+          resetAcceptForm();
         }}
         onConfirm={handleAccept}
         busy={acceptMut.isPending}
@@ -964,47 +1007,132 @@ const PaginatorButton = ({
 
 const AcceptDialog = ({
   open,
+  contractMode,
+  onContractModeChange,
   file,
   onChange,
+  signedContract,
+  onSignedContractChange,
+  w8ben,
+  onW8benChange,
+  kind,
+  onKindChange,
   onCancel,
   onConfirm,
   busy,
 }: {
   open: boolean;
+  contractMode: FellowshipContractMode;
+  onContractModeChange: (mode: FellowshipContractMode) => void;
   file: File | null;
   onChange: (file: File | null) => void;
+  signedContract: File | null;
+  onSignedContractChange: (file: File | null) => void;
+  w8ben: File | null;
+  onW8benChange: (file: File | null) => void;
+  kind: FellowshipKind;
+  onKindChange: (kind: FellowshipKind) => void;
   onCancel: () => void;
   onConfirm: () => void;
   busy: boolean;
-}) => (
-  <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
-    <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
-    <DialogContent>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        Upload the Bitshala-signed unsigned-contract PDF. Accepting creates the
-        fellowship and its documents, then emails the fellow to sign the contract
-        and upload their signed copy + W-8BEN.
-      </Typography>
-      <PdfUploadField
-        file={file}
-        onChange={onChange}
-        disabled={busy}
-        label="Choose contract PDF"
-      />
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={onCancel}>Cancel</Button>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={onConfirm}
-        disabled={!file || busy}
-      >
-        {busy ? 'Accepting…' : 'Accept'}
-      </Button>
-    </DialogActions>
-  </Dialog>
-);
+}) => {
+  const presigned = contractMode === FellowshipContractMode.PRESIGNED;
+  return (
+    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ fontWeight: 700 }}>Accept application</DialogTitle>
+      <DialogContent>
+        <FormControl sx={{ mb: 2 }} disabled={busy}>
+          <FormLabel sx={{ fontSize: '0.85rem', mb: 0.5 }}>Contract</FormLabel>
+          <RadioGroup
+            value={contractMode}
+            onChange={(e) => onContractModeChange(e.target.value as FellowshipContractMode)}
+          >
+            <FormControlLabel
+              value={FellowshipContractMode.UNSIGNED}
+              control={<Radio />}
+              label="Send unsigned contract (fellow signs & uploads)"
+            />
+            <FormControlLabel
+              value={FellowshipContractMode.PRESIGNED}
+              control={<Radio />}
+              label="I already have the signed contract"
+            />
+          </RadioGroup>
+        </FormControl>
+
+        {presigned ? (
+          <>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+              Upload the already-signed contract and the completed W-8BEN. This skips
+              the fellow's sign-and-upload step — the fellowship is created with its
+              documents already approved and ready to start.
+            </Typography>
+            <Stack spacing={2}>
+              <PdfUploadField
+                file={signedContract}
+                onChange={onSignedContractChange}
+                disabled={busy}
+                label="Choose signed contract PDF"
+              />
+              <PdfUploadField
+                file={w8ben}
+                onChange={onW8benChange}
+                disabled={busy}
+                label="Choose W-8BEN PDF"
+              />
+            </Stack>
+          </>
+        ) : (
+          <>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+              Upload the Bitshala-signed unsigned-contract PDF. Accepting creates the
+              fellowship and its documents, then emails the fellow to sign the contract
+              and upload their signed copy + W-8BEN.
+            </Typography>
+            <PdfUploadField
+              file={file}
+              onChange={onChange}
+              disabled={busy}
+              label="Choose contract PDF"
+            />
+          </>
+        )}
+
+        {/* Starter grants are invite-only — the admin classifies the fellowship
+            here, on accept. Unchecked = regular FELLOWSHIP. Orthogonal to the
+            contract mode above. */}
+        <FormControlLabel
+          sx={{ mt: 2 }}
+          control={
+            <Checkbox
+              checked={kind === FellowshipKind.STARTER_GRANT}
+              disabled={busy}
+              onChange={(e) =>
+                onKindChange(
+                  e.target.checked
+                    ? FellowshipKind.STARTER_GRANT
+                    : FellowshipKind.FELLOWSHIP,
+                )
+              }
+            />
+          }
+          label="Mark as starter grant"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={onConfirm}
+          disabled={busy || (presigned ? !signedContract || !w8ben : !file)}
+        >
+          {busy ? 'Accepting…' : 'Accept'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const RemarksDialog = ({
   open,

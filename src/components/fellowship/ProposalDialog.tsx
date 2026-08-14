@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   CircularProgress,
   Dialog,
@@ -9,7 +10,15 @@ import {
 } from '@mui/material';
 import { FileDown } from 'lucide-react';
 import { useApplicationProposal } from '../../hooks/fellowshipHooks';
+import { FellowshipKind } from '../../types/fellowship';
+import { formatFellowshipKind } from '../../utils/fellowshipFormat';
 import ProposalView from './ProposalView';
+
+// Kept local, mirroring how the fellowship tables keep their own color maps.
+const KIND_COLORS: Record<FellowshipKind, string> = {
+  [FellowshipKind.FELLOWSHIP]: '#a1a1aa',
+  [FellowshipKind.STARTER_GRANT]: '#fbbf24',
+};
 
 /**
  * Quick proposal viewer for screens that only hold an applicationId
@@ -19,12 +28,16 @@ import ProposalView from './ProposalView';
 export const ProposalDialog = ({
   applicationId,
   title,
+  kind,
   onClose,
   actions,
 }: {
   applicationId: string | null;
   /** Fallback dialog title while the proposal loads or has no title. */
   title?: string;
+  /** Shown as a badge in the header when opened from a fellowship (not a bare
+   * application) — applications don't carry a kind. */
+  kind?: FellowshipKind;
   onClose: () => void;
   /** Optional extra footer action(s), e.g. an admin "Start contract" button. */
   actions?: React.ReactNode;
@@ -36,8 +49,21 @@ export const ProposalDialog = ({
 
   return (
     <Dialog open={!!applicationId} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        {proposal?.title || title || 'Proposal'}
+      <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <span>{proposal?.title || title || 'Proposal'}</span>
+        {kind && (
+          <Box
+            component="span"
+            sx={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              color: KIND_COLORS[kind],
+            }}
+          >
+            {formatFellowshipKind(kind)}
+          </Box>
+        )}
       </DialogTitle>
       <DialogContent dividers>
         {proposalQuery.isLoading ? (

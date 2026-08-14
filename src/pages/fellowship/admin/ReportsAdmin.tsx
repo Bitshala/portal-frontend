@@ -20,6 +20,7 @@ import {
 import { ArrowDownUp, Check, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import MarkdownView from '../../../components/fellowship/MarkdownView';
+import ReportNotes from '../../../components/fellowship/ReportNotes';
 import ReportReflections from '../../../components/fellowship/ReportReflections';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
@@ -827,6 +828,8 @@ const ReportDetail = ({
           <strong>{report.reviewedByName}:</strong> {report.reviewerRemarks}
         </Alert>
       )}
+
+      <ReportNotes key={report.id} reportId={report.id} />
 
       {report.status === FellowshipReportStatus.SUBMITTED && (
         <Stack direction="row" spacing={1.25} sx={{ mt: 3 }}>

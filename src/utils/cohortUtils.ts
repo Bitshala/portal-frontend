@@ -9,6 +9,7 @@ export const getCohortImage = (cohortType: string): string => {
     'BITCOIN_PROTOCOL_DEVELOPMENT': 'https://bitshala.org/cohort/bpd.webp',
     'PROGRAMMING_BITCOIN': 'https://bitshala.org/cohort/pb.webp',
     'MASTERING_LIGHTNING_NETWORK': 'https://bitshala.org/cohort/ln.webp',
+    'BUILDING_BITCOIN_IN_RUST': 'https://bitshala.org/cohort/rust.webp',
   };
   return imageMap[cohortType] || 'https://bitshala.org/cohort/mb.webp';
 };
@@ -131,4 +132,5 @@ export const COHORT_TYPES = [
   CohortType.BITCOIN_PROTOCOL_DEVELOPMENT,
   CohortType.PROGRAMMING_BITCOIN,
   CohortType.MASTERING_LIGHTNING_NETWORK,
+  CohortType.BUILDING_BITCOIN_IN_RUST,
 ];

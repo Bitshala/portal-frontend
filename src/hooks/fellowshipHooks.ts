@@ -7,7 +7,11 @@ import type {
   FellowshipApplicationNote,
   FellowshipApplicationNoteWriteDto,
   FellowshipApplicationProposalDto,
+  FellowshipContractMode,
   FellowshipDocumentResponseDto,
+  FellowshipKind,
+  FellowshipReportNote,
+  FellowshipReportNoteWriteDto,
   GetFellowshipApplicationResponseDto,
   GetFellowshipReportContentResponseDto,
   GetFellowshipReportResponseDto,
@@ -120,13 +124,21 @@ export const useReviewApplication = createUseMutation<
   },
 );
 
-// Accept = multipart with the signed contract PDF. Creates the fellowship, so
-// invalidate both the application lists and the fellowship lists.
+// Accept = multipart with the contract PDF(s). Creates the fellowship, so
+// invalidate both the application lists and the fellowship lists. See
+// fellowshipService.acceptApplication for the UNSIGNED vs PRESIGNED field shape.
 export const useAcceptApplication = createUseMutation<
   void,
-  { id: string; file: File }
+  {
+    id: string;
+    kind: FellowshipKind;
+    contractMode: FellowshipContractMode;
+    file?: File | null;
+    signedContract?: File | null;
+    w8ben?: File | null;
+  }
 >(
-  ({ id, file }) => fellowshipService.acceptApplication(id, file),
+  ({ id, ...params }) => fellowshipService.acceptApplication(id, params),
   {
     queryInvalidation: async ({ queryClient }) => {
       await queryClient.invalidateQueries({ queryKey: ['fellowship-applications'] });
@@ -187,6 +199,59 @@ export const useDeleteApplicationNote = createUseMutation<
     queryInvalidation: async ({ queryClient, variables }) => {
       await queryClient.invalidateQueries({
         queryKey: ['fellowship-application-notes', variables.applicationId],
+      });
+    },
+  },
+);
+
+// =========================
+// Fellowship Report Notes
+// =========================
+
+// Like the application-note list route, this returns a plain array ordered
+// oldest-first, so the query data is FellowshipReportNote[] — not a PaginatedDataDto.
+export const useReportNotes = createUseQuery<FellowshipReportNote[], string>(
+  (reportId) => ['fellowship-report-notes', reportId],
+  (reportId) => () => fellowshipService.listReportNotes(reportId),
+);
+
+export const useCreateReportNote = createUseMutation<
+  FellowshipReportNote,
+  { reportId: string; body: FellowshipReportNoteWriteDto }
+>(
+  ({ reportId, body }) => fellowshipService.createReportNote(reportId, body),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-report-notes', variables.reportId],
+      });
+    },
+  },
+);
+
+export const useUpdateReportNote = createUseMutation<
+  FellowshipReportNote,
+  { reportId: string; noteId: string; body: FellowshipReportNoteWriteDto }
+>(
+  ({ reportId, noteId, body }) => fellowshipService.updateReportNote(reportId, noteId, body),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-report-notes', variables.reportId],
+      });
+    },
+  },
+);
+
+export const useDeleteReportNote = createUseMutation<
+  void,
+  { reportId: string; noteId: string }
+>(
+  ({ reportId, noteId }) => fellowshipService.deleteReportNote(reportId, noteId),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['fellowship-report-notes', variables.reportId],
       });
     },
   },
