@@ -101,6 +101,24 @@ export interface GetCohortResponseDto {
   weeks: GetCohortWeekResponseDto[];
 }
 
+export interface CohortMetricsDto {
+  cohortId: string;
+  cohortType: CohortType;
+  seasonNumber: number;
+  startDate: string;
+  endDate: string | null;
+  totalParticipants: number;
+  retainedStudents: number;
+  retentionRate: number; // fraction 0–1, unrounded
+  avgAttendanceRate: number; // fraction 0–1, unrounded
+  completionRate: number; // fraction 0–1, unrounded; 0 until the cohort ends
+}
+
+export interface GetCohortMetricsResponseDto {
+  computedAt: string | null; // ISO-8601 UTC of the last precompute run; null before the first run
+  cohorts: CohortMetricsDto[];
+}
+
 export interface UserCohortWaitlistResponseDto {
   cohortWaitlist: CohortType[];
 }

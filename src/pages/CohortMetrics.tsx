@@ -11,17 +11,11 @@ import {
   LabelList,
 } from 'recharts';
 import { BarChart3, Info } from 'lucide-react';
-import { useQueries } from '@tanstack/react-query';
-import { useCohorts } from '../hooks/cohortHooks';
-import apiService from '../services/apiService';
+import { useCohortMetrics } from '../hooks/cohortHooks';
 import { computeStatus } from '../utils/cohortUtils';
 import { cohortTypeToName, cohortTypeToShortName } from '../helpers/cohortHelpers';
-import type { LeaderboardEntryDto, GetCohortLeaderboardResponseDto } from '../types/api';
+import type { CohortStatus } from '../types/cohort';
 import type { CohortType } from '../types/enums';
-
-const normalizeLeaderboard = (data: GetCohortLeaderboardResponseDto): LeaderboardEntryDto[] => {
-  return Array.isArray(data) ? data : data.leaderboard;
-};
 
 const tooltipStyle = {
   backgroundColor: '#18181b',
@@ -45,6 +39,28 @@ interface CohortMetric {
   completionRate: number;
 }
 
+// API rates arrive as unrounded fractions in [0, 1]; the chart works on a 0–100
+// scale, so convert once here (rounded to 1 dp) rather than at each render site.
+const toPercent = (frac: number) => Math.round(frac * 1000) / 10;
+
+// The metrics endpoint's endDate is nullable; computeStatus needs a real end date,
+// so a cohort with no end yet can only be Upcoming (future start) or Active.
+const deriveStatus = (startDate: string, endDate: string | null): CohortStatus =>
+  endDate
+    ? computeStatus(startDate, endDate)
+    : new Date(startDate) > new Date()
+      ? 'Upcoming'
+      : 'Active';
+
+const formatComputedAt = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
 type MetricsTooltipPayload = Array<{
   dataKey?: string;
   value?: number | string;
@@ -65,7 +81,7 @@ const MetricsTooltip = ({ active, payload }: { active?: boolean; payload?: Metri
   });
 
   return (
-    <Box sx={{ ...tooltipStyle, p: 1.5, minWidth: 180 }}>
+    <Box sx={{ ...tooltipStyle, p: 1.5, minWidth: 200 }}>
       <Typography sx={{ color: '#fb923c', fontWeight: 700, fontSize: '0.8rem', mb: 1 }}>
         {cohort?.label ?? ''}
       </Typography>
@@ -82,6 +98,20 @@ const MetricsTooltip = ({ active, payload }: { active?: boolean; payload?: Metri
           </Typography>
         </Box>
       ))}
+      {cohort && (
+        <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #3f3f46' }}>
+          {[
+            { label: 'Avg attendance', value: `${cohort.avgAttendanceRate}%` },
+            { label: 'Participants', value: `${cohort.totalParticipants}` },
+            { label: 'Retained', value: `${cohort.retainedStudents}` },
+          ].map((row) => (
+            <Box key={row.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 0.25 }}>
+              <Typography sx={{ color: '#a1a1aa', fontSize: '0.78rem' }}>{row.label}</Typography>
+              <Typography sx={{ color: '#d4d4d8', fontSize: '0.78rem', fontWeight: 600 }}>{row.value}</Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 };
@@ -114,89 +144,31 @@ const CohortMetrics = () => {
   );
   const [showMetricInfo, setShowMetricInfo] = useState(false);
 
-  const { data: cohortsData, isLoading: cohortsLoading } = useCohorts({
-    page: 0,
-    pageSize: 100,
-  });
-
-  const filteredCohorts = useMemo(() => {
-    if (!cohortsData) return [];
-    return cohortsData.records.filter((c) => {
-      const status = computeStatus(c.startDate, c.endDate);
-      if (statusFilter === 'All') return status !== 'Upcoming';
-      return status === statusFilter;
-    });
-  }, [cohortsData, statusFilter]);
-
-  const leaderboardQueries = useQueries({
-    queries: filteredCohorts.map((cohort) => ({
-      queryKey: ['scores', 'cohort', cohort.id, 'leaderboard'],
-      queryFn: () => apiService.getCohortLeaderboard(cohort.id),
-    })),
-  });
-
-  const allLoaded = leaderboardQueries.every((q) => !q.isLoading);
-  const anyLoading = leaderboardQueries.some((q) => q.isLoading);
+  const { data: metricsResponse, isLoading } = useCohortMetrics();
+  const computedAt = metricsResponse?.computedAt ?? null;
 
   const metricsData: CohortMetric[] = useMemo(() => {
-    return filteredCohorts
-      .map((cohort, i) => {
-        const leaderboard = leaderboardQueries[i]?.data;
-        if (!leaderboard) return null;
-
-        const entries = normalizeLeaderboard(leaderboard);
-        const totalParticipants = entries.length;
-
-        if (totalParticipants === 0) {
-          return {
-            cohortId: cohort.id,
-            label: `${cohortTypeToName(cohort.type)} S${cohort.season}`,
-            shortLabel: `${cohortTypeToShortName(cohort.type)} S${cohort.season}`,
-            type: cohort.type,
-            season: cohort.season,
-            startDate: cohort.startDate,
-            totalParticipants: 0,
-            retainedStudents: 0,
-            retentionRate: 0,
-            avgAttendanceRate: 0,
-            completionRate: 0,
-          };
-        }
-
-        const retainedStudents = entries.filter(
-          (e) => e.maxAttendance > 0 && e.totalAttendance / e.maxAttendance >= 0.5,
-        ).length;
-
-        const retentionRate = (retainedStudents / totalParticipants) * 100;
-
-        const avgAttendanceRate =
-          (entries.reduce(
-            (sum, e) => sum + (e.maxAttendance > 0 ? e.totalAttendance / e.maxAttendance : 0),
-            0,
-          ) / totalParticipants) * 100;
-
-        const completionRate =
-          (entries.reduce(
-            (sum, e) => sum + (e.maxTotalScore > 0 ? e.totalScore / e.maxTotalScore : 0),
-            0,
-          ) / totalParticipants) * 100;
-
-        return {
-          cohortId: cohort.id,
-          label: `${cohortTypeToName(cohort.type)} S${cohort.season}`,
-          shortLabel: `${cohortTypeToShortName(cohort.type)} S${cohort.season}`,
-          type: cohort.type,
-          season: cohort.season,
-          startDate: cohort.startDate,
-          totalParticipants,
-          retainedStudents,
-          retentionRate: Math.round(retentionRate * 10) / 10,
-          avgAttendanceRate: Math.round(avgAttendanceRate * 10) / 10,
-          completionRate: Math.round(completionRate * 10) / 10,
-        };
+    const cohorts = metricsResponse?.cohorts ?? [];
+    return cohorts
+      .filter((m) => {
+        const status = deriveStatus(m.startDate, m.endDate);
+        if (statusFilter === 'All') return status !== 'Upcoming';
+        return status === statusFilter;
       })
-      .filter((m): m is CohortMetric => m !== null);
-  }, [filteredCohorts, leaderboardQueries]);
+      .map((m) => ({
+        cohortId: m.cohortId,
+        label: `${cohortTypeToName(m.cohortType)} S${m.seasonNumber}`,
+        shortLabel: `${cohortTypeToShortName(m.cohortType)} S${m.seasonNumber}`,
+        type: m.cohortType,
+        season: m.seasonNumber,
+        startDate: m.startDate,
+        totalParticipants: m.totalParticipants,
+        retainedStudents: m.retainedStudents,
+        retentionRate: toPercent(m.retentionRate),
+        avgAttendanceRate: toPercent(m.avgAttendanceRate),
+        completionRate: toPercent(m.completionRate),
+      }));
+  }, [metricsResponse, statusFilter]);
 
   // Sort by startDate ascending (earliest first) for charts
   const chronologicalData = useMemo(
@@ -211,14 +183,16 @@ const CohortMetrics = () => {
     [chronologicalData],
   );
 
-
-  if (cohortsLoading) {
+  if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress sx={{ color: '#fb923c' }} />
       </Box>
     );
   }
+
+  // computedAt is null only before the first daily precompute run (fresh deploy).
+  const notYetComputed = computedAt === null;
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -231,124 +205,156 @@ const CohortMetrics = () => {
           </Typography>
         </Box>
         <Typography sx={{ color: '#71717a', fontSize: '0.9rem' }}>
-          Continuous analysis of retention data across cohorts and seasons
+          Retention and completion across cohorts and seasons, from a daily snapshot.
         </Typography>
+        {computedAt && (
+          <Typography sx={{ color: '#52525b', fontSize: '0.78rem', mt: 0.5 }}>
+            Last updated {formatComputedAt(computedAt)}
+          </Typography>
+        )}
       </Box>
 
-      {/* Status Filter */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-        {(['Completed', 'Active', 'All'] as const).map((status) => (
-          <Chip
-            key={status}
-            label={status}
-            onClick={() => setStatusFilter(status)}
-            sx={{
-              bgcolor: statusFilter === status ? 'rgba(249,115,22,0.15)' : '#27272a',
-              color: statusFilter === status ? '#fb923c' : '#a1a1aa',
-              border: statusFilter === status ? '1px solid #f97316' : '1px solid #3f3f46',
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-              '&:hover': { bgcolor: statusFilter === status ? 'rgba(249,115,22,0.2)' : '#3f3f46' },
-            }}
-          />
-        ))}
-      </Box>
-
-      {anyLoading && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <CircularProgress size={16} sx={{ color: '#fb923c' }} />
-          <Typography sx={{ color: '#71717a', fontSize: '0.8rem' }}>Loading cohort data...</Typography>
-        </Box>
-      )}
-
-      {chronologicalData.length === 0 && allLoaded && (
+      {notYetComputed ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography sx={{ color: '#71717a', fontSize: '1rem' }}>
-            No cohort data available for the selected filter.
+            Metrics are being computed… check back shortly.
           </Typography>
         </Box>
-      )}
-
-      {chronologicalData.length > 0 && (
-        <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <BarChart3 size={20} color="#38bdf8" />
-            <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
-              Retention vs Completion
-            </Typography>
-            <Tooltip title={showMetricInfo ? 'Hide metric definitions' : 'Show metric definitions'} arrow>
-              <IconButton
-                size="small"
-                onClick={() => setShowMetricInfo((prev) => !prev)}
+      ) : (
+        <>
+          {/* Status Filter */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+            {(['Completed', 'Active', 'All'] as const).map((status) => (
+              <Chip
+                key={status}
+                label={status}
+                onClick={() => setStatusFilter(status)}
                 sx={{
-                  color: showMetricInfo ? '#38bdf8' : '#a1a1aa',
-                  bgcolor: showMetricInfo ? 'rgba(56,189,248,0.12)' : 'transparent',
-                  border: '1px solid',
-                  borderColor: showMetricInfo ? 'rgba(56,189,248,0.35)' : '#3f3f46',
-                  p: 0.5,
-                  ml: 0.5,
-                  '&:hover': { bgcolor: 'rgba(56,189,248,0.12)', color: '#38bdf8' },
+                  bgcolor: statusFilter === status ? 'rgba(249,115,22,0.15)' : '#27272a',
+                  color: statusFilter === status ? '#fb923c' : '#a1a1aa',
+                  border: statusFilter === status ? '1px solid #f97316' : '1px solid #3f3f46',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: statusFilter === status ? 'rgba(249,115,22,0.2)' : '#3f3f46' },
                 }}
-              >
-                <Info size={15} />
-              </IconButton>
-            </Tooltip>
+              />
+            ))}
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2.5, flexWrap: 'wrap', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Box sx={{ width: 22, height: 10, bgcolor: '#4ade80', borderRadius: 1 }} />
-              <Typography sx={{ color: '#d4d4d8', fontSize: '0.8rem' }}>
-                Green = Retention rate
+          {statusFilter !== 'Completed' && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+                mb: 3,
+                px: 1.5,
+                py: 1,
+                bgcolor: 'rgba(249,115,22,0.08)',
+                border: '1px solid rgba(249,115,22,0.25)',
+                borderRadius: 1.5,
+              }}
+            >
+              <Box sx={{ display: 'flex', mt: '2px', flexShrink: 0 }}>
+                <Info size={15} color="#fb923c" />
+              </Box>
+              <Typography sx={{ color: '#d4d4d8', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                Completion rate only counts once a cohort has ended — in-progress cohorts read 0%.
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Box sx={{ width: 22, height: 10, bgcolor: '#38bdf8', borderRadius: 1 }} />
-              <Typography sx={{ color: '#d4d4d8', fontSize: '0.8rem' }}>
-                Blue = Completion rate
-              </Typography>
-            </Box>
-          </Box>
-
-          {showMetricInfo && (
-            <FormulaBox formulas={[
-              { name: 'Retention', formula: 'students with attendance ≥ 50% / total participants × 100' },
-              { name: 'Completion', formula: 'average(totalScore / maxTotalScore) × 100' },
-            ]} />
           )}
 
-          <Box sx={{ width: '100%', height: Math.max(320, rankedData.length * 52 + 80) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rankedData} layout="vertical" margin={{ top: 12, right: 40, left: 28, bottom: 8 }} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#323238" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tick={{ fill: '#a1a1aa', fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={percentTick}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="shortLabel"
-                  tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={72}
-                />
-                <RechartsTooltip content={<MetricsTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                <Bar dataKey="retentionRate" name="Retention" fill="#4ade80" activeBar={{ fill: '#4ade80' }} radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="retentionRate" position="right" formatter={percentTick} style={{ fill: '#4ade80', fontSize: 11, fontWeight: 600 }} />
-                </Bar>
-                <Bar dataKey="completionRate" name="Completion" fill="#38bdf8" activeBar={{ fill: '#38bdf8' }} radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="completionRate" position="right" formatter={percentTick} style={{ fill: '#38bdf8', fontSize: 11, fontWeight: 600 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-        </Box>
+          {chronologicalData.length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Typography sx={{ color: '#71717a', fontSize: '1rem' }}>
+                No cohort data available for the selected filter.
+              </Typography>
+            </Box>
+          )}
+
+          {chronologicalData.length > 0 && (
+            <Box sx={{ bgcolor: '#1c1c1f', border: '1px solid #27272a', borderRadius: 2, p: 3, mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <BarChart3 size={20} color="#38bdf8" />
+                <Typography sx={{ fontWeight: 600, color: '#fafafa', fontSize: '1rem' }}>
+                  Retention vs Completion
+                </Typography>
+                <Tooltip title={showMetricInfo ? 'Hide metric definitions' : 'Show metric definitions'} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={() => setShowMetricInfo((prev) => !prev)}
+                    sx={{
+                      color: showMetricInfo ? '#38bdf8' : '#a1a1aa',
+                      bgcolor: showMetricInfo ? 'rgba(56,189,248,0.12)' : 'transparent',
+                      border: '1px solid',
+                      borderColor: showMetricInfo ? 'rgba(56,189,248,0.35)' : '#3f3f46',
+                      p: 0.5,
+                      ml: 0.5,
+                      '&:hover': { bgcolor: 'rgba(56,189,248,0.12)', color: '#38bdf8' },
+                    }}
+                  >
+                    <Info size={15} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 2.5, flexWrap: 'wrap', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 22, height: 10, bgcolor: '#4ade80', borderRadius: 1 }} />
+                  <Typography sx={{ color: '#d4d4d8', fontSize: '0.8rem' }}>
+                    Green = Retention rate
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 22, height: 10, bgcolor: '#38bdf8', borderRadius: 1 }} />
+                  <Typography sx={{ color: '#d4d4d8', fontSize: '0.8rem' }}>
+                    Blue = Completion rate
+                  </Typography>
+                </Box>
+              </Box>
+
+              {showMetricInfo && (
+                <FormulaBox formulas={[
+                  { name: 'Retention', formula: 'attendees of the latest past GD session / total participants' },
+                  { name: 'Completion', formula: 'share meeting certificate attendance (≤1–2 GD absences); 0 until the cohort ends' },
+                  { name: 'Attendance', formula: 'average attendance across GD sessions held so far' },
+                ]} />
+              )}
+
+              <Box sx={{ width: '100%', height: Math.max(320, rankedData.length * 52 + 80) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={rankedData} layout="vertical" margin={{ top: 12, right: 40, left: 28, bottom: 8 }} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#323238" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      domain={[0, 100]}
+                      tick={{ fill: '#a1a1aa', fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={percentTick}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="shortLabel"
+                      tick={{ fill: '#d4d4d8', fontSize: 12, fontWeight: 500 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={72}
+                    />
+                    <RechartsTooltip content={<MetricsTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    <Bar dataKey="retentionRate" name="Retention" fill="#4ade80" activeBar={{ fill: '#4ade80' }} radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="retentionRate" position="right" formatter={percentTick} style={{ fill: '#4ade80', fontSize: 11, fontWeight: 600 }} />
+                    </Bar>
+                    <Bar dataKey="completionRate" name="Completion" fill="#38bdf8" activeBar={{ fill: '#38bdf8' }} radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="completionRate" position="right" formatter={percentTick} style={{ fill: '#38bdf8', fontSize: 11, fontWeight: 600 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </Box>
+          )}
+        </>
       )}
     </Box>
   );
