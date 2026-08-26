@@ -105,6 +105,26 @@ export interface UserCohortWaitlistResponseDto {
   cohortWaitlist: CohortType[];
 }
 
+// Precomputed daily by a background job — not live. All rate fields are
+// 0..1 fractions of totalParticipants, based only on group-discussion weeks.
+export interface CohortMetricsRowDto {
+  cohortId: string;
+  cohortType: CohortType;
+  seasonNumber: number;
+  startDate: string;
+  endDate: string | null; // null if the cohort has no weeks scheduled yet
+  totalParticipants: number;
+  retainedStudents: number;
+  retentionRate: number;
+  avgAttendanceRate: number;
+  completionRate: number; // always 0 until endDate has passed
+}
+
+export interface GetCohortMetricsResponseDto {
+  computedAt: string | null; // null before the first job run
+  cohorts: CohortMetricsRowDto[];
+}
+
 export interface UpdateScoresRequestDto {
   attendance?: boolean;
   communicationScore?: number;
